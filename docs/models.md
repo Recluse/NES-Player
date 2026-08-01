@@ -35,6 +35,14 @@ prediction already scores 0.717. Balloon Fight's 0.944 against 0.411 is a much
 smaller achievement than it looks, and Mario's 0.708 against 0.717 is a much
 larger one.
 
+**And do not read the column as a ranking of skill.** It measures how
+predictable the demonstrated policy was, not how well the model plays. Two
+Double Dragon models differing by 25 points of accuracy — 0.864 against 0.618 —
+turned out to play identically when measured over ten paired runs. The lower one
+had simply learned from demonstrations that reacted to the situation instead of
+repeating one manoeuvre, and reactive behaviour is harder to predict from four
+frames. See [experiments.md](experiments.md).
+
 Every checkpoint is a directory with two files: `model.pt` and a `meta.json`
 holding the action vocabulary, the modality, mel statistics and the full
 training history.

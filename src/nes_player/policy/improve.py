@@ -84,10 +84,17 @@ def _progress(d: dict) -> int:
 
 def run_rollout(env: StableRetroAdapter, policy: BCPolicy, frames: int,
                 temperature: float, repeat: int, visual: bool = False,
-                start_pulses: int = 1) -> Rollout:
+                start_pulses: int = 1, idle_start: int = 0) -> Rollout:
     import cv2
 
     obs = env.reset(seed=0)
+    # Every rollout used to begin from exactly the same frame, so on a game
+    # started from a savestate the only difference between them was sampling
+    # noise. The policy then improves on one situation and nothing else: the
+    # round statistics climb while play at a different point in the level does
+    # not. `idle_start` waits a different number of frames before handing over.
+    for _ in range(idle_start):
+        obs = env.step_buttons([frozenset()])
     policy.reset()
     is_av = policy.modality == "av"
     smalls, actions, mels = [], [], []
@@ -148,17 +155,26 @@ def self_imitation(
     visual: bool = False,
     integrations: str | Path | None = None,
     start_pulses: int = 1,
+    state: str | None = None,
+    idle_step: int = 37,
 ) -> list[dict]:
     policy = BCPolicy(checkpoint)
-    env = StableRetroAdapter(game, integration_dir=integrations, include_debug=not visual)
+    # `state` matters more than it looks: some games (Double Dragon) cannot get
+    # past their title screen from power-on by any button sequence, so without
+    # it every rollout is a recording of the title, every reward is zero, and
+    # the fine-tuning happily runs on nothing. That is how a whole dataset was
+    # once collected before anyone looked at it.
+    env = StableRetroAdapter(game, integration_dir=integrations,
+                             include_debug=not visual, state=state)
     dev = policy.dev
     opt = torch.optim.AdamW(policy.model.parameters(), lr=lr)
     log = []
     try:
         for r in range(rounds):
             rollouts = [run_rollout(env, policy, frames, temperature, repeat,
-                                    visual=visual, start_pulses=start_pulses)
-                        for _ in range(rollouts_per_round)]
+                                    visual=visual, start_pulses=start_pulses,
+                                    idle_start=k * idle_step)
+                        for k in range(rollouts_per_round)]
             rollouts.sort(key=lambda x: -x.reward)
             keep = rollouts[: max(1, int(len(rollouts) * keep_frac))]
             rec = {
@@ -171,7 +187,18 @@ def self_imitation(
                 "kept_rewards": [x.reward for x in keep],
             }
             log.append(rec)
-            print(json.dumps(rec))
+            print(json.dumps(rec), flush=True)   # rounds take minutes; show them as they land
+            # Every rollout identical and going nowhere means the game never
+            # started — a title screen that needs `state`, or an intro that
+            # swallowed the START pulses. Fine-tuning on that trains the model
+            # to reproduce a still picture, and nothing about it looks wrong
+            # from the outside.
+            spread = max(x.reward for x in rollouts) - min(x.reward for x in rollouts)
+            if rec["max_progress"] <= 1.0 and spread <= 1e-6:
+                raise RuntimeError(
+                    f"round {r}: no rollout made any progress and all rewards are "
+                    f"identical — the game is probably not running. Check --state "
+                    f"and --start-pulses before trusting anything trained here.")
 
             xs = np.concatenate([x.small_frames for x in keep])
             ys = np.concatenate([x.action_idx for x in keep])

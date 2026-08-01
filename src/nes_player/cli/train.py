@@ -64,4 +64,4 @@ def cmd_improve(args: argparse.Namespace) -> None:
     self_imitation(args.checkpoint, game=args.game, rounds=args.rounds,
                    rollouts_per_round=args.rollouts, frames=args.frames,
                    visual=args.visual, integrations=args.integrations,
-                   start_pulses=args.start_pulses)
+                   start_pulses=args.start_pulses, state=args.state)

@@ -60,12 +60,17 @@ def episode_attn_masks(ep: Episode) -> np.ndarray:
     does. The boxes are downsampled to the conv feature grid and used as a
     target for the spatial softmax of the activations.
     """
-    cache = ep.path / "attn_mask.npy"
+    from nes_player.perception.motion import TRACKER_VERSION, MotionTracker
+
+    # The version is in the filename on purpose. Checking only the shape, as
+    # this did, meant that improving the tracker left every dataset holding
+    # masks from the old one — same shape, still loaded, silently teaching the
+    # model to look where the tracker used to be wrong.
+    cache = ep.path / f"attn_mask.v{TRACKER_VERSION}.npy"
     if cache.exists():
         m = np.load(cache)
         if m.shape[1:] == ATTN_HW:
             return m
-    from nes_player.perception.motion import MotionTracker
 
     tracker = MotionTracker()
     frames = ep.frames

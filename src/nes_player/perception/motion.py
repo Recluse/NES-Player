@@ -19,6 +19,12 @@ from dataclasses import dataclass
 import cv2
 import numpy as np
 
+# Bump when a change alters which boxes the tracker produces. Anything cached
+# from tracker output — attention masks above all — keys on this, because a
+# stale cache is invisible: the shapes still match, the training still runs, and
+# the model quietly learns to look where the old tracker was wrong.
+TRACKER_VERSION = 2   # 2: merged blobs are split between the tracks claiming them
+
 HUD_H = 32   # the score band most games put on top; excluded from scroll and diff
 MIN_AREA, MAX_AREA = 24, 3000
 MATCH_DIST = 28.0

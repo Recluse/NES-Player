@@ -6,6 +6,141 @@ something failed. Every entry names the script that reproduces it.
 
 ---
 
+## Self-imitation improved its own numbers and not its play
+
+With cloning apparently at a ceiling — two Double Dragon models 25 accuracy
+points apart played identically — the next thing to try is an objective tied to
+play rather than to imitation. Self-imitation with the pixel reward, six rounds
+of eight rollouts.
+
+Two faults surfaced before it could run at all. `improve` had no `--state`, so
+on a game whose title screen cannot be passed from power-on it would have
+recorded eight rollouts of the title, scored every one of them zero and
+fine-tuned on the result without complaint. That is precisely how the discarded
+Double Dragon dataset came to exist. A round in which nothing moves and every
+reward is identical now raises instead.
+
+The round log then looked encouraging:
+
+| Round | Mean progress | Best |
+|---|---|---|
+| 0 | 6.0 | 27.4 |
+| 3 | 27.3 | 104.9 |
+| 5 | 20.5 | 33.1 |
+
+And the duel against the model it started from said otherwise:
+
+| Model | Score | Progress | Attack frames | Paired |
+|---|---|---|---|---|
+| `bc_dd_attn3` | 146.1 ± 21.9 | 28.7 | 1366 | — |
+| `bc_dd_si` | 161.0 ± 42.3 | 23.6 | 925 | +14.9 (5W/4L) |
+
+Five wins to four is a coin, the spread doubled, and — the detail that gives it
+away — **the quantity being optimised came out lower**. Camera scroll was the
+reward, and the trained model scrolls less at evaluation than the model it was
+trained from.
+
+The cause is one line: `run_rollout` began every rollout with `env.reset(seed=0)`
+and nothing else. On a game started from a savestate that makes all eight
+rollouts in a round the same initial condition, differing only by sampling
+noise. Six rounds of improving at one moment of one level, measured at that same
+moment, produce a rising graph that means very little; evaluated anywhere else
+it is gone.
+
+Rollouts now begin after a different number of idle frames. Which is the same
+correction the measurement harness needed earlier in the day for the same
+reason — a deterministic setup repeated N times looks like N samples and is one.
+
+### Rerun with varied starts: it does not work either
+
+The round numbers immediately fell by a factor of three, which is the honest
+version of the same measurement: 2.5, 2.5, 6.2, 7.3, 9.3, 5.6 against the
+previous 6.0 through 20.5. Still rising to round four, then falling back.
+
+The duel is unambiguous:
+
+| Model | Score | Progress | Attack frames | Paired |
+|---|---|---|---|---|
+| `bc_dd_attn3` | 149.1 ± 20.2 | 22.8 | 1472 | — |
+| `bc_dd_si2` | 137.3 ± 39.2 | 15.8 | 1044 | **−11.8 (3W/7L)** |
+
+Worse on score, seven losses to three, spread doubled again, and — for the
+second time — the reward being optimised comes out lower at evaluation than the
+model it started from. Camera scroll 15.8 against 22.8.
+
+**Self-imitation does not improve this policy on this game.** Both runs are
+reported; neither checkpoint is adopted; the default stays `bc_dd_attn2`.
+
+What the two attempts together say about why is more useful than the result.
+Six rounds of eight rollouts is 48 episodes of experience, and the evaluation
+spread is ±20 to ±40 points. An effect small enough to hide in that is also
+small enough that fine-tuning on the top two rollouts per round will chase noise
+rather than skill — and the doubled spread in both runs is what chasing noise
+looks like. The mode collapse seen earlier on BT&DD is the same mechanism at a
+later stage.
+
+So the next attempt at this needs to change the budget, not the hyperparameters:
+far more rollouts per round, a wider kept slice, and the original demonstrations
+mixed back in to stop the distribution narrowing. Tuning `keep_frac` or the
+temperature against a ±30 measurement would just be the lane sweep again.
+
+---
+
+## Validation accuracy is not a measure of play
+
+Once the tracker and the instincts were fixed, the Double Dragon dataset was
+collected again — the existing model had been cloned from demonstrations
+produced by the broken versions — and a new model trained on it, same recipe,
+same hyperparameters, 35 fresh episodes.
+
+It came out far worse on the metric:
+
+| Model | Data | Validation accuracy | Majority baseline |
+|---|---|---|---|
+| `bc_dd_attn2` | old instincts | **0.864** | 0.318 |
+| `bc_dd_attn3` | fixed instincts | **0.618** | 0.326 |
+
+Twenty-five points is not a small difference, and the majority baselines are
+almost identical, so it is not that one dataset is more monotonous than the
+other.
+
+Then both were made to play, 10 paired runs of 3000 frames:
+
+| Model | Score | Progress | Attack frames | Paired |
+|---|---|---|---|---|
+| `bc_dd_attn2` | 149.4 ± 37.1 | 18.2 | 876 | — |
+| `bc_dd_attn3` | 146.2 ± 40.9 | 25.9 | 1366 | −3.2 (3W/7L) |
+
+**They play the same.** A 25-point gap in validation accuracy corresponds to no
+difference in play at all.
+
+The explanation is that the metric answers a different question than the one it
+is usually read as answering. Validation accuracy measures how *predictable* the
+demonstrated policy is from four frames. Old instincts stood in a corner
+repeating one manoeuvre, which clones beautifully. Fixed instincts close on
+enemies, align by depth, strike and move on — behaviour that depends on the
+situation, and is correspondingly harder to guess.
+
+This was already visible in the table without being understood: Super Mario
+Bros. sits at 0.708 against a 0.717 baseline and is the strongest model there.
+This experiment is the same phenomenon isolated, with the play measurement
+attached.
+
+Consequences worth stating plainly:
+
+- **The accuracy column in the model table ranks cloneability, not skill.** It
+  is still worth reporting — against its baseline it says whether anything was
+  learned at all — but a higher number does not mean a better player.
+- **Retraining on better demonstrations did not produce a better player**, at
+  least not measurably at n=10 with a ±40 spread. The default checkpoint is
+  therefore left as it was; there is no evidence on which to change it.
+- The one clear difference is that the new model attacks far more often, 876
+  frames against 1366, which is what the fixed instincts taught it.
+
+Reproduce with `scripts/experiments/dd_checkpoint_duel.py`.
+
+---
+
 ## Splitting a clinch: the perception fix works, the score does not move
 
 The long-standing open item: at contact range a beat-em-up's hero and enemy

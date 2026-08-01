@@ -144,6 +144,7 @@ def build_parser() -> argparse.ArgumentParser:
                     help="reward from pixels (camera scroll) instead of RAM — spec §12.9")
     im.add_argument("--start-pulses", type=int, default=1,
                     help="START pulse series at the beginning of a rollout (games with intros)")
+    im.add_argument("--state", default=None, help=STATE_HELP)
     im.set_defaults(func=cmd_improve)
 
     return parser
