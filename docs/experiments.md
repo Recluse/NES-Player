@@ -77,6 +77,43 @@ that Double Dragon's memory map does not currently expose.
 
 Reproduce with `scripts/experiments/clinch_ab.py`.
 
+### Pinned against the left wall
+
+Watching the recording afterwards turned up a separate fault the score had been
+hiding. Once the enemies were down the agent walked into the left edge and
+stayed there for the rest of the episode.
+
+The mechanism is a loop between two correct components. The escalation for being
+stuck is to back off left and jump with a run-up; against a wall backing off
+produces no movement, so no scroll, so the stuck detector fires again, so the
+agent backs off into the same wall. Neither part is wrong on its own — the
+detector correctly reports no progress, and the manoeuvre is correct in open
+ground. The fault is applying a manoeuvre where it is physically impossible.
+
+Guarding that one branch cut the frames spent at the edge from 657 to 423 per
+4000 and left the agent in the corner for a tenth of the episode, because three
+other rules also issue LEFT: the surrounded rule, curiosity, and whatever is
+already queued in the manoeuvre plan. Plugging one hole of four.
+
+The guard now sits in `step()`, the single point every action passes through,
+and waits for evidence rather than assuming a wall: LEFT held for 15 frames with
+the hero at the edge and the world not moving. Then it drops the press and
+clears the plan that produced it.
+
+| | Pinned frames per 4000 | Score |
+|---|---|---|
+| no guard | 657 | 145.7 ± 28.6 |
+| guard on one branch | 423 | 147.9 ± 35.8 |
+| guard at the single choke point | **388** | 152.7 ± 40.1 |
+
+Score moves by +7 with four wins and three losses, which is noise again and is
+not the claim. The claim is the 41% drop in time spent stuck in a corner, and
+that one is a direct count.
+
+Worth noting how this was found: not by a metric, but by watching two minutes of
+video. The score barely registers an agent standing still in a corner, because
+standing still is not much worse than the flailing it replaced.
+
 ---
 
 ## Comparing emulation cores on third-party TAS movies

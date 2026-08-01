@@ -68,3 +68,34 @@ def test_ignores_distant_lanes_and_bullets():
     p = _policy()
     bullet = _slot(2, 115.0, 120.0, small=True)   # small blob: a bullet, not an enemy
     assert p._engage_step([HERO, bullet], HERO) is None
+
+
+def test_no_retreat_into_the_left_wall():
+    """Backing off left while against the left edge pins the agent there.
+
+    Seen in a recording: once the enemies were down the agent walked into the
+    left edge, which produces no scroll, which reads as being stuck, which
+    triggers another retreat into the same wall. It never left the corner.
+    """
+    p = _policy()
+    p.mode = "explore"
+    p.knowledge.jump_height = {"32": 40.0}
+    hero = _slot(0, 12.0, 120.0)          # up against the left edge
+    hero.ctrl_score = 5.0
+    p._stuck_jumps = 5                     # past the point where escalation kicks in
+    p._scroll_hist = [0.0] * 40            # nothing has scrolled for a while
+    action = p._explore_step([hero], hero, {})
+    assert "LEFT" not in action, "must not walk further into the wall"
+    assert "RIGHT" in action, "the way on is to the right"
+
+
+def test_retreat_still_happens_in_open_space():
+    p = _policy()
+    p.mode = "explore"
+    p.knowledge.jump_height = {"32": 40.0}
+    hero = _slot(0, 140.0, 120.0)          # middle of the screen
+    hero.ctrl_score = 5.0
+    p._stuck_jumps = 5
+    p._scroll_hist = [0.0] * 40
+    action = p._explore_step([hero], hero, {})
+    assert action == frozenset({"LEFT"}), "away from a wall the run-up still applies"

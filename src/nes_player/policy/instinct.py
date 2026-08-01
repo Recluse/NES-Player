@@ -62,6 +62,12 @@ FACING_MIN_DX = 10    # closer than this the blobs merge and the sign of dx lies
 # approached vertically; strikes only happen once aligned.
 APPROACH_DY = 64      # within this band an enemy is reachable on foot
 
+# Screen column below which the hero has nowhere left to retreat to. Walking
+# into a wall produces no scroll, which the stuck detector reads as being stuck,
+# which triggers another retreat into the same wall.
+LEFT_EDGE = 28
+WALL_EVIDENCE = 15    # frames of fruitless LEFT before concluding there is a wall
+
 WAIT_MIN = 120        # minimum frames to wait for gameplay to begin
 WAIT_MAX = 1800       # fuse: past this, calibrate with whatever we have
 
@@ -129,6 +135,7 @@ class InstinctPolicy:
         self._target_left = 0
         self._attack_phase = 0
         self._facing: str | None = None      # last confident direction to the enemy
+        self._wall_frames = 0                # consecutive frames of LEFT doing nothing
         self._plan: list[tuple[frozenset[str], int]] = []   # queue of (buttons, frames)
         self._cal_started = False
         self.tracker = MotionTracker()
@@ -168,9 +175,37 @@ class InstinctPolicy:
         else:
             ctrl = best if best is not None and best.ctrl_prob >= 0.55 else None
             pressed = self._explore_step(slots, ctrl, verdicts)
+            pressed = self._unstick_from_left_wall(pressed, best)
         self._pressed = pressed
         self._frame += 1
         return pressed, slots, verdicts
+
+    def _unstick_from_left_wall(self, pressed: frozenset[str],
+                                ctrl: Slot | None) -> frozenset[str]:
+        """Stop pressing LEFT once it has demonstrably stopped doing anything.
+
+        Guarding the one escalation branch that walks left was not enough: the
+        surrounded rule, curiosity and the manoeuvre queue all issue LEFT too,
+        and any of them can hold the agent against the edge. This is the single
+        place every action passes through, so the guard belongs here.
+
+        It waits for evidence rather than assuming a wall. Only after LEFT has
+        been held for `WALL_EVIDENCE` frames with the hero pinned at the edge
+        and the world refusing to move does it conclude there is nothing there,
+        drop the press and clear whatever plan produced it.
+        """
+        if ctrl is None or ctrl.ctrl_prob <= 0.7 or "LEFT" not in pressed:
+            self._wall_frames = 0
+            return pressed
+        if ctrl.cx >= LEFT_EDGE or abs(self.tracker.scroll_dx) > 0.4:
+            self._wall_frames = 0
+            return pressed
+        self._wall_frames += 1
+        if self._wall_frames < WALL_EVIDENCE:
+            return pressed
+        self._plan.clear()
+        self.last_reason = "left edge does not give — turning around"
+        return (pressed - {"LEFT"}) | {"RIGHT"}
 
     # ---------- calibration ----------
 
@@ -271,6 +306,14 @@ class InstinctPolicy:
             if self._stuck_jumps <= 3:
                 self._plan = [(JUMP_RUN, hold), (RUN, 16)]
                 self.last_reason = f"stuck — jump hold {hold}f (try {self._stuck_jumps})"
+            elif ctrl is not None and ctrl.cx < LEFT_EDGE:
+                # Already against the left wall. Backing off left is what the
+                # escalation would normally do, and there it does nothing at
+                # all: no movement, so still "stuck", so back off again — the
+                # agent pins itself to the edge for the rest of the episode.
+                # The way on is always to the right.
+                self._plan = [(RUN, 90), (JUMP_RUN, max(hold, 24)), (RUN, 40)]
+                self.last_reason = "stuck at the left edge — the way on is right"
             else:
                 # Escalate: back off and jump with a run-up. The retreat is kept
                 # short and followed by a long run forward, because in a

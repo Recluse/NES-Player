@@ -28,7 +28,8 @@ GAME = "DoubleDragon-Nes-v0"
 STATE = "default"     # its title screen cannot be passed from power-on
 
 
-def run(frames: int, seed: int, split: bool, engage_dy: int | None = None) -> dict:
+def run(frames: int, seed: int, split: bool, engage_dy: int | None = None,
+        left_edge: int | None = None) -> dict:
     """One episode. `seed` idles a different number of frames before play starts.
 
     The instinct policy is deterministic, so passing a seed to the emulator
@@ -41,10 +42,13 @@ def run(frames: int, seed: int, split: bool, engage_dy: int | None = None) -> di
 
     real = motion._split_detection
     real_dy = instinct.ENGAGE_DY
+    real_edge = instinct.LEFT_EDGE
     if not split:
         motion._split_detection = lambda *a, **k: None
     if engage_dy is not None:
         instinct.ENGAGE_DY = engage_dy
+    if left_edge is not None:
+        instinct.LEFT_EDGE = left_edge
     try:
         from nes_player.policy.improve import VisualProgress
 
@@ -54,13 +58,18 @@ def run(frames: int, seed: int, split: bool, engage_dy: int | None = None) -> di
         obs = env.reset(seed=seed)
         for _ in range(seed * 37):          # idle: a different slice of the level
             obs = env.step_buttons([frozenset()])
-        score0, hits, aligning, closing = None, 0, 0, 0
+        score0, hits, aligning, closing, pinned = None, 0, 0, 0, 0
         for i in range(frames):
             d = obs.debug or {}
             if score0 is None and i > 100:
                 score0 = d.get("score", 0)
             score = max(0, d.get("score", 0) - score0) if score0 is not None else 0
-            pressed, _, _ = policy.step(obs.frame_rgb, score, False)
+            pressed, slots, _ = policy.step(obs.frame_rgb, score, False)
+            hero = max(slots, key=lambda s: s.ctrl_prob, default=None)
+            # The pathology this measures directly: the agent walks into the
+            # left edge, gets no scroll, reads that as being stuck, and retreats
+            # into the same wall again. Score barely notices; this does.
+            pinned += hero is not None and hero.ctrl_prob > 0.7 and hero.cx < 28
             reason = policy.last_reason
             hits += "finishing" in reason
             aligning += "aligning" in reason
@@ -72,10 +81,12 @@ def run(frames: int, seed: int, split: bool, engage_dy: int | None = None) -> di
         # on once the enemies are down, so camera scroll says whether the agent
         # is winning fights even when the score counter is noisy.
         return {"score": score, "progress": round(progress.total, 1),
-                "hits": hits, "aligning": aligning, "closing": closing}
+                "hits": hits, "aligning": aligning, "closing": closing,
+                "pinned": int(pinned)}
     finally:
         motion._split_detection = real
         instinct.ENGAGE_DY = real_dy
+        instinct.LEFT_EDGE = real_edge
 
 
 def main() -> int:
@@ -84,16 +95,21 @@ def main() -> int:
     ap.add_argument("--frames", type=int, default=3000)
     ap.add_argument("--engage-dy", type=int, nargs="*", default=None,
                     help="sweep the same-lane threshold with splitting on")
+    ap.add_argument("--left-edge", action="store_true",
+                    help="isolate the left-wall fix instead: on against off")
     args = ap.parse_args()
 
-    arms: list[tuple[str, bool, int | None]] = [("merged", False, None), ("split", True, None)]
-    for dy in args.engage_dy or []:
-        arms.append((f"split dy={dy}", True, dy))
+    if args.left_edge:
+        arms = [("wall retreat", True, None, -1), ("wall fix", True, None, 28)]
+    else:
+        arms = [("merged", False, None, None), ("split", True, None, None)]
+        for dy in args.engage_dy or []:
+            arms.append((f"split dy={dy}", True, dy, None))
 
     out: dict[str, list[dict]] = {a[0]: [] for a in arms}
     for seed in range(args.runs):
-        for arm, split, dy in arms:
-            r = run(args.frames, seed, split, dy)
+        for arm, split, dy, edge in arms:
+            r = run(args.frames, seed, split, dy, edge)
             r["seed"] = seed
             out[arm].append(r)
             print(json.dumps({"arm": arm, **r}), flush=True)
@@ -112,7 +128,7 @@ def main() -> int:
         print(f"{arm:14} score {statistics.mean(scores):6.1f} ±{spread:5.1f}  "
               f"progress {statistics.mean(prog):7.1f}  "
               f"hit {statistics.mean(r['hits'] for r in rows):5.0f}  "
-              f"align {statistics.mean(r['aligning'] for r in rows):5.0f}  "
+              f"pinned {statistics.mean(r['pinned'] for r in rows):5.0f}  "
               f"vs base {statistics.mean(diffs):+6.1f} ({wins}W/{losses}L)")
     return 0
 
