@@ -1,0 +1,81 @@
+{
+  "version": "v1",
+  "models": {
+    "bc_smb_attn3": {
+      "title": "Super Mario Bros.",
+      "file": "bc_smb_attn3.tar.gz",
+      "bytes": 15265211,
+      "sha256": "5bc6b3e6a120d3f498038e4c08068586714d5d2a651303f479c45adcb13efcf5",
+      "game": "SuperMarioBros-Nes-v0",
+      "val_acc": 0.708,
+      "majority_baseline": 0.717
+    },
+    "bc_contra_attn": {
+      "title": "Contra (US)",
+      "file": "bc_contra_attn.tar.gz",
+      "bytes": 15272804,
+      "sha256": "b3f224319d0418af06effdbcec4ca0b6c746c9c0795e22fd140bcdfdbd672473",
+      "game": "ContraU-Nes-v0",
+      "val_acc": 0.943,
+      "majority_baseline": 0.377
+    },
+    "bc_gradius_attn": {
+      "title": "Gradius",
+      "file": "bc_gradius_attn.tar.gz",
+      "bytes": 15264815,
+      "sha256": "f0846b9479752af6f7ed0b4460a2779f8b9c7568a90fb2193b1a847ec9518d20",
+      "game": "Gradius-Nes-v0",
+      "val_acc": 0.872,
+      "majority_baseline": 0.449
+    },
+    "bc_balloonfight_attn": {
+      "title": "Balloon Fight",
+      "file": "bc_balloonfight_attn.tar.gz",
+      "bytes": 15265900,
+      "sha256": "f63ad2c6c04cf31764d3e1e388e55d17366bde440141c018db239f9cd44dc13c",
+      "game": "BalloonFight-Nes-v0",
+      "val_acc": 0.944,
+      "majority_baseline": 0.411
+    },
+    "bc_battletoads_attn": {
+      "title": "Battletoads",
+      "file": "bc_battletoads_attn.tar.gz",
+      "bytes": 15271519,
+      "sha256": "7839615ab1316f962c49d921d6936bb2a32833f6a8ddedccf5041863e832e498",
+      "game": "Battletoads-Nes-v0",
+      "val_acc": 0.702,
+      "majority_baseline": 0.43
+    },
+    "bc_dd_attn2": {
+      "title": "Double Dragon",
+      "file": "bc_dd_attn2.tar.gz",
+      "bytes": 15265895,
+      "sha256": "ff4da453358ba694f8bd997fb9840611a0477e898b759c2d84190228d0af8e4a",
+      "game": "DoubleDragon-Nes-v0",
+      "state": "default",
+      "val_acc": 0.864,
+      "majority_baseline": 0.318
+    },
+    "bc_base41_attn1": {
+      "title": "multi-game base / observer",
+      "file": "bc_base41_attn1.tar.gz",
+      "bytes": 15286022,
+      "sha256": "bfce47cc9457ae6f8be5792b06fbd28a399f6e09c311db935d4dc58fa9c12823",
+      "val_acc": 0.944,
+      "majority_baseline": 0.377
+    },
+    "ego_smb4": {
+      "title": "ego world model (Super Mario Bros.)",
+      "file": "ego_smb4.tar.gz",
+      "bytes": 1088287,
+      "sha256": "f7b83420cd055894ad6748480b6f449753d2904c1876e21d665732f6eed32df4",
+      "action_advantage": 1.189
+    },
+    "av_smb": {
+      "title": "sound localisation (Super Mario Bros.)",
+      "file": "av_smb.tar.gz",
+      "bytes": 1617809,
+      "sha256": "7d967ddaa5b1fdfb1259a3fc977572eb75413473607de6a075670b48b9f183bd"
+    }
+  }
+}
