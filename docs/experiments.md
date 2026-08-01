@@ -6,6 +6,79 @@ something failed. Every entry names the script that reproduces it.
 
 ---
 
+## Splitting a clinch: the perception fix works, the score does not move
+
+The long-standing open item: at contact range a beat-em-up's hero and enemy
+become one connected component, the greedy match hands it to whichever track is
+nearer, the other ghosts at its last position, and the sign of
+`enemy − hero` becomes noise. `_split_detection` now cuts the blob between the
+two predicted positions.
+
+Measured on Double Dragon, both arms in one process, 12 runs of 3000 frames.
+Each run starts the policy at a different point in the level — the instinct
+policy is deterministic, so seeding the emulator alone produces twelve
+byte-identical runs and an n of 1 wearing the clothes of an n of 12. The first
+attempt at this measurement did exactly that and reported a confident 119
+against 139.
+
+| Arm | Score | Progress | Attack frames | Alignment frames | Paired vs base |
+|---|---|---|---|---|---|
+| merged (before) | 103.5 ± 26.6 | 7.0 | 254 | 466 | — |
+| split, lane 20 (default) | 109.2 ± 23.8 | 21.4 | **435** | 668 | +5.8 (5W/6L) |
+| split, lane 24 | 118.5 ± 21.5 | 9.0 | 438 | 625 | +15.0 (7W/5L) |
+| split, lane 28 | 113.8 ± 19.9 | 13.8 | 462 | 503 | +10.3 (5W/5L) |
+| split, lane 32 | 113.2 ± 29.1 | 8.1 | **480** | 477 | +9.8 (8W/4L) |
+
+**The score difference is not established, and neither is any lane width.**
+Every split arm sits 6 to 15 points above the baseline, which looks like a
+trend until the paired win/loss column is read: the best of them is 8 wins to 4
+losses, which a fair coin produces about one time in five. The ordering by mean
+(24 > 28 ≈ 32 > 20) does not match the ordering by win rate (32 > 24 > 28 = 20),
+and that mismatch is what noise looks like. With five arms on the table, the
+best-looking one is expected to look good by chance; picking it would be
+measuring the sampling error and calling it a result.
+
+The second metric did not rescue the comparison either. Camera scroll was added
+on the theory that a beat-em-up level only advances once the enemies are down,
+but over 3000 frames on Double Dragon it barely advances at all, and the values
+(7.0, 21.4, 9.0, 13.8, 8.1) track nothing. It is a reasonable metric for a
+scrolling game and the wrong one here.
+
+**What is established is the perception fix itself.** Frames in which the agent
+is striking a tracked enemy rise from 254 to 462, an 82% increase, which is a
+direct count rather than a downstream proxy. The tracker now keeps two objects
+where it kept one.
+
+**The interesting part is the side effect.** Alignment frames jump from 466 to
+668 once splitting is on. The depth-alignment rule fires whenever the enemy is
+more than 20 px away vertically — and until now `dy` at contact range was
+garbage, so the rule mostly did not fire at all. With an accurate `dy` it fires
+constantly and the agent spends its time repositioning by a few pixels instead
+of hitting. Loosening the lane to 28 px brings it back to 503.
+
+In other words the policy's threshold had been tuned, unknowingly, against
+broken perception. That is worth remembering for every other constant in
+`instinct.py`: several of them were chosen while the tracker was merging
+fighters.
+
+The default lane stays at 20 px. Changing a constant on an unproven +15 would
+be exactly the mistake this log exists to prevent — and the two "clever" ideas
+that lost earlier on this same game were lost the same way. The split itself
+stays on: object counts feed the planner's threat list, contact attribution in
+the object memory and the attention masks used in training, all of which want
+two objects to be two objects regardless of what this one policy scores.
+
+What the sweep does establish is that **this metric cannot resolve differences
+of this size**. A ±25 spread on a mean of 110 needs roughly 50 runs to see a
+15-point effect, not 12. Either the next attempt budgets for that, or it finds
+a tighter measurement — the honest candidate being a direct count of how often
+the agent strikes in the wrong direction, which needs ground-truth positions
+that Double Dragon's memory map does not currently expose.
+
+Reproduce with `scripts/experiments/clinch_ab.py`.
+
+---
+
 ## Comparing emulation cores on third-party TAS movies
 
 The movies were recorded in FCEUX and BizHawk while we play on fceumm, so
@@ -217,11 +290,12 @@ the "surrounded" rule stayed on the *narrow* band. With the wide one it counted
 enemies at other depths as an encirclement, the agent retreated continuously,
 and the score fell to 66.
 
-Sprite overlap remains unsolved: at contact range the motion tracker merges hero
-and enemy into one blob and the sign of the direction becomes noise, so the
-agent hits backwards. Holding the last confident direction was added and changed
-nothing (110 against 110). This needs a tracker that can separate two fighters in
-a clinch.
+Sprite overlap was the open problem here: at contact range the motion tracker
+merged hero and enemy into one blob, the sign of the direction became noise, and
+the agent hit backwards. Holding the last confident direction was added and
+changed nothing (110 against 110). It has since been addressed in the tracker
+itself, by splitting the merged blob — see the entry at the top of this log,
+including what that did and did not improve.
 
 ### Double Dragon: the dataset was garbage
 

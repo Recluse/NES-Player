@@ -12,12 +12,16 @@ games the agent has never seen.
 probabilities, tracked objects and the numbers the agent read off the
 screen](docs/images/dashboard.jpg)
 
-*Left: the game with Grad-CAM showing where the network is looking and boxes
-around the objects the motion tracker found. Right: the action distribution,
-tracked objects, live conv features, remembered sprites, and the agent's own
-running commentary. `hud read 100 0 1 1 354` is score, coins, world and timer —
-read off the picture, with no labels and no memory access. The timer on screen
-says 354.*
+*Left: the game with Grad-CAM showing where the network is looking, boxes around
+the objects the motion tracker found, and rings where a sound was predicted to
+come from. The gamepad below lights up the buttons actually being pressed —
+here B and RIGHT, matching the 0.68 the model gives that action. Right: the
+action distribution, uncertainty over time, tracked objects, live conv features,
+remembered sprites, the sounds heard, and the agent's own running commentary.*
+
+*`hud read 300 1 1 1 391` is score, coins, world and timer, read off the picture
+with no labels and no memory access. The game's own HUD in the same frame reads
+000300, ×01, 1-1, TIME 391.*
 
 ## What it does
 

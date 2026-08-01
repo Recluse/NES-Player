@@ -17,6 +17,13 @@ Per frame:
 3. **Tracking** — greedy matching by centre distance under 28 px, giving stable
    ids and an EMA velocity. A stalled object is kept as a ghost at its last
    position; the controlled one for up to 300 frames.
+3a. **Clinches** — when two tracks claim the same blob, which is what happens
+   the moment two fighters touch, the blob is cut between their predicted
+   positions rather than awarded to the nearer one. Without this the loser
+   ghosts at its last position and the winner's centre slides into the gap, so
+   "which way is the enemy" becomes noise. Attack frames on Double Dragon rise
+   from 254 to 462; the score does not measurably move. See
+   [experiments.md](experiments.md).
 4. **Which one is me** — correlate the sign of the slot's **world** velocity
    (screen velocity minus the scroll) with LEFT/RIGHT being pressed. The result
    is `ctrl_prob`, an EMA through a sigmoid.

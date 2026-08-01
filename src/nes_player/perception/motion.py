@@ -25,6 +25,16 @@ MATCH_DIST = 28.0
 VEL_EMA = 0.4
 STALE_AFTER = 8
 
+# Splitting a merged blob back into its fighters. In a beat-em-up two sprites
+# at contact range become one connected component: the loser of the greedy
+# match ghosts at its last position while the winner's centre jumps into the
+# gap between them. The sign of "which way is the enemy" then becomes noise,
+# and the agent turns around and punches empty air. Measured on Double Dragon,
+# holding the last confident direction did not help — the fix has to keep the
+# two centres apart in the first place.
+SPLIT_MIN_EXTENT = 14   # a blob thinner than this cannot hold two fighters
+SPLIT_MIN_GAP = 7       # predicted centres closer than this are one thing
+
 
 @dataclass
 class Slot:
@@ -42,6 +52,64 @@ class Slot:
     @property
     def ctrl_prob(self) -> float:
         return 1 / (1 + np.exp(-self.ctrl_score / 2))
+
+
+def _slice_stats(labels: np.ndarray, comp: int, lo: int, hi: int, axis: int,
+                 hud_h: int) -> tuple[int, int, int, int, float, float] | None:
+    """Bounding box and centroid of one component inside a slice of the frame.
+
+    `lo`/`hi` bound the slice along `axis` in screen coordinates; `labels` is in
+    play coordinates, hence the HUD offset. Returns None when the slice holds no
+    pixels of that component, which happens when a sprite is fully occluded.
+    """
+    if axis == 0:
+        sub = labels[:, max(0, lo):max(0, hi)]
+        off_x, off_y = max(0, lo), hud_h
+    else:
+        sub = labels[max(0, lo - hud_h):max(0, hi - hud_h), :]
+        off_x, off_y = 0, max(hud_h, lo)
+    ys, xs = np.nonzero(sub == comp)
+    if len(xs) == 0:
+        return None
+    x0, x1 = int(xs.min()) + off_x, int(xs.max()) + off_x
+    y0, y1 = int(ys.min()) + off_y, int(ys.max()) + off_y
+    return (x0, y0, x1 - x0 + 1, y1 - y0 + 1,
+            float(xs.mean()) + off_x, float(ys.mean()) + off_y)
+
+
+def _split_detection(labels: np.ndarray, comp: int, det: tuple, tracks: list) -> list | None:
+    """Cut one merged blob between the tracks that are all claiming it.
+
+    The cut goes along whichever axis separates their predicted positions more,
+    at the midpoints between them, so each fighter keeps a centre on its own
+    side of the clinch. Returns one detection per track, in the same order, or
+    None when the blob is too small to be two things.
+    """
+    x, y, w, h, _, _, small = det
+    if small or len(tracks) < 2:
+        return None
+    pred = [(s.cx + s.vx, s.cy + s.vy) for s in tracks]
+    spread_x = max(p[0] for p in pred) - min(p[0] for p in pred)
+    spread_y = max(p[1] for p in pred) - min(p[1] for p in pred)
+    axis = 0 if spread_x >= spread_y else 1
+    if max(spread_x, spread_y) < SPLIT_MIN_GAP:
+        return None
+    if (w if axis == 0 else h) < SPLIT_MIN_EXTENT:
+        return None
+
+    order = sorted(range(len(tracks)), key=lambda i: pred[i][axis])
+    lo_edge, hi_edge = (x, x + w) if axis == 0 else (y, y + h)
+    out: list = [None] * len(tracks)
+    for rank, i in enumerate(order):
+        lo = lo_edge if rank == 0 else int(round((pred[order[rank - 1]][axis]
+                                                  + pred[i][axis]) / 2))
+        hi = hi_edge if rank == len(order) - 1 else int(round(
+            (pred[i][axis] + pred[order[rank + 1]][axis]) / 2))
+        st = _slice_stats(labels, comp, lo, hi, axis, HUD_H)
+        if st is None:
+            return None          # one side is fully occluded: not a clean split
+        out[i] = (*st, small)
+    return out
 
 
 class MotionTracker:
@@ -69,9 +137,9 @@ class MotionTracker:
         diff[:2] = diff[-2:] = 0
         _, mask = cv2.threshold(diff, 28, 255, cv2.THRESH_BINARY)
         mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, np.ones((5, 5), np.uint8))
-        n, _, stats, centroids = cv2.connectedComponentsWithStats(mask)
+        n, labels, stats, centroids = cv2.connectedComponentsWithStats(mask)
 
-        dets = []
+        dets, det_comp = [], []
         for i in range(1, n):
             x, y, w, h, area = stats[i]
             # Small compact blobs — Contra's bullets are 2x2 to 8x8 — go through
@@ -81,14 +149,15 @@ class MotionTracker:
             if small or (MIN_AREA <= area <= MAX_AREA and w < 100 and h < 100):
                 dets.append((x, y + HUD_H, w, h, centroids[i][0], centroids[i][1] + HUD_H,
                              small))
+                det_comp.append(i)
 
-        # 3. Tracking: greedy matching by centre distance
-        used = set()
+        # 3. Tracking. Each slot picks its nearest detection; unlike a plain
+        # greedy match, two slots are allowed to pick the same one, because in
+        # a clinch they genuinely are one blob. Those get split below.
+        claims: dict[int, list[Slot]] = {}
         for slot in self._slots:
             best, best_d = None, MATCH_DIST
             for k, d in enumerate(dets):
-                if k in used:
-                    continue
                 dist = float(np.hypot(d[4] - slot.cx, d[5] - slot.cy))
                 if dist < best_d:
                     best, best_d = k, dist
@@ -97,8 +166,32 @@ class MotionTracker:
                 slot.vx *= 0.8   # stalled or lost: let the velocity decay
                 slot.vy *= 0.8
                 continue
-            used.add(best)
-            x, y, w, h, cx, cy, small = dets[best]
+            claims.setdefault(best, []).append(slot)
+
+        used = set(claims)
+        assigned: list[tuple[Slot, tuple]] = []
+        for k, tracks in claims.items():
+            if len(tracks) == 1:
+                assigned.append((tracks[0], dets[k]))
+                continue
+            parts = _split_detection(labels, det_comp[k], dets[k], tracks)
+            if parts is None:
+                # Not separable: the nearest track keeps the blob, the rest go
+                # stale exactly as they did before splitting existed.
+                nearest = min(tracks, key=lambda s: np.hypot(dets[k][4] - s.cx,
+                                                             dets[k][5] - s.cy))
+                for s in tracks:
+                    if s is nearest:
+                        assigned.append((s, dets[k]))
+                    else:
+                        s.missed += 1
+                        s.vx *= 0.8
+                        s.vy *= 0.8
+                continue
+            assigned.extend(zip(tracks, parts, strict=True))
+
+        for slot, det in assigned:
+            x, y, w, h, cx, cy, small = det
             slot.small = small
             slot.vx = (1 - VEL_EMA) * slot.vx + VEL_EMA * (cx - slot.cx)
             slot.vy = (1 - VEL_EMA) * slot.vy + VEL_EMA * (cy - slot.cy)
