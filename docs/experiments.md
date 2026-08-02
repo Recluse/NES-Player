@@ -1318,3 +1318,49 @@ is to hit things rather than avoid them.
 What it still cannot do: read the score, so `reward` labels never form; and tell
 a death from finishing a level, since both replace the screen and neither game
 reached the end of one while this was measured.
+
+
+## Better data, worse validation, better play
+
+The Mario datasets had been recorded by the instinct policy as it was before any
+of today's fixes — the one that stood still calibrating for 512 frames, walked
+into the first Goomba and did not recognise it next time. Cloning is bounded by
+whoever produced the data, so the data was re-recorded with the improved policy.
+
+The first attempt made things **worse**, and interestingly so. The new model
+survived all 3000 frames of every run with zero deaths, which the duel picked as
+its metric because nobody scored, and it looked like a win. It was not: distance
+−0.1, and pressing bare `B` in 91% of frames without ever leaving the start.
+
+The cause was a change of mine that had measured as harmless. Mid-air steering —
+letting a running jump drop its direction to get out of the way — never won a
+measurement on the policy itself (+12.6 distance, t = +0.09), and I kept it
+because it seemed right. Dropping the direction produces `A+B` and bare `B`:
+
+| actions with no direction | |
+|---|---|
+| old dataset | 2% |
+| with steering | **33%** |
+| after removing it | 7% |
+
+A third of the dataset had no direction in it, and behavioural cloning found the
+common denominator and held `B`. **A rule can be harmless for the hand-written
+policy and lethal for whatever learns from it.** The policy keeps following its
+plan regardless; the network only sees the buttons.
+
+Steering was removed, the data re-recorded, and the same model retrained:
+
+| trained on | score | distance | deaths | validation |
+|---|---|---|---|---|
+| old data | 3.0 | 920.0 | 2.0 | **0.941** |
+| new data | **24.0** | **1385.7** | **1.3** | 0.568 |
+
+Score +21.0, winning on 8 of 10 paired seeds; distance +51%.
+
+And the clearest statement yet of what validation accuracy is worth here: the
+model at **0.568 plays substantially better than the model at 0.941**. Not
+equally, as on Double Dragon earlier — better, by a wide margin. The old data is
+easy to predict precisely because a quarter of it is the same pointless retreat,
+and its majority-class baseline says so: 0.451 against 0.335. Choosing a
+checkpoint by validation accuracy would have chosen the one that walks into a
+wall.

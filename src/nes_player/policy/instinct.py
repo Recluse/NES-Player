@@ -71,18 +71,14 @@ APPROACH_DY = 64      # within this band an enemy is reachable on foot
 LEFT_EDGE = 28
 WALL_EVIDENCE = 15    # frames of fruitless LEFT before concluding there is a wall
 
-# Steering a plan that is already running — see `_steer`.
-DIRECTIONS = frozenset({"LEFT", "RIGHT"})
-STEER_AHEAD = 40      # px in front that count as "on the way"
-# Generous vertically on purpose. Mid-jump the hero is ABOVE the thing it is
-# about to land on, so a narrow lane test — the right one for a fight on the
-# ground — excludes exactly the case steering exists for. It is safe to be
-# generous here because `_engage_step` runs first and clears the plan when it
-# takes an object on: anything still reaching this point is something the fight
-# rules declined.
-STEER_LANE = 72
-STEER_CLOSING = 0.5   # world px/frame of approach before it counts as closing
-STEER_PANIC = 18      # this close, stop pushing forward whatever it is doing
+# Mid-air steering — letting a running jump drop its direction to get out of the
+# way of what is ahead — was built here and taken out again. It never won a
+# measurement of its own (+12.6 distance, t=+0.09), and it poisoned the data
+# this policy records: dropping the direction produces `A+B` and bare `B`, which
+# went from 2% of a dataset to 33%, and behavioural cloning on that collapsed
+# onto "hold B" and never moved at all — 3000 frames survived, zero distance.
+# A rule can be harmless for the hand-written policy and lethal for whatever
+# learns from it, and both have to be measured.
 MOVE_EPS = 0.35       # world px/frame below which the hero counts as standing still
 AIRBORNE_VY = 1.0     # vertical px/frame above which the hero is off the ground
 
@@ -180,9 +176,6 @@ class InstinctPolicy:
         # Off = the pre-fix behaviour, kept so the change can be ablated rather
         # than argued about. See _explore_step.
         self.curiosity_needs_progress = True
-        # Off = plans play out untouched, the behaviour before mid-air steering
-        # existed. Kept so the change can be ablated. See _steer.
-        self.steer_running_plans = True
         self._target_id: int | None = None   # finish one enemy, not all of them once
         self._target_left = 0
         self._attack_phase = 0
@@ -355,21 +348,17 @@ class InstinctPolicy:
         # queue. Otherwise a long retreat from the stuck logic runs for 135
         # frames while an enemy stands next to us, unhit.
         #
-        # With one exception: a jump already in the air. The fight rules were
-        # written for a beat-em-up on the ground, and mid-flight they do the
-        # wrong thing twice over — they press UP or DOWN to "line up" with an
-        # enemy at a different depth, which in a platformer is not a depth but
-        # a height, and they cancel the jump. They also shadowed the steering
-        # below almost entirely: their reach (52 px across, 64 down) covers
-        # nearly everything a jump could steer around. A jump is committed;
-        # what it can still do is change direction, which is what `_steer` is.
-        jumping = bool(self._plan) and "A" in self._plan[0][0]
-        if ctrl is not None and not jumping:
+        # A jump in the air used to be exempt, so that mid-air steering could
+        # act on it. The steering is gone (see the note by MOVE_EPS) and the
+        # exemption went with it: without something to steer *with*, standing
+        # the fight rules down mid-jump only removes their one useful reaction,
+        # which is to stop a manoeuvre when an enemy is already on top of us.
+        if ctrl is not None:
             engage = self._engage_step(slots, ctrl)
             if engage is not None:
                 return engage
         if self._plan:
-            return self._steer(self._take_from_plan(), ctrl, slots)
+            return self._take_from_plan()
 
         hold = self.knowledge.best_jump_hold()
         # Curiosity is only curiosity while it is getting somewhere. Measured on
@@ -535,40 +524,4 @@ class InstinctPolicy:
         self._plan[0] = (buttons, left - 1)
         if left <= 1:
             self._plan.pop(0)
-        return buttons
-
-    def _steer(self, buttons: frozenset[str], ctrl: Slot | None,
-               slots: list[Slot]) -> frozenset[str]:
-        """Let a running plan change its mind about direction, mid-air included.
-
-        A jump is issued as a plan — hold A for N frames, then run — and until
-        now nothing could touch it while it played. On a slow puzzle platformer
-        that is fine: you decide, then you move. On a fast one it is the whole
-        difference, because the decision that matters is taken *during* the
-        jump. The agent was not failing to understand that it can steer in the
-        air; it had no way to.
-
-        The button that gives the jump its height is left alone — releasing A
-        early shortens the jump, which is a different decision from steering —
-        and only the direction is reconsidered. Reconsidered against what the
-        eyes see, not against a verdict: with feedback in strict mode there are
-        no danger labels, so the rule is "something is close ahead in my lane
-        and closing", which is visible in pixels alone.
-        """
-        if not self.steer_running_plans or ctrl is None or not (buttons & DIRECTIONS):
-            return buttons
-        facing = "RIGHT" if "RIGHT" in buttons else "LEFT" if "LEFT" in buttons else None
-        if facing is None:
-            return buttons
-        sign = 1 if facing == "RIGHT" else -1
-        for s in slots:
-            if s is ctrl or s.small:
-                continue
-            dx = (s.cx - ctrl.cx) * sign          # positive: ahead of us
-            if not (0 < dx < STEER_AHEAD and abs(s.cy - ctrl.cy) < STEER_LANE):
-                continue
-            closing = (s.vx - self.tracker.scroll_dx) * sign < -STEER_CLOSING
-            if closing or dx < STEER_PANIC:
-                self.last_reason = f"steering off #{s.slot_id} ahead"
-                return buttons - {facing}
         return buttons
