@@ -14,6 +14,7 @@ from nes_player.perception.feedback import (
     Feedback,
     NoFeedback,
     PrivilegedFeedback,
+    VisualFeedback,
     make_feedback,
 )
 from nes_player.policy.instinct import InstinctPolicy
@@ -55,6 +56,13 @@ def _nonsense(i):
     return {"score": int(rng.integers(0, 5000)), "lives": int(rng.integers(-1, 3))}
 
 
+def test_the_visual_source_ignores_the_telemetry_too():
+    frames = _frames(300)
+    a = _trace(frames, "visual", _sane)
+    b = _trace(frames, "visual", _nonsense)
+    assert a == b, "the screen is the same, so the actions must be"
+
+
 def test_strict_mode_ignores_the_telemetry_entirely():
     frames = _frames(400)
     assert _trace(frames, "strict", _sane) == _trace(frames, "strict", _nonsense)
@@ -91,10 +99,56 @@ def test_uninitialised_lives_are_not_a_death():
     assert src.update(f, {"score": 0, "lives": 255}).died is False
 
 
-def test_the_default_is_strict():
-    assert isinstance(make_feedback(), NoFeedback)
+def test_the_default_reads_the_screen_and_not_the_machine():
+    assert isinstance(make_feedback(), VisualFeedback)
     assert make_feedback().privileged is False
+    assert make_feedback("strict").privileged is False
     assert make_feedback("privileged").privileged is True
+
+
+def _level(seed: int = 0) -> np.ndarray:
+    """A frame shaped like a game screen: flat tiles, not noise.
+
+    Noise is the wrong fixture here. Shifting random pixels by two columns
+    changes every one of them, so a scrolling screen would read as a death;
+    a real background is made of tiles and barely changes when it scrolls.
+    """
+    rng = np.random.default_rng(seed)
+    tiles = rng.integers(90, 220, (28, 30, 3), dtype=np.uint8)
+    return np.repeat(np.repeat(tiles, 8, axis=0), 8, axis=1)
+
+
+def test_a_replaced_screen_is_a_death():
+    """Measured threshold: ordinary play peaks near 27, a death gives 98-141."""
+    src, level = VisualFeedback(), _level()
+    assert src.update(level).died is False
+    for k in range(1, 6):                    # the level scrolling
+        assert src.update(np.roll(level, 2 * k, axis=1)).died is False
+    assert src.update(np.zeros((224, 240, 3), np.uint8)).died is True
+
+
+def test_coming_back_from_black_is_not_a_second_death():
+    """A death is two cuts: to black, then back to the level. Only the first
+    one is the death, and what tells them apart is what follows — measured,
+    the screen after a death averages 0 and after a restart 98 to 141."""
+    src, level = VisualFeedback(), _level(1)
+    black = np.zeros((224, 240, 3), np.uint8)
+    src.update(level)
+    assert src.update(black).died is True
+    for _ in range(300):                      # the black screen sits there
+        src.update(black)
+    assert src.update(level).died is False, "returning to the level is not a death"
+
+
+def test_two_real_deaths_are_both_reported():
+    """The cooldown must not swallow a second death a few seconds later."""
+    src, level = VisualFeedback(), _level(2)
+    black = np.zeros((224, 240, 3), np.uint8)
+    src.update(level)
+    assert src.update(black).died is True
+    for _ in range(300):
+        src.update(level)
+    assert src.update(black).died is True
 
 
 def test_an_unknown_mode_is_rejected():

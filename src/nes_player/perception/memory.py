@@ -27,15 +27,17 @@ MATCH_DIST = 55.0
 CONTACT_PX = 22.0
 EFFECT_WINDOW = 45    # frames after a contact in which points count
 # A death is reported far later than it happens. The score updates on the frame
-# it changes, but the lives counter only drops once the dying animation has run
-# and the level has restarted: measured on Super Mario Bros., the hero touches
-# a Goomba at frame 291 and the counter moves at frame 504 — 213 frames later.
+# it changes, but a death has to travel through the dying animation and the
+# level restart first: measured on Super Mario Bros., the hero touches a Goomba
+# at frame 291 and the lives counter moves at 504 — 213 frames later. The honest
+# signal, the screen going black, is later still: 4 frames behind the counter on
+# Mario and 129 on Double Dragon. So the window has to cover roughly 350 frames
+# of lag, and 400 leaves a margin.
+#
 # With one window for both, every death arrived long after the contact that
 # caused it had expired, so nothing on that game was ever labelled dangerous:
-# 60 contacts, zero danger labels. The project already knew about this lag from
-# the other side — `DEATH_SOUND_LOOKBACK = 140` in the play loop exists because
-# the death jingle precedes the counter.
-DEATH_WINDOW = 260
+# 60 contacts, zero danger labels.
+DEATH_WINDOW = 400
 
 
 

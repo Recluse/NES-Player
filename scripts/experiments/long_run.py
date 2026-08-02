@@ -97,7 +97,7 @@ def run(agent: str, frames: int, seed: int, temperature: float,
         strip_every: int, out_dir: Path | None,
         video_out: Path | None = None, video_scale: int = 3,
         no_gate: bool = False, perception: str = "motion",
-        feedback_mode: str = "strict", game: str = GAME,
+        feedback_mode: str = "visual", game: str = GAME,
         no_steer: bool = False) -> dict:
     import cv2
 
@@ -214,8 +214,9 @@ def main() -> int:
     ap.add_argument("--game", default=GAME)
     ap.add_argument("--no-steer", action="store_true",
                     help="instinct only: plans play out untouched, for an ablation")
-    ap.add_argument("--feedback", choices=("strict", "privileged", "pixel"),
-                    default="strict",
+    ap.add_argument("--feedback",
+                    choices=("strict", "visual", "privileged", "pixel"),
+                    default="visual",
                     help="instinct only: where 'something good/bad happened' comes from")
     ap.add_argument("--perception", choices=("motion", "sprites"), default="motion",
                     help="instinct only: where objects come from — inferred from "

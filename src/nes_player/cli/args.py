@@ -22,11 +22,11 @@ from nes_player.cli.train import (
 
 FEEDBACK_HELP = (
     "where the agent learns that something good or bad happened, which is an "
-    "INPUT and not telemetry: 'strict' (default) tells it nothing, so danger "
-    "and reward labels never form and the pixels-and-sound-only claim holds; "
-    "'privileged' reads score and lives from emulator memory, which is what a "
-    "teacher may do and a student may not; 'pixel' reads the on-screen panel, "
-    "which is the honest source but does not work well enough yet")
+    "INPUT and not telemetry: 'strict' tells it nothing; 'visual' (default) "
+    "sees a death on the screen, which is honest and measured to have no false "
+    "alarms in 41,400 frames, but reports no score; 'privileged' reads score "
+    "and lives from emulator memory, which is what a teacher may do and a "
+    "student may not; 'pixel' reads the on-screen panel and does not work yet")
 CORE_HELP = "emulation core: fceumm (default), nestopia, quicknes"
 STATE_HELP = ("integration start state ('default' for its own); needed by games "
               "whose title screen cannot be passed from power-on")
@@ -112,8 +112,8 @@ def build_parser() -> argparse.ArgumentParser:
     g.add_argument("--core", default=None, help=CORE_HELP)
     g.add_argument("--sound-loc", default="runs/av_smb",
                    help="AV-align checkpoint: ping the sound source on the panel")
-    g.add_argument("--feedback", choices=("strict", "privileged", "pixel"),
-                   default="strict", help=FEEDBACK_HELP)
+    g.add_argument("--feedback", choices=("strict", "visual", "privileged", "pixel"),
+                   default="visual", help=FEEDBACK_HELP)
     g.add_argument("--ghost", default="runs/ego_smb4",
                    help="ego world-model checkpoint for the ghost trajectory ('' disables it)")
     g.set_defaults(func=cmd_play)
@@ -133,8 +133,8 @@ def build_parser() -> argparse.ArgumentParser:
     x.add_argument("--core", default=None, help=CORE_HELP)
     x.add_argument("--record", default=None,
                    help="directory: write exploration episodes as Zarr datasets")
-    x.add_argument("--feedback", choices=("strict", "privileged", "pixel"),
-                   default="strict", help=FEEDBACK_HELP)
+    x.add_argument("--feedback", choices=("strict", "visual", "privileged", "pixel"),
+                   default="visual", help=FEEDBACK_HELP)
     x.set_defaults(func=cmd_explore)
 
     wm = sub.add_parser("train-wm",

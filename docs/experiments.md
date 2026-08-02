@@ -1265,3 +1265,56 @@ of one track", both descriptors look mediocre and close together — 0.659 and
 0.690 — because a track that runs long enough drifts onto a different object,
 and the descriptor gets charged for the tracker's mistake. Restricting to
 sightings at most eight frames apart separates the two answers.
+
+
+---
+
+## Earning the death signal instead of taking it
+
+Once the object memory worked, the observation fence had a price: on Super Mario
+Bros. the agent covered 674.5 with no feedback against 1070.7 while reading the
+emulator. Lowering the fence was not an option, so the signal had to come from
+somewhere a player can see.
+
+Measuring first. Every candidate signal was logged per frame across 41,400
+frames of two games, with the emulator's lives counter kept as ground truth and
+nothing else:
+
+| | ordinary play | at a death |
+|---|---|---|
+| mean absolute frame change | p99 ≈ 20, max 26.8 | 98 – 141 |
+
+A death is two cuts, not one — the screen goes black and then the level is
+rebuilt — and the two are separated by what follows them:
+
+| | screen after the cut |
+|---|---|
+| death | mean 0.0 |
+| restart | mean 141.0 (Mario), 98.4 (Double Dragon) |
+
+So the rule is: the picture was replaced, and replaced by nothing.
+
+| | real deaths | detected | false alarms |
+|---|---|---|---|
+| 5 runs, 34,200 frames, two games | 12 | **12** | **0** |
+
+The cut is late — 4 frames behind the lives counter on Mario, 129 on Double
+Dragon, and the counter is itself 213 behind the hit — so the attribution window
+went to 400 frames, which is measured rather than padded.
+
+Super Mario Bros., distance over two minutes, eight paired seeds:
+
+| | distance | |
+|---|---|---|
+| `strict` | 674.5 | |
+| `visual` | **1083.1** | +408.7 against strict, t = +2.24 |
+| `privileged` | 1070.7 | `visual` is +12.5 against it, t = +0.22 |
+
+The honest signal recovers the whole benefit and is statistically
+indistinguishable from reading the machine. Double Dragon is unchanged
+(score 328.5 against 310.2, t = +0.56), as expected on a game where the answer
+is to hit things rather than avoid them.
+
+What it still cannot do: read the score, so `reward` labels never form; and tell
+a death from finishing a level, since both replace the screen and neither game
+reached the end of one while this was measured.

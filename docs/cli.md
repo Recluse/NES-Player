@@ -69,24 +69,39 @@ choose buttons — so this is an **input**, and where it comes from decides whet
 
 | Mode | Source | Use |
 |---|---|---|
-| `strict` (default) | nothing | the agent is told nothing, so the claim holds. Danger and reward labels never form |
+| `visual` (default) | the screen going black | honest, and measured to match the emulator exactly |
+| `strict` | nothing | the agent is told nothing; danger and reward labels never form |
 | `privileged` | emulator memory | a teacher may see more than its student; also for measurement |
-| `pixel` | the on-screen panel, read like a person | the honest source, and not good enough yet |
+| `pixel` | the on-screen panel, read like a person | reads the score too, and does not work yet |
 
 Measured. Replaying identical frames with the telemetry scrambled changed 51% of
 the actions before the fence existed and 0% after it.
 
-What the fence costs depends on the game, and the first answer was wrong. On
-Double Dragon it costs nothing (score −15.8, t = −0.40 over eight paired seeds).
-That measurement was taken while the danger machinery was broken in three
-separate ways, and generalising from it was a mistake: with those fixed, Super
+Being told nothing is expensive on a game whose answer is to avoid things: Super
 Mario Bros. gives 674.5 distance under `strict` against 1070.7 under
-`privileged` — **+396, t = +2.01**. On a game where the answer is to avoid
-things rather than hit them, being told nothing is expensive.
+`privileged`, +396 at t = +2.01. (On Double Dragon it costs nothing, which is
+why an earlier measurement there said the fence was free — generalising from one
+game was a mistake.)
 
-The conclusion is not to lower the fence but to earn the signal honestly: a
-death is visible on the screen and audible in the jingle the play loop already
-detects.
+So the signal is earned instead of taken. A death replaces the screen with
+black, and that is visible without reading anything:
+
+| | detected | false alarms |
+|---|---|---|
+| 12 real deaths over 34,200 frames of two games | **12** | **0** |
+
+The two cuts of a death — to black, then back to the level — are told apart by
+what follows: the screen after a death averages 0, after a restart 98 to 141.
+
+With that, the fence costs nothing at all:
+
+| Super Mario Bros., 8 paired seeds | distance |
+|---|---|
+| `strict` | 674.5 |
+| `visual` | **1083.1** (+408.7 against strict, t = +2.24) |
+| `privileged` | 1070.7 (`visual` is +12.5 against it, t = +0.22) |
+
+An honest signal that is indistinguishable from the cheat.
 
 `pixel` is left in place and not default because it does not work yet: against
 memory over 4000 frames it agreed 12% of the time on Double Dragon, where the
