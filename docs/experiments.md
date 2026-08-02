@@ -1364,3 +1364,22 @@ easy to predict precisely because a quarter of it is the same pointless retreat,
 and its majority-class baseline says so: 0.451 against 0.335. Choosing a
 checkpoint by validation accuracy would have chosen the one that walks into a
 wall.
+
+
+### Measured on the game's own axis
+
+Camera scroll is a stand-in for progress on games that do not report their own.
+Mario does report it, so `scripts/experiments/mario_reach.py` asks the game.
+Eight paired seeds, 4000 frames:
+
+| trained on | reach into 1-1 | deaths |
+|---|---|---|
+| old data | 702 (21%) | 3.0 |
+| new data | **1164** (36%, best run 1888) | **1.6** |
+
++462, winning 7 of 8 seeds. Neither finishes the level.
+
+The first version of that script cut each run short: it stopped as soon as the
+level number changed, and the level number moves during a death as well as at
+the end of a level, so every run ended at its first death. It reported
+1164 as 755 until that was removed.

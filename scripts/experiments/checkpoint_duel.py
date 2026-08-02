@@ -24,6 +24,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 GAME = "DoubleDragon-Nes-v0"
 STATE = "default"
 WARMUP_FRAMES = 1200   # budget for getting past an intro before giving up
+# Below this much accumulated camera movement, a run did not go anywhere and
+# "survived" means "did nothing" rather than "played well".
+STILL_PROGRESS = 40.0
 
 
 def run(checkpoint: str, frames: int, seed: int, temperature: float,
@@ -125,7 +128,25 @@ def main() -> int:
     base = out[args.checkpoints[0]]
     # Pick the metric the game actually reports: a shmup scrolls by itself, so
     # its "progress" is a clock, and only survival says anything.
-    key = "survived" if all(r["score"] == 0 for rs in out.values() for r in rs) else "score"
+    #
+    # But survival has a degenerate winner. An agent that stands still and holds
+    # one button never dies, and this comparison once handed it the crown: 3000
+    # frames survived, zero deaths, and a distance of minus nought point one.
+    # It read as a clean sweep. So survival is only allowed to decide when
+    # somebody actually moved — otherwise the run is not survival, it is idling,
+    # and the honest thing is to say there is nothing to compare.
+    scoreless = all(r["score"] == 0 for rs in out.values() for r in rs)
+    moved = max(abs(r["progress"]) for rs in out.values() for r in rs) > STILL_PROGRESS
+    if scoreless and not moved:
+        print("no score and nobody moved: every arm is idling, so there is "
+              "nothing here to compare. Survival would crown whichever agent "
+              "does least.")
+        for ckpt, rows in out.items():
+            print(f"  {Path(ckpt).name:16} progress "
+                  f"{statistics.mean(r['progress'] for r in rows):7.1f}  "
+                  f"attack frames {statistics.mean(r['attacks'] for r in rows):5.0f}")
+        return 1
+    key = "survived" if scoreless else "score"
     print(f"comparing on: {key}")
     for ckpt, rows in out.items():
         vals = [r[key] for r in rows]
