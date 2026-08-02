@@ -119,6 +119,8 @@ class Brain:
         self.hud_buf: list = []
         self._ticks = 0
         self._stop = False
+        self._fails = 0
+        self.last_error: str | None = None
         self._thread: threading.Thread | None = None
 
     def start(self) -> None:
@@ -137,14 +139,26 @@ class Brain:
                 continue
             try:
                 self._think(frame)
-            except Exception:
+                self._fails = 0
+            except Exception as e:
                 # A transient failure here must not kill the run: the game loop
-                # keeps playing with the previous decision.
+                # keeps playing with the previous decision. A permanent one must
+                # not hide either — a broken Grad-CAM path was swallowed here
+                # every frame for three of the four memory presets, and the only
+                # symptom was an overlay that quietly never appeared.
+                self._fails += 1
+                self.last_error = f"{type(e).__name__}: {e}"
+                if self._fails in (1, 10, 100) or self._fails % 1000 == 0:
+                    print(f"policy thread failed {self._fails}x: {self.last_error}",
+                          flush=True)
                 time.sleep(0.05)
             time.sleep(max(0.0, 1 / BRAIN_HZ - (time.monotonic() - t0)))
 
     def _think(self, frame) -> None:
-        self.pressed, self.ranked = self.policy.act(frame, temperature=self.args.temperature)
+        # Decide only. The game loop has already observed this frame and every
+        # one before it; calling act() here would advance the stack a second
+        # time, at the clock's rate, which is the defect this split removes.
+        self.pressed, self.ranked = self.policy.decide(temperature=self.args.temperature)
         self.seq += 1
         if self.args.cam and self.viewer.show_cam:
             self.cam = self.policy.compute_cam(frame)
@@ -196,6 +210,7 @@ def cmd_play(args: argparse.Namespace) -> None:
     from nes_player.emulator.stable_retro import StableRetroAdapter
     from nes_player.evaluation.viewer import Viewer, run_with_gui
     from nes_player.perception.audio_events import AudioEventDetector
+    from nes_player.perception.feedback import make_feedback
     from nes_player.perception.memory import ObjectMemory
     from nes_player.perception.motion import MotionTracker
     from nes_player.perception.text import HudReader
@@ -245,7 +260,9 @@ def cmd_play(args: argparse.Namespace) -> None:
             pause = PauseWatchdog(FROZEN_FRAMES)
             title = TitleTracker()
             ranked: list = []
-            score0, lives_prev, prev_score = None, None, 0
+            prev_score = 0
+            prev_over = False
+            feedback = make_feedback(args.feedback)
             death_tag_until, reward_tag_until = -1, -1
             unpause_left, game_over = 0, False
             entropy_hist: list[float] = []
@@ -258,8 +275,14 @@ def cmd_play(args: argparse.Namespace) -> None:
             restart = False
 
             for i in range(max_frames):
+                # The frame stack advances HERE, once per emulator frame, not
+                # in the brain thread once per decision. The offsets are frame
+                # counts — `long` means 128 frames, 2.1 seconds — and filling
+                # the history at 15 Hz made it mean 128 decisions, which is
+                # 8.5 seconds in realtime and something machine-dependent
+                # headless. Same checkpoint, different input, no error.
+                policy.observe(obs.frame_rgb, obs.audio_pcm)
                 brain.frame = obs.frame_rgb
-                policy.push_audio(obs.audio_pcm)   # the AV model hears; video-only is a no-op
                 if locator:
                     locator.push_audio(obs.audio_pcm)
 
@@ -325,23 +348,24 @@ def cmd_play(args: argparse.Namespace) -> None:
                     unpause_left = UNPAUSE_FRAMES
                     thoughts.add(f"f{i}: screen frozen — looks like pause, pressing START")
 
-                # Emulator memory is read here for *evaluation only* — the policy
-                # above never sees it (spec §3).
+                # `d` is for the display and the run's own bookkeeping. What
+                # goes INTO the object memory below — and from there into the
+                # planner and the curiosity rule, and so into the buttons — is
+                # `fb`, whose source is chosen by --feedback and is `strict` by
+                # default. The two used to be the same thing, which is how the
+                # pixels-only claim became untrue without anyone editing a line
+                # that looked like a decision.
                 d = obs.debug or {}
+                fb = feedback.update(obs.frame_rgb, d)
+                score, died = fb.score, fb.died
                 x_now = d.get("xscroll", d.get("xscrollHi", 0) * 256 + d.get("xscrollLo", 0))
                 if x_now < 6000:
                     best_x = max(best_x, x_now)
-                if score0 is None and i > 100:
-                    score0 = d.get("score", 0)
-                score = max(0, d.get("score", 0) - score0) if score0 is not None else 0
-                died = lives_prev is not None and d.get("lives", 0) < lives_prev
                 lives = d.get("lives", 0)
-                was_over, game_over = game_over, lives is not None and lives < 0
-                if game_over and not was_over:
+                game_over = lives is not None and lives < 0
+                if game_over and not prev_over:
                     thoughts.add(f"f{i}: GAME OVER — will re-enter via START")
-                if was_over and not game_over:
-                    score0 = None                 # new game, new score baseline
-                lives_prev = lives
+                prev_over = game_over
 
                 slots = tracker.update(obs.frame_rgb, pressed)
                 verdicts = memory.update(obs.frame_rgb, slots, i, score, died)

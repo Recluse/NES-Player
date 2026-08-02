@@ -24,6 +24,7 @@ Frame and audio are normalised by the adapter, so a model always receives
 240×224 at 32040 Hz whichever core produced it.
 """
 
+import hashlib
 import json
 import platform
 import shutil
@@ -51,6 +52,10 @@ _DIR, LIBEXT = _target()
 BUILDBOT = (f"https://buildbot.libretro.com/nightly/{_DIR}/latest/"
             "{name}_libretro" + LIBEXT + ".zip")
 STORE = Path(__file__).parents[3] / "rnd" / "cores"   # binaries live outside the repo
+# Which builds we have decided to trust. Checked in, so an experiment can say
+# exactly which binary produced its numbers, and so a changed upstream artifact
+# under the same `latest` URL is an error rather than a surprise.
+MANIFEST = Path(__file__).parents[3] / "cores.lock.json"
 
 _NES_SPEC = {
     "lib": None,
@@ -72,23 +77,98 @@ def available() -> list[str]:
     return [BUILTIN] + [c for c in got if c != BUILTIN]
 
 
-def fetch(name: str) -> Path:
-    """Download a core from the official libretro builds."""
+def sha256(path: Path) -> str:
+    h = hashlib.sha256()
+    with path.open("rb") as f:
+        for chunk in iter(lambda: f.read(1 << 20), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def _manifest() -> dict:
+    return json.loads(MANIFEST.read_text()) if MANIFEST.exists() else {}
+
+
+def _manifest_key(name: str) -> str:
+    """One entry per core per platform: the binaries are not interchangeable."""
+    return f"{name}/{_DIR}"
+
+
+def fetch(name: str, pin: bool = False) -> Path:
+    """Download a core from the official libretro builds, digest checked.
+
+    The URL says `latest`, so what arrives under it changes without notice.
+    Downloading a native library, marking it executable and loading it into the
+    process is the most trusting thing this project does, and it used to happen
+    with no record of what had been loaded — which is both a supply-chain hole
+    and a reproducibility one: an experiment could not say which binary produced
+    its numbers.
+
+    So a core must be in the manifest, with its SHA-256, before it will run.
+    `pin=True` records a new one — a deliberate act, on a build the operator has
+    decided to trust, rather than something that happens quietly on first use.
+    """
     if name not in KNOWN:
         raise ValueError(f"unknown core {name!r}; known: {', '.join(KNOWN)}")
     STORE.mkdir(parents=True, exist_ok=True)
     dest = STORE / f"{name}_libretro{LIBEXT}"
+    manifest = _manifest()
+    key = _manifest_key(name)
+    expected = manifest.get(key, {}).get("sha256")
+
     if dest.exists():
+        got = sha256(dest)
+        if expected is None:
+            if not pin:
+                raise RuntimeError(
+                    f"{dest} is not in {MANIFEST.name}. Its digest is {got}. "
+                    f"Run with pin=True (or `nes-player`'s --pin-core) to record it "
+                    f"after checking where it came from.")
+            _pin(manifest, key, name, got)
+        elif got != expected:
+            raise RuntimeError(
+                f"{dest} does not match {MANIFEST.name}: expected {expected}, "
+                f"got {got}. Delete it to re-download, or investigate.")
         return dest
+
+    url = BUILDBOT.format(name=name)
     with tempfile.TemporaryDirectory() as td:
         zip_path = Path(td) / "core.zip"
-        subprocess.run(["curl", "-sL", "--max-time", "180", "-o", str(zip_path),
-                        BUILDBOT.format(name=name)], check=True)
+        subprocess.run(["curl", "-sL", "--max-time", "180", "-o", str(zip_path), url],
+                       check=True)
         with zipfile.ZipFile(zip_path) as zf:
             inner = next(n for n in zf.namelist() if n.endswith(LIBEXT))
-            dest.write_bytes(zf.read(inner))
+            # Written next to the destination and checked before it becomes the
+            # real name, so a mismatched download never sits there executable.
+            staged = Path(td) / dest.name
+            staged.write_bytes(zf.read(inner))
+        got = sha256(staged)
+        if expected is not None and got != expected:
+            raise RuntimeError(
+                f"downloaded {name} does not match {MANIFEST.name}: expected "
+                f"{expected}, got {got}. Upstream changed under the same URL.")
+        if expected is None:
+            if not pin:
+                raise RuntimeError(
+                    f"{name} is not pinned in {MANIFEST.name}. The download from "
+                    f"{url} has digest {got}; record it with pin=True to accept it.")
+            _pin(manifest, key, name, got, url)
+        shutil.move(str(staged), dest)
     dest.chmod(0o755)
     return dest
+
+
+def _pin(manifest: dict, key: str, name: str, digest: str, url: str | None = None) -> None:
+    manifest[key] = {"core": name, "platform": _DIR, "sha256": digest,
+                     "url": url or BUILDBOT.format(name=name)}
+    MANIFEST.parent.mkdir(parents=True, exist_ok=True)
+    MANIFEST.write_text(json.dumps(dict(sorted(manifest.items())), indent=2) + "\n")
+    print(f"pinned {key} = {digest}", flush=True)
+
+
+def digest_of(name: str) -> str | None:
+    """The recorded digest of a core, for run metadata. None if not pinned."""
+    return _manifest().get(_manifest_key(name), {}).get("sha256")
 
 
 def use(name: str) -> None:
@@ -106,9 +186,7 @@ def use(name: str) -> None:
     import stable_retro.data as data
     from stable_retro._retro import RetroEmulator
 
-    lib = STORE / f"{name}_libretro{LIBEXT}"
-    if not lib.exists():
-        lib = fetch(name)
+    lib = fetch(name)   # verifies the digest whether it was cached or downloaded
     # The binary has to sit in the core directory, whose path was baked in at
     # import time. On its own it switches nothing: nothing references it until
     # the platform is re-registered, and that happens only in this process.

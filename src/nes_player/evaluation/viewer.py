@@ -190,7 +190,11 @@ class Viewer:
             if chunk:
                 try:
                     self._speaker.write(np.frombuffer(chunk, dtype=np.int16))
-                except Exception:
+                except Exception as e:
+                    # The feeder thread ends here, so the run continues in
+                    # silence. Say why: an unexplained loss of sound halfway
+                    # through a recording is a mystery worth one line of log.
+                    print(f"audio output stopped: {type(e).__name__}: {e}", flush=True)
                     return
             else:
                 time.sleep(0.003)
@@ -238,7 +242,10 @@ class Viewer:
             _, _, rw, rh = cv2.getWindowImageRect(WINDOW)
             if rw > 0 and abs(rw - _W) > 2:
                 x, y = x * _W / rw, y * _H / rh
-        except Exception:
+        except cv2.error:
+            # Some backends do not implement it; the nominal scale is the
+            # fallback. Narrowed from `Exception` so that a real bug in the
+            # lines above surfaces instead of quietly mislocating every click.
             x, y = x / self.scale, y / self.scale
 
         def hit(btn):

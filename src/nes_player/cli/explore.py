@@ -48,6 +48,8 @@ class Observer:
         self.ranked: list = []
         self.cam = None
         self._stop = False
+        self._fails = 0
+        self.last_error: str | None = None
 
     def start(self) -> None:
         threading.Thread(target=self._work, daemon=True).start()
@@ -71,7 +73,16 @@ class Observer:
                 continue
             try:
                 _, self.ranked, self.cam = self.policy.act(frame, with_cam=True)
-            except Exception:
+                self._fails = 0
+            except Exception as e:
+                # Same reasoning as the policy thread in play.py: keep going,
+                # but say so. A permanent failure here looks exactly like an
+                # observer that has nothing to show.
+                self._fails += 1
+                self.last_error = f"{type(e).__name__}: {e}"
+                if self._fails in (1, 10, 100) or self._fails % 1000 == 0:
+                    print(f"observer failed {self._fails}x: {self.last_error}",
+                          flush=True)
                 time.sleep(0.05)
             time.sleep(max(0.0, 1 / OBSERVER_HZ - (time.monotonic() - t0)))
 
@@ -81,6 +92,7 @@ def cmd_explore(args: argparse.Namespace) -> None:
     from nes_player.emulator.stable_retro import StableRetroAdapter
     from nes_player.evaluation.viewer import Viewer, run_with_gui
     from nes_player.perception.audio_events import AudioEventDetector
+    from nes_player.perception.feedback import make_feedback
     from nes_player.policy.instinct import InstinctPolicy
 
     env = StableRetroAdapter(args.game, integration_dir=args.integrations,
@@ -114,29 +126,30 @@ def cmd_explore(args: argparse.Namespace) -> None:
                     "sample_rate": env.sample_rate})
             pause = PauseWatchdog(FROZEN_FRAMES)
             title = TitleTracker()
-            score0, lives_prev, game_over = None, None, False
+            game_over = False
             prev_score = 0
+            feedback = make_feedback(args.feedback)
             last_reason = ""
             unpause_left = 0
             title_press_at = -1000
             screen_prompt: str | None = None
             entropy_hist: list[float] = []
             last_entropy_ranked: list = []
-            restart = False
+            restart = quitting = False
 
             for i in range(max_frames):
-                # Emulator memory is read for evaluation only; the policy below
-                # sees pixels and audio (spec §3).
+                # Two separate readings of the same frame, and the difference
+                # matters. `feedback` is an INPUT: it tells the policy that
+                # something good or bad happened, and those labels pick buttons.
+                # Its source is chosen by --feedback and is `strict` by default.
+                # `d` below is for the display and the run's own bookkeeping —
+                # game over, the printed line — and never reaches the policy.
                 d = obs.debug or {}
-                if score0 is None and i > 100:
-                    score0 = d.get("score", 0)
-                score = max(0, d.get("score", 0) - score0) if score0 is not None else 0
-                died = lives_prev is not None and d.get("lives", 0) < lives_prev
+                fb = feedback.update(obs.frame_rgb, d)
                 lives = d.get("lives", 0)
                 game_over = lives is not None and lives < 0
-                lives_prev = lives
 
-                pressed, slots, verdicts = policy.step(obs.frame_rgb, score, died)
+                pressed, slots, verdicts = policy.step(obs.frame_rgb, fb.score, fb.died)
                 in_game = any(s.ctrl_prob > CTRL_PROB for s in slots)
 
                 if i % PROMPT_EVERY == 0:
@@ -176,13 +189,13 @@ def cmd_explore(args: argparse.Namespace) -> None:
                 if len(entropy_hist) > 2000:
                     del entropy_hist[:-500]
 
-                if died:
+                if fb.died:
                     for cid in ears.attribute(sounds.within(DEATH_SOUND_LOOKBACK), "death"):
                         thoughts.add(f"f{i}: sound #{cid} = DANGER (death jingle)")
-                if score > prev_score:
+                if fb.score > prev_score:
                     for cid in ears.attribute(sounds.within(REWARD_SOUND_LOOKBACK), "reward"):
                         thoughts.add(f"f{i}: sound #{cid} = REWARD (score sound)")
-                prev_score = score
+                prev_score = fb.score
 
                 if title.step(obs.frame_rgb, i, in_game=in_game,
                               from_power_on=args.state is None):
@@ -205,7 +218,7 @@ def cmd_explore(args: argparse.Namespace) -> None:
                         obs, (pressed,),
                         info={"game": args.game, "mode": f"instinct/{policy.mode}",
                               "episode": str(episode), "fps": viewer.fps_info(),
-                              "score": str(score),
+                              "score": str(fb.score),
                               **({"observer": "BC watches"} if observer else {})},
                         thoughts=thoughts + policy.knowledge.lines(),
                         slots=slots, verdicts=verdicts,
@@ -221,7 +234,13 @@ def cmd_explore(args: argparse.Namespace) -> None:
                                       for e in sounds.events],
                     )
                     if cmd == "quit":
-                        return
+                        # Break rather than return: the frames recorded so far
+                        # are real data and deserve to be finished properly.
+                        # Returning here used to skip close() entirely, leaving
+                        # a directory with no actions and no metadata that the
+                        # next training run happily picked up.
+                        quitting = True
+                        break
                     if cmd == "restart":
                         restart = True
                         break
@@ -233,7 +252,7 @@ def cmd_explore(args: argparse.Namespace) -> None:
                 except ValueError:
                     pass          # empty episode, nothing to write
             print(f"episode={episode} debug={obs.debug or {}}")
-            if not (args.loop or restart):
+            if quitting or not (args.loop or restart):
                 break
 
     try:

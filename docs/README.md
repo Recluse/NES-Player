@@ -25,7 +25,7 @@ to prove, then pick a document below.
 
 | Stage | State |
 |---|---|
-| 0. Repository and infrastructure | done — uv, Python 3.14, ruff, pytest (48 tests including regression) |
+| 0. Repository and infrastructure | done — uv, Python 3.14, ruff, pytest (132 tests including regression) |
 | 1. Emulator harness | done — stable-retro/fceumm headless, determinism, savestates |
 | 2. Dataset builder | done — FM2 replay to Zarr; desynchronising movies contribute a verified prefix |
 | 3. Behavioural cloning baseline | done — plus self-imitation |

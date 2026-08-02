@@ -4,23 +4,45 @@
 
 ```
 ROM → stable-retro (fceumm, headless) ─ EmulatorAdapter
-        │ 240×224 RGB frame, 32040 Hz mono PCM, debug RAM (never for the policy)
+        │ 240×224 RGB frame, 32040 Hz mono PCM, debug RAM
         │ ↑ CANONICAL form, identical whichever core is loaded — see below
         ▼
 Perception (CPU, classical — no neural networks)
   ├── MotionTracker: camera scroll (phase correlation) + moving blobs → slots
   │                  (blobs under 24 px pass only with a world velocity: bullets)
+  ├── SpriteTracker: the same slots read from the console's sprite table —
+  │                  exact, privileged, for supervision and measurement only
   ├── ObjectMemory: sprite clusters + contact outcomes → danger / reward
+  ├── Feedback: strict / privileged / pixel — see the fence below
   ├── AudioEventDetector: log-mel flux onsets → sound clusters and their meaning
   ├── HudReader: on-screen counters, digits learned without labels
   └── SoundLocator (neural, optional): contrastive sound↔frame → where it came from
         ▼
 Policies
   ├── BCPolicy: CNN over video, or video + audio; behavioural cloning plus self-imitation
+  ├── StatePolicy: the privileged teacher — 36 numbers from the sprite table
   └── InstinctPolicy: control calibration and exploration rules, no training at all
         ▼
-Action: an NES button bitmask (L+R and U+D rejected in ControllerState)
+Action: an NES button bitmask, opposite directions resolved away
 ```
+
+## The fence
+
+The agent plays from pixels and sound. Emulator memory exists and is trivially
+readable, so the boundary has to be a mechanism rather than an intention.
+
+- **The observation channel** is pixels and audio. Nothing else is passed to a
+  policy that plays.
+- **The feedback channel** — "the score went up", "we died" — is an input too,
+  because it becomes danger/reward labels and those pick buttons. Its source is
+  named explicitly (`perception/feedback.py`) and defaults to telling the agent
+  nothing.
+- **Supervision and teachers may cheat.** Attention targets from the sprite
+  table, and the state teacher that reads object positions, are on the training
+  side of the fence. The student they produce is not.
+- **The check is a test, not a comment.** Replay the same frames with the
+  telemetry scrambled; in strict mode the action trace must be identical. It was
+  48.9% identical before this existed.
 
 ## Modules
 
@@ -42,6 +64,8 @@ src/nes_player/
 │   ├── memory.py         ObjectMemory: 16×16 prototypes, contacts, verdicts
 │   ├── audio_events.py   AudioEventDetector: onsets, clusters, death/reward meaning
 │   ├── av_align.py       AVAlign/SoundLocator: contrastive sound↔frame (InfoNCE)
+│   ├── sprites.py        shadow OAM at $0200 → exact object positions, SpriteTracker
+│   ├── feedback.py       where "good/bad happened" comes from; strict by default
 │   ├── text.py           HudReader: unsupervised digits, screen prompts
 │   ├── title.py          TitleWatch/TitleTracker: title screen from pixels
 │   └── slots.py          SlotAE: neural slots (v1 — a negative result)
@@ -50,11 +74,15 @@ src/nes_player/
 │   ├── improve.py        self-imitation: rollouts → retrain on the best ones
 │   ├── planner.py        EgoPlanner: MPC over the ego model (templates × 16 steps)
 │   ├── idm.py            inverse dynamics: recover the button between two frames
+│   ├── state_teacher.py  privileged teacher: 36 numbers in, trained on results
 │   └── instinct.py       InstinctPolicy: wait → calibrate → explore, knowledge base
 ├── world_model/
 │   ├── model.py          WorldModel v1/v2 (latent, action-blind — kept as history)
 │   └── ego.py            EgoModel v4: crop around the hero → (dx, dy), GhostPredictor
+├── provenance.py         run.json: commit, dirty flag, versions, ROM/core/data ids
 ├── evaluation/
+│   ├── evaluator.py      synchronous, frame-indexed play: observe every frame,
+│   │                     decide on a fixed grid, hold in between
 │   ├── dashboard.py      the 1280×720 panel (×1.5 for HD)
 │   └── viewer.py         window, recording, sound, threading — see below
 └── cli/

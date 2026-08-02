@@ -1,0 +1,20 @@
+{
+  "mesen/apple/osx/arm64": {
+    "core": "mesen",
+    "platform": "apple/osx/arm64",
+    "sha256": "3849098df9baf3b37fb58e27049c05d39ff4c4ffa63f0d739294188ba601c5d5",
+    "url": "https://buildbot.libretro.com/nightly/apple/osx/arm64/latest/mesen_libretro.dylib.zip"
+  },
+  "nestopia/apple/osx/arm64": {
+    "core": "nestopia",
+    "platform": "apple/osx/arm64",
+    "sha256": "a3450a09262109534a46098abbb00d2b016168da4b4351027b2eae5a40024886",
+    "url": "https://buildbot.libretro.com/nightly/apple/osx/arm64/latest/nestopia_libretro.dylib.zip"
+  },
+  "quicknes/apple/osx/arm64": {
+    "core": "quicknes",
+    "platform": "apple/osx/arm64",
+    "sha256": "7171d1a090cd2b063ff6516a289da6f9824409d493241ed5d3c9a256b0429cd6",
+    "url": "https://buildbot.libretro.com/nightly/apple/osx/arm64/latest/quicknes_libretro.dylib.zip"
+  }
+}

@@ -58,6 +58,18 @@ class ObjectMemory:
         self._slot_cluster: dict[int, int] = {}
         self._protos: np.ndarray | None = None   # (K, PATCH, PATCH), for vectorised L2
 
+    def begin_episode(self) -> None:
+        """Forget what was still in flight; keep what was learned.
+
+        Clusters are meant to outlive an episode — that is the whole point of a
+        memory. Contacts awaiting an outcome are not: their frame numbers are
+        episode-local, so after a reset `frame_index - p.frame` goes negative
+        and stays inside the window forever, and the first death of the new
+        episode gets blamed on an object from the old one.
+        """
+        self._pending.clear()
+        self._slot_cluster.clear()
+
     def _patch(self, frame_rgb: np.ndarray, bbox) -> np.ndarray:
         x, y, w, h = bbox
         crop = frame_rgb[max(0, y) : y + h, max(0, x) : x + w]
@@ -101,17 +113,24 @@ class ObjectMemory:
                     and np.hypot(s.cx - controlled.cx, s.cy - controlled.cy) < CONTACT_PX):
                 cluster.contacts += 1
                 self._pending.append(_PendingContact(cluster.cluster_id, frame_index, score))
-        # Resolve the consequences of earlier contacts
+        # Resolve the consequences of earlier contacts. The window is checked
+        # first, for both outcomes: it used to gate only the score, so a death
+        # was credited to every contact still on the list no matter how old,
+        # and — because expiry happened in the branch a death skipped — those
+        # contacts were never dropped at all. An object touched once could
+        # collect the blame for every death for the rest of the run.
         still = []
         for p in self._pending:
+            if frame_index - p.frame >= EFFECT_WINDOW:
+                continue           # too long ago to be a consequence of this
             c = self.clusters[p.cluster_id]
             if died:
                 c.deaths += 1
-            elif frame_index - p.frame < EFFECT_WINDOW:
-                if score > p.score_at:
-                    c.score_gain += score - p.score_at
-                    p.score_at = score
-                still.append(p)
+                continue           # resolved: the contact got its answer
+            if score > p.score_at:
+                c.score_gain += score - p.score_at
+                p.score_at = score
+            still.append(p)
         self._pending = still
         for s in slots:
             cid = self._slot_cluster.get(s.slot_id)

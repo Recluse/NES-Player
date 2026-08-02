@@ -175,3 +175,48 @@ A playable policy with no training at all. Three phases:
      supposed to move.
 
 It keeps its own MotionTracker and ObjectMemory.
+
+
+---
+
+## Objects from the sprite table
+
+The NES draws everything that moves as sprites, and the picture processing unit
+is told where they are by a 256-byte table it receives by direct memory access
+from CPU page `$0200` every frame: 64 sprites of four bytes each — y, tile,
+attributes, x. Practically every game on the machine uses that transfer, so
+reading page 2 gives exact positions of every on-screen object **in any game**,
+with no per-game memory map to write.
+
+```python
+oam = ram[0x200:0x200 + 4 * 64].reshape(64, 4)
+visible = oam[oam[:, 0] < 0xEF]        # 0xEF and above parks a sprite off-screen
+```
+
+`SpriteTracker` presents these through the same interface as `MotionTracker`, so
+the instinct policy can be run on either without changing a line of its logic —
+which is what isolates perception as a variable.
+
+Two limits, both real:
+
+- **This is privileged.** It is for supervision, for measurement, and for a
+  teacher that is meant to see more than its student. A policy that plays does
+  not read it.
+- **Sprites are objects, not the world.** Floors, pits, spikes and walls are
+  background tiles and do not appear in the table at all. In Super Mario Bros.
+  the most lethal thing on the screen is invisible to it.
+
+Recorded episodes do not store RAM and do not need to: every episode replays
+frame-exactly from its recorded actions, so the table can be recovered
+afterwards. The recovery verifies itself — the replay is compared with the
+stored frames every 600 frames and raises rather than returning a plausible
+table from a different run.
+
+## Where "something good or bad happened" comes from
+
+The object memory turns contacts into `danger` and `reward` verdicts using two
+facts: the score went up, and we died. Those verdicts choose buttons, so the
+facts are an **input**, and their source decides whether the pixels-and-sound
+claim is true. `perception/feedback.py` names three sources and defaults to
+`strict`, which supplies neither fact. See [cli.md](cli.md#feedback) for the
+measurements behind that default.

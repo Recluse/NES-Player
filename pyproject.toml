@@ -4,6 +4,8 @@ version = "0.1.0"
 description = "Multimodal agent that learns to play NES games from human-like observations"
 authors = [{ name = "Ruslan Semov" }]
 license = "MIT"
+license-files = ["LICENSE"]
+readme = "README.md"
 requires-python = ">=3.14,<3.15"
 dependencies = [
     "stable-retro>=1.0.1",
@@ -22,6 +24,10 @@ dev = [
     "ruff>=0.5",
 ]
 
+[project.urls]
+Homepage = "https://nesplayer.recluse.lol"
+Repository = "https://github.com/Recluse/NES-Player"
+
 [project.scripts]
 nes-player = "nes_player.cli:main"
 
@@ -31,6 +37,30 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/nes_player"]
+
+# Two publication paths existed with two different rule sets: scripts/publish.py
+# builds the public mirror and withholds docs-ru/, web/, .claude/ and the
+# personal Telegram scripts, while a plain `uv build` sdist packed all of them.
+# Nothing secret was in there, but an operator running `uv publish` would have
+# shipped exactly what the other path deliberately holds back. The sdist now
+# carries only what the package needs; the mirror stays the one publish path.
+# Kept as an allowlist, not a denylist, so a new private file is excluded by
+# default rather than by remembering to add it.
+[tool.hatch.build.targets.sdist]
+# Anchored with a leading slash: unanchored, `docs` also matched `web/docs`
+# and `README.md` matched every README in the tree, so the first attempt at
+# this allowlist shipped exactly the four files it was written to withhold.
+include = [
+    "/src/nes_player",
+    "/tests",
+    "/docs",
+    "/integrations",
+    "/README.md",
+    "/LICENSE",
+    "/pyproject.toml",
+    "/uv.lock",
+]
+exclude = ["/tests/unit/test_public_hygiene.py"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

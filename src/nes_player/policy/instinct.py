@@ -25,6 +25,7 @@ from pathlib import Path
 
 import numpy as np
 
+from nes_player.emulator.controller import resolve_conflicts
 from nes_player.perception.memory import ObjectMemory
 from nes_player.perception.motion import MotionTracker, Slot
 
@@ -113,8 +114,13 @@ class InstinctPolicy:
     """Same interface as BCPolicy, plus its own tracker and object memory."""
 
     def __init__(self, knowledge_path: str | Path | None = None,
-                 attack_button: str = "B"):
-        self.tracker = MotionTracker()
+                 attack_button: str = "B", perception: str = "motion"):
+        # "motion" infers objects from the pixels, which is what the agent has
+        # to do for real. "sprites" reads the console's sprite table: exact
+        # positions, no inference. Swapping them isolates perception as a
+        # variable — see perception/sprites.py.
+        self.perception = perception
+        self.tracker = self._new_tracker()
         self.memory = ObjectMemory()
         self.knowledge = Knowledge()
         self.knowledge_path = Path(knowledge_path) if knowledge_path else None
@@ -131,6 +137,9 @@ class InstinctPolicy:
         self._scroll_hist: list[float] = []
         self._stuck_jumps = 0
         self._enemies_near = False    # enemies nearby means "stuck" does not count
+        # Off = the pre-fix behaviour, kept so the change can be ablated rather
+        # than argued about. See _explore_step.
+        self.curiosity_needs_progress = True
         self._target_id: int | None = None   # finish one enemy, not all of them once
         self._target_left = 0
         self._attack_phase = 0
@@ -138,7 +147,9 @@ class InstinctPolicy:
         self._wall_frames = 0                # consecutive frames of LEFT doing nothing
         self._plan: list[tuple[frozenset[str], int]] = []   # queue of (buttons, frames)
         self._cal_started = False
-        self.tracker = MotionTracker()
+        self.tracker = self._new_tracker()
+        if hasattr(self, "memory"):   # reset() also runs from __init__
+            self.memory.begin_episode()
         # Knowledge already gathered, from an earlier episode or from disk:
         # calibrating again would waste the first thousand frames of every run.
         if self.knowledge.jump_height:
@@ -150,9 +161,23 @@ class InstinctPolicy:
 
     # ---------- one frame ----------
 
-    def step(self, frame_rgb: np.ndarray, score: int = 0, died: bool = False):
-        """Returns (pressed, slots, verdicts); the last two are for rendering."""
-        slots = self.tracker.update(frame_rgb, self._pressed)
+    def _new_tracker(self):
+        if self.perception == "sprites":
+            from nes_player.perception.sprites import SpriteTracker
+
+            return SpriteTracker()
+        return MotionTracker()
+
+    def step(self, frame_rgb: np.ndarray, score: int = 0, died: bool = False,
+             ram: np.ndarray | None = None):
+        """Returns (pressed, slots, verdicts); the last two are for rendering.
+
+        `ram` is only read when perception is "sprites", and only to locate
+        objects. The policy never reads game variables from it (spec §3).
+        """
+        slots = (self.tracker.update(frame_rgb, self._pressed, ram)
+                 if self.perception == "sprites"
+                 else self.tracker.update(frame_rgb, self._pressed))
         verdicts = self.memory.update(frame_rgb, slots, self._frame, score, died)
         best = max(slots, key=lambda s: s.ctrl_prob, default=None)
         self._scroll_hist.append(self.tracker.scroll_dx)
@@ -176,7 +201,9 @@ class InstinctPolicy:
             ctrl = best if best is not None and best.ctrl_prob >= 0.55 else None
             pressed = self._explore_step(slots, ctrl, verdicts)
             pressed = self._unstick_from_left_wall(pressed, best)
-        self._pressed = pressed
+        # One resolver on the way out. The unstick guard turns LEFT into RIGHT
+        # while a plan may still be holding LEFT, and a hand cannot press both.
+        self._pressed = pressed = resolve_conflicts(pressed)
         self._frame += 1
         return pressed, slots, verdicts
 
@@ -275,6 +302,15 @@ class InstinctPolicy:
             return buttons
 
         hold = self.knowledge.best_jump_hold()
+        # Curiosity is only curiosity while it is getting somewhere. Measured on
+        # Double Dragon it latched onto a fixed blob overhead and jumped at it
+        # for 3912 of 4200 frames — and because curiosity is checked above the
+        # stuck escalation, the escalation never got a turn: the agent stood in
+        # one spot for three minutes, alive only because nothing came to kill
+        # it. Being demonstrably stuck disqualifies curiosity, and once the
+        # escalation gets the world moving again curiosity is allowed back.
+        stuck = self._stuck() and not self._enemies_near
+        gate = stuck and self.curiosity_needs_progress
         if ctrl is not None:
             # Danger ahead: jump over it.
             for s in slots:
@@ -286,7 +322,7 @@ class InstinctPolicy:
                     self.last_reason = f"danger #{s.slot_id} ahead — jumping over"
                     return self._take_from_plan()
             # Curiosity: something unfamiliar overhead is worth jumping into.
-            for s in slots:
+            for s in (() if gate else slots):
                 if s is ctrl or verdicts.get(s.slot_id) != "unknown":
                     continue
                 dx, dy = s.cx - ctrl.cx, ctrl.cy - s.cy
@@ -300,7 +336,7 @@ class InstinctPolicy:
 
         # In a beat-em-up the camera holds still while enemies are alive. That
         # is not being stuck, it is the game working as designed.
-        if self._stuck() and not self._enemies_near:
+        if stuck:
             self._stuck_jumps += 1
             self._scroll_hist.clear()   # fresh window after a manoeuvre
             if self._stuck_jumps <= 3:

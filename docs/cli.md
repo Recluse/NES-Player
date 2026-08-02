@@ -27,7 +27,14 @@ uv run nes-player play --game SuperMarioBros-Nes-v0 --checkpoint runs/bc_smb_att
 | `--planner` | MPC on top of the ego model |
 | `--sound-loc PATH` | AV-align checkpoint: draw a ring where a sound came from |
 | `--state default` | start from the integration's savestate — needed by games whose title screen cannot be passed from power-on |
-| `--core nestopia` | pick a different emulation core |
+| `--core nestopia` | pick a different emulation core; the binary is checked against `cores.lock.json` before it is loaded |
+| `--feedback strict` | where "something good or bad happened" comes from. See [Feedback](#feedback) — this is an input, not telemetry |
+
+The frame stack advances once per **emulator frame**, in the game loop, while
+the network decides at ~15 Hz in its own thread. Those used to be the same
+event, which meant `--memory long` reached 128 *decisions* back rather than 128
+frames — several times its documented window, and a different number on a
+different machine.
 
 ## `explore` — instincts, no training involved
 
@@ -47,7 +54,34 @@ features without touching the controls.
 
 `--record DIR` writes every episode as a Zarr dataset. This is where training
 data for games without a synchronised TAS comes from — headless it produces
-hundreds of episodes in minutes.
+hundreds of episodes in minutes. An episode directory appears only once it is
+complete: recording happens in `<name>.partial` and is renamed at the end, so a
+crash or a quit leaves nothing that looks loadable but is not.
+
+`--feedback` selects the same channel as in `play`; see below.
+
+## Feedback
+
+The instinct policy learns which objects are dangerous from two facts: the score
+went up, and we died. Those become `danger` and `reward` labels, and the labels
+choose buttons — so this is an **input**, and where it comes from decides whether
+"pixels and sound only" is true.
+
+| Mode | Source | Use |
+|---|---|---|
+| `strict` (default) | nothing | the agent is told nothing, so the claim holds. Danger and reward labels never form |
+| `privileged` | emulator memory | a teacher may see more than its student; also for measurement |
+| `pixel` | the on-screen panel, read like a person | the honest source, and not good enough yet |
+
+Measured. Replaying identical frames with the telemetry scrambled changed 51% of
+the actions before the fence existed and 0% after it. Turning the channel off
+cost nothing measurable in play (score −15.8, t = −0.40 over eight paired
+seeds), which says the labels were adding noise rather than knowledge.
+
+`pixel` is left in place and not default because it does not work yet: against
+memory over 4000 frames it agreed 12% of the time on Double Dragon, where the
+digit reader locks onto the health bar, and 26% on Mario, where the number of
+lives is not drawn during play at all.
 
 ## `train-bc` — behavioural cloning
 
@@ -62,8 +96,25 @@ last 10% of episodes taken whole rather than a random split — a random split
 across frames of the same episode leaks.
 
 `--attn 1.0` turns on attention supervision: the last conv layer's attention map
-is penalised for looking outside the motion tracker's boxes. Masks are cached in
-`attn_mask.npy` next to the episode.
+is penalised for looking outside the object boxes. Masks are cached next to the
+episode, in a filename carrying the version of whatever produced them.
+
+`--attn-source {tracker,oam}` chooses where those boxes come from. `tracker`
+infers objects from motion in the pixels — the same thing the agent has to do,
+and wrong often: of the cells it calls an object only **31%** contain a real
+sprite, and it misses **43%** of the ones that are there. `oam` reads the
+console's own sprite table, which is exact and works in every NES game. That is
+a cheat, and supervision is allowed to cheat: the target says where to look, and
+the network still has to find it in pixels when it plays.
+
+`--memory {short,wide,long,epic}` sets how far back the frame stack reaches, in
+frames: 4, 32, 128, 1280. The samples are spaced geometrically, so the window
+grows without the network growing.
+
+Training keeps the **best epoch by validation accuracy**, not the last one, and
+says so in the log when they differ. Audio normalisation is computed from the
+training split alone and stored in the checkpoint, so the same numbers apply
+during training, validation and play.
 
 `--init-from CHECKPOINT` reuses a base model's body and audio encoder and
 retrains the heads — this is the few-shot transfer path.
@@ -107,15 +158,26 @@ uv run nes-player train-idm --episode datasets/explore --out runs/idm_x
 Guesses which button was pressed between two frames. This is the route to
 learning from recordings that have no button track.
 
-## `train-wm` — world model
+## `train-ego` — ego world model
+
+```bash
+uv run nes-player train-ego --episode datasets/explore_smb --out runs/ego_x
+```
+
+Predicts where the hero ends up for a given button sequence. **This is the model
+`play --ghost` and `play --planner` actually load.** It had no CLI entry for a
+while, so anyone following the documented commands trained the other one.
+
+## `train-wm` — legacy world model
 
 ```bash
 uv run nes-player train-wm --episode datasets/smb_warps_tas --out runs/wm_x
 ```
 
-Prints `action_advantage`: how much better the model predicts when it is told
-the action than when it is not. Above 1 means actions carry information the
-model can use.
+The action-blind latent model, kept to reproduce the project's recorded negative
+result rather than because anything uses it. Prints `action_advantage`: how much
+better it predicts when told the action than when not. Above 1 means actions
+carry information the model can use.
 
 ## `train-slots` — neural slots (experimental)
 

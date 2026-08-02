@@ -32,8 +32,17 @@ Linux, CPU otherwise. The models are small; training takes minutes, not hours.
   directory. Never a random frame split: consecutive frames are near-duplicates,
   and a random split leaks the answer.
 - `--attn` adds attention supervision: cross-entropy between the spatial softmax
-  of the last conv layer's activations and a mask of the motion tracker's boxes,
-  cached in `attn_mask.npy` beside the episode.
+  of the last conv layer's activations and a mask of where the objects are,
+  cached beside the episode under a filename carrying the version of whatever
+  produced it. `--attn-source oam` takes the mask from the console's sprite
+  table instead of the motion tracker; the tracker gets 31% of its boxes right
+  and misses 43% of the objects.
+- Audio normalisation is computed from the **training split only** and stored in
+  the checkpoint, so training, validation and play all use the same numbers.
+  Previously each episode was normalised by its own statistics — validation
+  episodes included, which is a look at audio the model has not heard yet — and
+  inference used an average of all of them.
+- Training keeps the **best epoch by validation accuracy**, not the last.
 
 The attention loss exists because of a measurement. Left alone, the network put
 12.5% of its attention mass inside object boxes while a uniform gaze would put
@@ -42,10 +51,41 @@ background that happened to correlate with the action. With supervision it
 reaches 21.5%, and 38.0% on the multi-game base, at a cost of 2–3 points of
 accuracy.
 
-At inference the policy decides at about 15 Hz. Jump duration is added outside
-the network (see `JumpShaper` in `cli/play.py`): a full Super Mario Bros. jump
-needs roughly 32 frames of held A, which a policy resampled every 4 frames
-cannot express by itself.
+At inference the policy decides at about 15 Hz while **observing every emulator
+frame**. The two are separate calls (`observe` and `decide`) for a reason: when
+the frame stack advanced once per decision, `--memory long` reached 128
+decisions back rather than 128 frames — around 8.5 seconds in realtime and a
+machine-dependent number headless — so the memory presets did not measure the
+windows their names claim. For measurement use `evaluation/evaluator.py`, which
+decides on a fixed grid of frame indices and returns those indices with the
+result.
+
+Jump duration is added outside the network (see `JumpShaper` in `cli/play.py`):
+a full Super Mario Bros. jump needs roughly 32 frames of held A, which a policy
+resampled every 4 frames cannot express by itself.
+
+## The privileged teacher (`policy/state_teacher.py`)
+
+Cloning is bounded by whoever produced the data, and measurement says that bound
+has been reached: a clone at 0.981 validation plays no better than one at 0.567.
+So the teacher is trained on **results** instead — play twelve rollouts, keep the
+best four by reward, retrain, repeat.
+
+It plays from 36 numbers rather than pixels: the hero, the six nearest objects
+**relative to the hero**, and the camera scroll. Relative on purpose — absolute
+coordinates would have it memorise places, and the places change every screen.
+Compact on purpose too: the loop needs hundreds of rollouts, and a small network
+over 36 numbers retrains in seconds where the pixel network takes an hour.
+
+The teacher reads the machine; the student it is meant to produce does not. Two
+guards against the collapse this project already hit once, where retraining on
+the top two of eight round after round produced a policy so deterministic that
+six evaluation runs came back identical: a wider slice is kept, and the original
+demonstrations are mixed back in every round.
+
+Progress is read from a fixed set of held-out seeds, the same ones every round.
+The rollout seeds deliberately differ per round — training on one fixed opening
+teaches that opening — which makes the round's own mean useless as a curve.
 
 ## Self-imitation (`policy/improve.py`)
 

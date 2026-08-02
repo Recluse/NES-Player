@@ -8,7 +8,10 @@ episode/
 └── preview.mp4        optional, written by the viewer
 """
 
+from __future__ import annotations
+
 import json
+import shutil
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -20,6 +23,7 @@ from nes_player.emulator.adapter import EmulatorObservation
 from nes_player.emulator.controller import BUTTONS
 
 FRAME_CHUNK = 256
+SCHEMA_VERSION = 1
 
 
 def buttons_mask(pressed: frozenset[str]) -> int:
@@ -42,13 +46,29 @@ class EpisodeWriter:
     _actions: list[list[int]] = field(default_factory=list)
     _n: int = 0
 
+    @property
+    def _staging(self) -> Path:
+        """Where frames land while the episode is still being written.
+
+        The final directory used to be created on the first frame, while
+        actions, offsets and metadata were only written by `close()`. A quit
+        from the viewer returns before `close()`, and so does an exception —
+        leaving a directory that looks like an episode, is missing its labels
+        and its last buffered frames, and is picked up by the next training run
+        as if it were fine. Staging plus an atomic rename means a directory
+        either does not exist or is complete.
+        """
+        return self.out_dir.with_name(self.out_dir.name + ".partial")
+
     def append(
         self, obs: EmulatorObservation, pressed_per_player: tuple[frozenset[str], ...]
     ) -> None:
         if self._frames is None:
             h, w, c = obs.frame_rgb.shape
-            self.out_dir.mkdir(parents=True, exist_ok=True)
-            root = zarr.open_group(str(self.out_dir / "episode.zarr"), mode="w")
+            if self._staging.exists():
+                shutil.rmtree(self._staging)     # an earlier attempt that died
+            self._staging.mkdir(parents=True, exist_ok=True)
+            root = zarr.open_group(str(self._staging / "episode.zarr"), mode="w")
             self._frames = root.create_array(
                 "frames", shape=(0, h, w, c), chunks=(FRAME_CHUNK, h, w, c),
                 dtype="uint8", compressors=zarr.codecs.ZstdCodec(level=3))
@@ -71,12 +91,38 @@ class EpisodeWriter:
             self._audio_buf.clear()
 
     def close(self) -> None:
+        """Finish the episode and publish it under its real name.
+
+        Safe to call twice, and safe to call from a `finally` — a half-written
+        episode is discarded rather than published.
+        """
         if self._frames is None:
+            self.abandon()
             raise ValueError("empty episode")
         self._flush()
-        np.save(self.out_dir / "actions.npy", np.asarray(self._actions, dtype=np.uint8))
-        np.save(
-            self.out_dir / "audio_offsets.npy", np.asarray(self._audio_offsets, dtype=np.int64)
-        )
-        meta = dict(self.metadata, frames=self._n, buttons=list(BUTTONS))
-        (self.out_dir / "metadata.json").write_text(json.dumps(meta, indent=2, ensure_ascii=False))
+        np.save(self._staging / "actions.npy", np.asarray(self._actions, dtype=np.uint8))
+        np.save(self._staging / "audio_offsets.npy",
+                np.asarray(self._audio_offsets, dtype=np.int64))
+        meta = dict(self.metadata, frames=self._n, buttons=list(BUTTONS),
+                    schema=SCHEMA_VERSION, complete=True)
+        (self._staging / "metadata.json").write_text(
+            json.dumps(meta, indent=2, ensure_ascii=False))
+        if self.out_dir.exists():
+            shutil.rmtree(self.out_dir)
+        self._staging.rename(self.out_dir)   # atomic: same filesystem, one call
+        self._frames = None
+
+    def abandon(self) -> None:
+        """Throw away what was written. For the error path."""
+        self._frames = None
+        if self._staging.exists():
+            shutil.rmtree(self._staging, ignore_errors=True)
+
+    def __enter__(self) -> EpisodeWriter:
+        return self
+
+    def __exit__(self, exc_type, exc, tb) -> None:
+        if exc_type is not None or self._n == 0:
+            self.abandon()
+        else:
+            self.close()

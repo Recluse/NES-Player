@@ -14,11 +14,19 @@ from nes_player.cli.train import (
     cmd_improve,
     cmd_train_av,
     cmd_train_bc,
+    cmd_train_ego,
     cmd_train_idm,
     cmd_train_slots,
     cmd_train_wm,
 )
 
+FEEDBACK_HELP = (
+    "where the agent learns that something good or bad happened, which is an "
+    "INPUT and not telemetry: 'strict' (default) tells it nothing, so danger "
+    "and reward labels never form and the pixels-and-sound-only claim holds; "
+    "'privileged' reads score and lives from emulator memory, which is what a "
+    "teacher may do and a student may not; 'pixel' reads the on-screen panel, "
+    "which is the honest source but does not work well enough yet")
 CORE_HELP = "emulation core: fceumm (default), nestopia, quicknes"
 STATE_HELP = ("integration start state ('default' for its own); needed by games "
               "whose title screen cannot be passed from power-on")
@@ -57,6 +65,24 @@ def build_parser() -> argparse.ArgumentParser:
     t.add_argument("--max-episodes", type=int, default=None)
     t.add_argument("--attn", type=float, default=0.0,
                    help="attention-loss weight: pull conv attention onto tracker boxes")
+    t.add_argument("--attn-lead", type=int, nargs="+", default=[0],
+                   help="frames ahead to aim the attention target, extrapolated "
+                        "from tracker velocity. Several values mark all of those "
+                        "places at once: '--attn-lead 0 15' means both where an "
+                        "object is and where it will be in a quarter second, "
+                        "leaving the network to weight them. A single non-zero "
+                        "value replaces now with later, which measured worse")
+    t.add_argument("--attn-source", choices=("tracker", "oam"), default="tracker",
+                   help="where the attention target comes from: 'tracker' infers "
+                        "objects from motion in the pixels, 'oam' reads the "
+                        "console's own sprite table, which is exact and works in "
+                        "any NES game. Supervision only — the policy still plays "
+                        "from pixels and sound")
+    t.add_argument("--memory", choices=("short", "wide", "long", "epic"), default="short",
+                   help="how far back the frame stack reaches: short 67 ms (four "
+                        "consecutive frames), wide 0.53 s, long 2.1 s. The wider "
+                        "settings space the samples geometrically, so the window "
+                        "grows without the network growing")
     t.set_defaults(func=cmd_train_bc)
 
     g = sub.add_parser("play", help="run a trained BC policy in the emulator")
@@ -86,6 +112,8 @@ def build_parser() -> argparse.ArgumentParser:
     g.add_argument("--core", default=None, help=CORE_HELP)
     g.add_argument("--sound-loc", default="runs/av_smb",
                    help="AV-align checkpoint: ping the sound source on the panel")
+    g.add_argument("--feedback", choices=("strict", "privileged", "pixel"),
+                   default="strict", help=FEEDBACK_HELP)
     g.add_argument("--ghost", default="runs/ego_smb4",
                    help="ego world-model checkpoint for the ghost trajectory ('' disables it)")
     g.set_defaults(func=cmd_play)
@@ -105,13 +133,27 @@ def build_parser() -> argparse.ArgumentParser:
     x.add_argument("--core", default=None, help=CORE_HELP)
     x.add_argument("--record", default=None,
                    help="directory: write exploration episodes as Zarr datasets")
+    x.add_argument("--feedback", choices=("strict", "privileged", "pixel"),
+                   default="strict", help=FEEDBACK_HELP)
     x.set_defaults(func=cmd_explore)
 
-    wm = sub.add_parser("train-wm", help="world model: latent dynamics conditioned on actions")
+    wm = sub.add_parser("train-wm",
+                        help="legacy action-blind world model, kept to reproduce "
+                             "the negative result; for the model play --ghost "
+                             "actually loads, use train-ego")
     wm.add_argument("--episode", required=True)
     wm.add_argument("--out", required=True)
     wm.add_argument("--epochs", type=int, default=3)
     wm.set_defaults(func=cmd_train_wm)
+
+    eg = sub.add_parser("train-ego",
+                        help="ego world model: where the hero goes for a given "
+                             "button sequence; this is what --ghost uses")
+    eg.add_argument("--episode", required=True)
+    eg.add_argument("--out", required=True)
+    eg.add_argument("--epochs", type=int, default=4)
+    eg.add_argument("--seed", type=int, default=0)
+    eg.set_defaults(func=cmd_train_ego)
 
     av = sub.add_parser("train-av", help="contrastive sound↔frame (source localisation)")
     av.add_argument("--episode", required=True)

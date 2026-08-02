@@ -15,7 +15,8 @@ def cmd_train_bc(args: argparse.Namespace) -> None:
 
     meta = train_bc(args.episode, args.out, epochs=args.epochs, use_audio=args.audio,
                     init_from=args.init_from, max_episodes=args.max_episodes,
-                    attn=args.attn)
+                    attn=args.attn, attn_lead=tuple(args.attn_lead),
+                    attn_source=args.attn_source, memory=args.memory)
     last = meta["history"][-1]
     print(f"modality={meta['modality']} val_acc={last['val_acc']:.3f} "
           f"majority_baseline={meta['val_majority_baseline']:.3f}")
@@ -49,12 +50,28 @@ def cmd_train_slots(args: argparse.Namespace) -> None:
 
 
 def cmd_train_wm(args: argparse.Namespace) -> None:
-    """Latent world model. `action_advantage` above 1 means actions actually help."""
+    """Latent world model. `action_advantage` above 1 means actions actually help.
+
+    This trains the action-blind path, which is the project's recorded negative
+    result. The model actually used at play time is the ego one below; the two
+    were reachable by one command and one unreferenced function respectively,
+    so a reader following the CLI trained the wrong thing.
+    """
     from nes_player.world_model.model import train_wm
 
     meta = train_wm(args.episode, args.out, epochs=args.epochs)
     print(f"action_advantage={meta['action_advantage']:.3f} "
           f"(must be > 1: predictions with actions beat predictions without)")
+
+
+def cmd_train_ego(args: argparse.Namespace) -> None:
+    """Ego world model: where the hero will be, given the buttons. Used by --ghost."""
+    from nes_player.world_model.ego import train_ego
+
+    meta = train_ego(args.episode, args.out, epochs=args.epochs, seed=args.seed)
+    last = meta["history"][-1]
+    print(" ".join(f"{k}={v:.4f}" if isinstance(v, float) else f"{k}={v}"
+                   for k, v in last.items()))
 
 
 def cmd_improve(args: argparse.Namespace) -> None:

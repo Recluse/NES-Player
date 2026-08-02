@@ -5,6 +5,28 @@ from dataclasses import dataclass
 
 BUTTONS = ("A", "B", "SELECT", "START", "UP", "DOWN", "LEFT", "RIGHT")
 
+# A d-pad is one physical rocker: pressing two opposite directions is not
+# something a hand can do. TAS movies record them anyway — the emulator accepts
+# the bits — and cloning those recordings taught 24 of our checkpoints action
+# vocabularies containing LEFT+RIGHT. The archive keeps the raw combination;
+# nothing that reaches a controller may.
+OPPOSITES = (("LEFT", "RIGHT"), ("UP", "DOWN"))
+
+
+def resolve_conflicts(pressed: Iterable[str]) -> frozenset[str]:
+    """Drop opposite directions, keeping neither.
+
+    Neither, rather than one of them: which one a player "meant" is a guess,
+    and on the games where this appears the combination is a TAS trick whose
+    effect is closer to no direction than to either. Dropping both is the one
+    choice that never invents an intent.
+    """
+    out = set(pressed)
+    for a, b in OPPOSITES:
+        if a in out and b in out:
+            out -= {a, b}
+    return frozenset(out)
+
 
 @dataclass(frozen=True)
 class ControllerState:

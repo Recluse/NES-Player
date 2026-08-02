@@ -6,6 +6,211 @@ something failed. Every entry names the script that reproduces it.
 
 ---
 
+## A frame stack that reaches seconds: first real signal
+
+Four consecutive frames span 67 ms. That is enough to read a velocity and
+nothing else, which makes the policy effectively memoryless — a poor model of a
+player, who remembers where the enemy came from and which way the level was
+going. Sampling the stack geometrically instead of consecutively buys time depth
+at almost no cost: `wide` is six frames at 1,2,4,8,16,32 back (0.53 s) and
+`long` is eight reaching 128 back (2.1 s).
+
+Trained on the same Double Dragon episodes, same recipe. Validation accuracy
+barely moves — 0.618, 0.656, 0.625 — which by now is expected to say nothing.
+Ten paired runs of play:
+
+| Window | Score | Progress | Attack frames |
+|---|---|---|---|
+| short, 67 ms | 142.7 ± 33.0 | 22.3 | 1340 |
+| wide, 0.53 s | 153.1 ± 30.3 | 28.5 | 1330 |
+| long, 2.1 s | 155.5 ± 49.9 | **56.8** | 1499 |
+
+Paired against the short window, per seed:
+
+| Arm | Metric | Mean diff | t | Bootstrap P(>0) |
+|---|---|---|---|---|
+| wide | score | +10.4 | 0.58 | 0.72 |
+| wide | progress | +6.3 | 0.67 | 0.74 |
+| long | score | +12.8 | 0.68 | 0.76 |
+| long | **progress** | **+34.5** | **2.25** | **0.996** |
+
+Every row but the last is the same coin flip every measurement in this log has
+produced. The last one is not: 2.5× the progress, medians 55.9 against 21.6 so
+it is not one outlier dragging a mean, and a bootstrap that keeps the difference
+positive 996 times in 1000.
+
+It is also the metric that *should* respond. Progress is how far the agent moved
+the level along, which is exactly what needs memory — to go forward you have to
+know you have already been to the left. Score in a beat-em-up accrues from
+flailing, which is why it stays silent.
+
+Two cautions, both earned today. This is one game and ten runs, and this session
+has already produced a +15 that was a measurement bug and a rising training
+curve that was measuring one memorised moment. And the win is on the secondary
+metric while the headline one shrugs.
+
+## Leading the target: better accuracy, worse play, and a mechanism for why
+
+A player shoots where the enemy is going, not where it is. The tracker already
+computes a velocity per object, so the cheapest possible version of that idea is
+to aim the attention target ahead of them: `--attn-lead N` extrapolates every
+box N frames forward before it becomes the supervision target. No model, one
+multiplication.
+
+Accuracy went up, on both settings, and with a suggestive shape — the leading
+models start *below* the baseline and finish above it, as a harder target
+should:
+
+| Attention target | Accuracy by epoch |
+|---|---|
+| where objects are | 0.431 → 0.515 → 0.625 |
+| 15 frames ahead | 0.415 → 0.527 → **0.652** |
+| 30 frames ahead | 0.412 → 0.534 → 0.641 |
+
+Play says the opposite, and clearly:
+
+| Model | Score | Attack frames | Paired | t |
+|---|---|---|---|---|
+| no lead | 151.6 ± 38.8 | 1432 | — | — |
+| lead 15 | 132.9 ± 49.3 | 1269 | −18.7 (3W/7L) | −1.13 |
+| lead 30 | 115.9 ± 21.0 | 1170 | **−35.7 (3W/7L)** | **−2.44** |
+
+The 30-frame lead is significantly *worse* — t = −2.44, the same magnitude that
+made the memory result convincing, pointing the other way. And the damage scales
+with the lead, which is what a real effect looks like rather than noise.
+
+The attack-frame column explains it. Leading costs 163 and 262 frames of
+attacking respectively, t = −2.8 and −4.2, far stronger than the score signal.
+The agent is looking at empty floor where the enemy will be and not hitting the
+enemy that is in front of it. In a beat-em-up contact is now; the useful lead is
+zero, and a quarter-second lead is enough to miss.
+
+This is the clearest instance yet of the pattern this log keeps recording: **the
+better-cloning model is the worse player.** Leading makes the demonstrated
+behaviour easier to predict — the target moves smoothly instead of jittering
+with the tracker — while making the actual decisions worse.
+
+### Offering the lead instead of imposing it
+
+The fault above is in how the question was asked, not in the idea. A single
+lead value *replaces* now with later. Marking both — `--attn-lead 0 15` unions
+the current and extrapolated boxes into one target — leaves the network to
+weight them.
+
+That change removes the damage entirely:
+
+| Attention target | Score vs plain | t | Attack frames | t |
+|---|---|---|---|---|
+| forced +15 | −18.7 | −1.13 | **−163** | **−2.82** |
+| forced +30 | **−35.7** | **−2.44** | **−262** | **−4.24** |
+| offered 0 and +15 | +2.3 | 0.15 | −22 | −0.41 |
+| offered 0, +15, +30 | +4.0 | 0.21 | **+210** | **+3.66** |
+
+Score is a draw in both offered variants, so **the lead adds nothing to a
+beat-em-up** — the expected answer, since contact happens now. But the attack
+column is not a draw. Forcing the lead cost 163 and 262 frames of attacking;
+offering it costs 22, and offering three horizons *gains* 210 (t = 3.66).
+
+So the network does exactly what it was given the option to do: it keeps
+attending to the enemy in front of it, and the extra marks neither help nor get
+in the way. Given a choice it declines the lead; given no choice it obeyed and
+played worse. That distinction — between prescribing a strategy and offering
+one — is the transferable part of this experiment.
+
+One caveat on the three-horizon variant: its accuracy is the worst of the set
+(0.606) and its score spread the widest (±69). Painting three boxes per object
+covers enough of the screen that "look here" stops being a constraint, so its
++210 attack frames are more likely loosened supervision than insight.
+
+The idea is not closed. Leading should pay where a projectile takes real time
+to arrive, which needs a shoot-em-up whose measurement can resolve anything —
+Gradius currently cannot, since every model there dies to the same wave.
+
+---
+
+### Ten times wider is worse, and the 2.1 s window wins again
+
+Asked for ten times `long`: `epic` reaches 1280 frames back, 21.3 seconds,
+eleven frames and 33 input channels. It is the worst of the four, and worst from
+the first epoch — 0.336 against 0.421–0.433 — so it is not undertrained, it is
+being fed something harder to learn from.
+
+| Window | Span | Accuracy by epoch |
+|---|---|---|
+| short | 4 | 0.421 → 0.554 → 0.618 |
+| wide | 32 | 0.433 → 0.553 → **0.656** |
+| long | 128 | 0.431 → 0.515 → 0.625 |
+| epic | 1280 | 0.336 → 0.468 → **0.533** |
+
+In play, a fresh duel of short against long against epic:
+
+| Model | Score | Mean diff | t | Bootstrap P(>0) |
+|---|---|---|---|---|
+| short | 124.8 ± 17.9 | — | — | — |
+| long | 159.3 ± 41.9 | **+34.5** | **2.44** | **0.999** |
+| epic | 128.9 ± 27.4 | +4.1 | 0.40 | 0.65 |
+
+**This is the second independent win for the 2.1 s window**, and on the other
+metric: the first duel had it ahead on progress (+34.5, t=2.25) with score
+silent; this one has it ahead on score (+34.5, t=2.44) with progress silent.
+Two separate runs, two different metrics, same direction, both past t=2.2. The
+2.1 s window is now the strongest result in this log.
+
+`epic` is nothing, and its failure is informative. Twenty-one seconds ago has no
+pixel in common with now, so nine of the eleven channels carry noise that
+dilutes the two that carry signal — and a third of every episode is lost to
+having no history that far back. A convolution has no way to know that the
+object in a frame from 21 seconds ago is the same object it is looking at now;
+it sees eleven unrelated pictures. Past a couple of seconds, more frames is the
+wrong mechanism. Carrying a *conclusion* forward — a recurrent state, or the
+object memory that already exists — is the right one.
+
+The second game was chosen as a different genre — a horizontal shoot-em-up
+instead of a beat-em-up. On validation accuracy it agrees, and more cleanly than
+Double Dragon did: 0.866, 0.885, **0.915** against a 0.449 baseline, monotone in
+window width, with the long model ahead from the first epoch (0.828 against
+0.797) rather than catching up at the end.
+
+The play measurement says nothing at all:
+
+| Window | Survived | Deaths | Paired |
+|---|---|---|---|
+| short | 617.4 ± 837.2 | 2.7 | — |
+| wide | 620.4 ± 836.1 | 2.7 | +3.0 (9W/0L) |
+| long | 619.6 ± 836.4 | 2.7 | +2.2 (8W/1L) |
+
+Three frames out of six hundred. The 9W/0L looks impressive and is not: every
+arm dies at frame 352–356 of gameplay, a spread of four frames, to the same
+scripted first wave. The models are uniformly bad here in exactly the same way,
+so the measurement has no resolution — winning by three frames ten times is one
+observation about tie-breaking, not about skill.
+
+**So the hypothesis is neither confirmed nor refuted.** Double Dragon showed a
+real effect on progress; Gradius agrees on the proxy metric and cannot speak on
+the real one. Confirming this properly needs a game where the models differ
+enough to be separated — or many more Double Dragon runs.
+
+Getting even this far required fixing the harness three times, each fault
+producing confident numbers about nothing:
+
+- it never pressed START, so on Gradius it measured the attract demo, which
+  plays itself. All three checkpoints returning identical progress to the
+  decimal is what gave that away;
+- "progress = camera scroll" is a clock in an auto-scrolling game, not an
+  achievement. The metric is now chosen from what the game reports;
+- a fixed number of START presses lands wrong on some seeds, and a run that
+  never started reports surviving the whole episode. The start is now confirmed
+  by the world moving, and an unstarted seed is dropped for every arm.
+
+**What this is not.** Two seconds of frames is not "holding the level in your
+head". A convolutional stack cannot associate a thing seen now with the same
+thing seen 128 frames ago; it sees eight independent pictures. Real memory needs
+a recurrent state carrying a *conclusion* rather than pixels, or an explicit map.
+That the 2.1 s window helps at all suggests the ceiling here is not the idea but
+the mechanism.
+
+---
+
 ## Self-imitation improved its own numbers and not its play
 
 With cloning apparently at a ceiling — two Double Dragon models 25 accuracy
@@ -827,3 +1032,119 @@ Progress over 3600 frames, 3 runs: no hold [643, 515, 643], hold 24 [686, 725,
 The 2136 outlier is the point: with a long enough hold the agent occasionally
 clears a section it otherwise cannot, and the distribution becomes bimodal rather
 than merely shifted.
+
+
+---
+
+## Attention supervision: the tracker was mostly wrong
+
+The attention targets came from the motion tracker. Measured against the
+console's own sprite table on one episode:
+
+| | |
+|---|---|
+| of the cells the tracker calls an object, actually a sprite | **31%** |
+| of real objects, found by the tracker | **57%** |
+| objects per frame: tracker / sprite table | 10.9 / 2.9 |
+
+Eight of every eleven "objects" were background. `--attn-source oam` reads the
+sprite table instead. Existing datasets did not need re-recording: every episode
+replays frame-exactly from its recorded actions (checked — mean absolute
+difference 0.000 at frames 0, 1, 10, 100, 600, 1800 and 3599), so the table can
+be recovered from a run that never stored it.
+
+Duelled at 10 paired seeds against the tracker baseline: score +28.2 (t = +1.35,
+5W/5L), progress −24.0 (t = −1.40). No effect either way. The change is kept
+because it fixes a real defect, not because it won.
+
+## Epochs do not buy play
+
+Same data, same everything, 3 epochs against 40:
+
+| | validation | score in play |
+|---|---|---|
+| 3 epochs | 0.567 | 148.8 |
+| 40 epochs | **0.981** | 117.2 (t = −0.14) |
+
+A forty-one point gap in how faithfully the demonstrations are cloned, and no
+difference at all in how well the agent plays. An earlier pair with a 25-point
+gap gave the same answer. Behavioural cloning is bounded by whoever produced the
+data, and the data comes from the instinct policy, which does not finish a
+level.
+
+## Perception versus decision
+
+The instinct policy, unchanged, given exact object positions instead of inferred
+ones. Eight paired seeds, three minutes each:
+
+| | sprite table | motion tracker | |
+|---|---|---|---|
+| score | 416.9 | 274.6 | **+142, t = +2.42, 6W/2L** |
+| distance | 88.3 | 121.6 | −33, t = −1.40 |
+| deaths | 2.0 | 0.9 | **+1.1, t = +3.81, 6W/0L** |
+
+Perception was a real bottleneck **for fighting** and not for getting anywhere:
+seeing the enemies properly makes the agent fight better and die more, and does
+not make it advance. That separates the two failures — what it sees, and what it
+decides — and says a teacher that merely sees more will reproduce this result
+rather than improve on it.
+
+## A privileged teacher, trained on results
+
+A small network over 36 numbers from the sprite table — the hero, the six
+nearest objects **relative to the hero**, and the camera — cloned from the same
+episodes (validation 0.877) and then improved by keeping the best four of twelve
+rollouts each round.
+
+**Double Dragon: no improvement over ten rounds.** The reason is visible in the
+numbers rather than guessable: distance varied from −8 to +18 across every round
+while score varied from 98 to 137 and a death costs 300, so progress supplied
+about a tenth of the selection signal. In a beat-em-up the camera holds while
+enemies are alive, so every rollout advances about the same distance and there
+is nothing for selection to climb. This is not fixable with weights: the game
+does not let distance grow without killing the enemies first.
+
+**Super Mario Bros.: it learns.** Twelve rounds, six held-out seeds evaluated
+every round:
+
+| | reward | deaths |
+|---|---|---|
+| first four rounds | −29.0 | 2.54 |
+| last four rounds | **+236.8** | **1.33** |
+
+Deaths halved. And the shape of the learning is legible: by round 7 it had
+stopped throwing itself at everything at the cost of distance (deaths 0.67, x
+down from 773 to 526), and by round 10 it had the distance back and kept the
+deaths down (x 739, deaths 1.33). Not "became cautious" — began to tell where it
+can charge and where it cannot.
+
+The difference between the two games is not the network. Mario publishes its own
+x position and level number, which differ between policies by hundreds; Double
+Dragon has no such axis.
+
+## What the fence cost
+
+Turning off the memory-derived feedback channel entirely, eight paired seeds:
+
+| | strict | privileged | |
+|---|---|---|---|
+| score | 227.4 | 243.1 | −15.8, t = −0.40 |
+| distance | 100.9 | 125.2 | −24.3, t = −0.63 |
+| deaths | 0.8 | 0.6 | +0.1, t = +0.42 |
+
+Nothing significant. Half of all actions depended on that channel and the result
+did not change, which means it was moving behaviour without improving it.
+
+## Metrics that lied
+
+Every one of these looked sensible and was wrong. They are listed because the
+pattern is the finding: a plausible number is not a measurement.
+
+| Metric | What it actually was | How it was caught |
+|---|---|---|
+| "scene cuts" | deaths — the respawn flash | RAM byte `$06B1` (lives) stepped on exactly those frames, three times over two runs |
+| "distance" | the sum of twitching | holding RIGHT for 900 frames from the start moves the camera −4.9 px: it is locked while enemies live |
+| "finished a level" | walked to the next screen | inferred from a tileset change; a real level change alters the gameplay, and it had not |
+| validation accuracy | cloneability, not skill | 0.567 against 0.981 played identically |
+| a self-improvement curve | different starting points | rollout seeds differed per round, so dips were seeds with deaths |
+| held-out evaluation | zero, every round | the start offset `seed × 37` idled seed 901 for 33,000 frames, into the attract demo |
