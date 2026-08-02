@@ -220,3 +220,23 @@ facts are an **input**, and their source decides whether the pixels-and-sound
 claim is true. `perception/feedback.py` names three sources and defaults to
 `strict`, which supplies neither fact. See [cli.md](cli.md#feedback) for the
 measurements behind that default.
+
+
+## Remembering which object is which
+
+A cluster is an averaged 16×16 grey crop, matched by nearest prototype. Two
+numbers in that sentence were measured rather than chosen, and one of them had
+been wrong since the beginning:
+
+- **the threshold, 55.** Over pairs of sightings that are certainly the same
+  object against pairs that are certainly not, that is where the two
+  distributions separate best. It was 28, which files an animating sprite as a
+  new object every few frames.
+- **the death window, 260 frames.** The lives counter does not move when the
+  hero is hit; it moves when the death animation has finished and the level has
+  restarted, 213 frames later on Super Mario Bros. Points still use 45 frames,
+  because the score moves the instant it moves.
+
+An object is only credited with a death if it is the **last** thing touched. A
+window wide enough to cover the counter's lag holds several contacts at once,
+and blaming all of them makes half the screen look lethal.

@@ -19,6 +19,8 @@ EXPLORE is a handful of rules:
 - an object already known to be dangerous is closing in, so jump over it.
 """
 
+from __future__ import annotations
+
 import json
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -69,6 +71,21 @@ APPROACH_DY = 64      # within this band an enemy is reachable on foot
 LEFT_EDGE = 28
 WALL_EVIDENCE = 15    # frames of fruitless LEFT before concluding there is a wall
 
+# Steering a plan that is already running — see `_steer`.
+DIRECTIONS = frozenset({"LEFT", "RIGHT"})
+STEER_AHEAD = 40      # px in front that count as "on the way"
+# Generous vertically on purpose. Mid-jump the hero is ABOVE the thing it is
+# about to land on, so a narrow lane test — the right one for a fight on the
+# ground — excludes exactly the case steering exists for. It is safe to be
+# generous here because `_engage_step` runs first and clears the plan when it
+# takes an object on: anything still reaching this point is something the fight
+# rules declined.
+STEER_LANE = 72
+STEER_CLOSING = 0.5   # world px/frame of approach before it counts as closing
+STEER_PANIC = 18      # this close, stop pushing forward whatever it is doing
+MOVE_EPS = 0.35       # world px/frame below which the hero counts as standing still
+AIRBORNE_VY = 1.0     # vertical px/frame above which the hero is off the ground
+
 WAIT_MIN = 120        # minimum frames to wait for gameplay to begin
 WAIT_MAX = 1800       # fuse: past this, calibrate with whatever we have
 
@@ -109,6 +126,27 @@ class Knowledge:
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(json.dumps(self.__dict__, indent=2))
 
+    @classmethod
+    def load(cls, path: Path) -> Knowledge:
+        """Read what an earlier run measured, or start empty.
+
+        This did not exist. The file was written after every calibration and
+        read by nothing, while `reset` said "knowledge loaded — exploring" in a
+        branch that could never be taken. So every run of every game spent its
+        first 512 frames standing still, running the calibration protocol
+        again — 8.5 seconds, and on Super Mario Bros. fatal, because the first
+        Goomba arrives at frame 504 and the agent was still measuring its own
+        jump height when it did. Three lives, three times, no level.
+        """
+        if not path.exists():
+            return cls()
+        try:
+            d = json.loads(path.read_text())
+        except (OSError, ValueError):
+            return cls()
+        return cls(run_speed=dict(d.get("run_speed", {})),
+                   jump_height=dict(d.get("jump_height", {})))
+
 
 class InstinctPolicy:
     """Same interface as BCPolicy, plus its own tracker and object memory."""
@@ -122,8 +160,9 @@ class InstinctPolicy:
         self.perception = perception
         self.tracker = self._new_tracker()
         self.memory = ObjectMemory()
-        self.knowledge = Knowledge()
         self.knowledge_path = Path(knowledge_path) if knowledge_path else None
+        self.knowledge = (Knowledge.load(self.knowledge_path)
+                          if self.knowledge_path else Knowledge())
         self.attack_button = attack_button   # which button strikes; found by probing
         self._pressed = NOOP
         self.reset()
@@ -135,11 +174,15 @@ class InstinctPolicy:
         self._samples: dict[str, list[float]] = {}
         self._jump_start_cy: float | None = None
         self._scroll_hist: list[float] = []
+        self._move_hist: list[float] = []
         self._stuck_jumps = 0
         self._enemies_near = False    # enemies nearby means "stuck" does not count
         # Off = the pre-fix behaviour, kept so the change can be ablated rather
         # than argued about. See _explore_step.
         self.curiosity_needs_progress = True
+        # Off = plans play out untouched, the behaviour before mid-air steering
+        # existed. Kept so the change can be ablated. See _steer.
+        self.steer_running_plans = True
         self._target_id: int | None = None   # finish one enemy, not all of them once
         self._target_left = 0
         self._attack_phase = 0
@@ -181,6 +224,13 @@ class InstinctPolicy:
         verdicts = self.memory.update(frame_rgb, slots, self._frame, score, died)
         best = max(slots, key=lambda s: s.ctrl_prob, default=None)
         self._scroll_hist.append(self.tracker.scroll_dx)
+        # How fast the hero is moving through the world, camera removed. On a
+        # platformer this is most of the story: the screen does not scroll until
+        # the hero reaches the middle of it, so the camera alone says "stuck"
+        # for the whole opening stretch of every level.
+        self._move_hist.append(
+            abs(best.vx - self.tracker.scroll_dx) + abs(best.vy)
+            if best is not None and best.ctrl_prob > 0.55 else 0.0)
         if self.mode == "calibrate" and not self._cal_started:
             # Wait for the controls to RESPOND, not for a timer: press RIGHT and
             # watch for a slot that correlates with it. Cutscenes, menus and
@@ -279,27 +329,47 @@ class InstinctPolicy:
     # ---------- exploration ----------
 
     def _stuck(self) -> bool:
-        # Stuck means almost no frames scrolled noticeably. Counting frames
-        # rather than summing the scroll matters: phase correlation is noisy on
-        # flashing sprites, and a sum smears the threshold away.
-        recent = self._scroll_hist[-40:]
-        moving = sum(1 for v in recent if abs(v) > 0.4)
-        return len(recent) == 40 and moving <= 3
+        """Stuck means neither the world nor the hero has moved for a while.
+
+        It used to mean only that the camera had stopped, and on a platformer
+        that is wrong for the opening stretch of every level: Super Mario Bros.
+        holds the screen still until the hero reaches the middle of it. Measured
+        over 2000 frames of 1-1, the agent believed it was stuck for 947 of them
+        and spent that time backing off and jumping, which is how it died three
+        times without leaving the first screen.
+
+        Counting frames rather than summing matters for both signals: phase
+        correlation is noisy on flashing sprites, and a sum smears the
+        threshold away.
+        """
+        scroll = self._scroll_hist[-40:]
+        if len(scroll) < 40:
+            return False
+        if sum(1 for v in scroll if abs(v) > 0.4) > 3:
+            return False
+        moved = self._move_hist[-40:]
+        return sum(1 for v in moved if v > MOVE_EPS) <= 3
 
     def _explore_step(self, slots, ctrl, verdicts) -> frozenset[str]:
         # Fighting outranks every manoeuvre, so it is checked BEFORE the plan
         # queue. Otherwise a long retreat from the stuck logic runs for 135
         # frames while an enemy stands next to us, unhit.
-        if ctrl is not None:
+        #
+        # With one exception: a jump already in the air. The fight rules were
+        # written for a beat-em-up on the ground, and mid-flight they do the
+        # wrong thing twice over — they press UP or DOWN to "line up" with an
+        # enemy at a different depth, which in a platformer is not a depth but
+        # a height, and they cancel the jump. They also shadowed the steering
+        # below almost entirely: their reach (52 px across, 64 down) covers
+        # nearly everything a jump could steer around. A jump is committed;
+        # what it can still do is change direction, which is what `_steer` is.
+        jumping = bool(self._plan) and "A" in self._plan[0][0]
+        if ctrl is not None and not jumping:
             engage = self._engage_step(slots, ctrl)
             if engage is not None:
                 return engage
         if self._plan:
-            buttons, left = self._plan[0]
-            self._plan[0] = (buttons, left - 1)
-            if left <= 1:
-                self._plan.pop(0)
-            return buttons
+            return self._steer(self._take_from_plan(), ctrl, slots)
 
         hold = self.knowledge.best_jump_hold()
         # Curiosity is only curiosity while it is getting somewhere. Measured on
@@ -339,6 +409,7 @@ class InstinctPolicy:
         if stuck:
             self._stuck_jumps += 1
             self._scroll_hist.clear()   # fresh window after a manoeuvre
+            self._move_hist.clear()
             if self._stuck_jumps <= 3:
                 self._plan = [(JUMP_RUN, hold), (RUN, 16)]
                 self.last_reason = f"stuck — jump hold {hold}f (try {self._stuck_jumps})"
@@ -377,6 +448,14 @@ class InstinctPolicy:
         near = []
         for s in slots:
             if s is ctrl or s.small or s.ctrl_prob > 0.7:
+                continue
+            # Something that has killed us and never once paid for being hit is
+            # not a fight, it is an obstacle. Walking up to a Goomba to punch it
+            # is how the agent lost every life on Super Mario Bros. without
+            # leaving the first screen — the fight rules ran before the rule
+            # that jumps over danger, so the jump never got a turn. Which of the
+            # two an object is comes from the memory, not from knowing the game.
+            if self.memory.lethal_only(s.slot_id):
                 continue
             dx, dy = s.cx - ctrl.cx, s.cy - ctrl.cy
             if abs(dy) <= APPROACH_DY and abs(dx) <= max(ENGAGE_DX, SURROUNDED_DX):
@@ -422,14 +501,22 @@ class InstinctPolicy:
             self._facing = "RIGHT" if dx > 0 else "LEFT"
         facing = self._facing or ("RIGHT" if dx > 0 else "LEFT")
         # Different depth: line up first, or the strike passes through air.
+        #
+        # Only while standing on something. Off the ground, UP and DOWN are not
+        # depth — there is no depth in a platformer, and even in a beat-em-up
+        # you cannot change lane mid-jump. The only control a body in flight
+        # has is horizontal, so that is all that is offered here.
         dy = target.cy - ctrl.cy
-        if abs(dy) > ENGAGE_DY:
+        if abs(dy) > ENGAGE_DY and abs(ctrl.vy) <= AIRBORNE_VY:
             vert = "DOWN" if dy > 0 else "UP"
             buttons = {vert}
             if abs(dx) > HIT_DX:
                 buttons.add(facing)
             self.last_reason = f"aligning with #{target.slot_id} ({vert})"
             return frozenset(buttons)
+        if abs(dy) > ENGAGE_DY:
+            self.last_reason = f"in the air — steering towards #{target.slot_id}"
+            return frozenset({facing})
         if abs(dx) <= HIT_DX:
             # Press/release rhythm: in many games a strike registers on the
             # button's rising edge, and a held B hits once and then stops.
@@ -448,4 +535,40 @@ class InstinctPolicy:
         self._plan[0] = (buttons, left - 1)
         if left <= 1:
             self._plan.pop(0)
+        return buttons
+
+    def _steer(self, buttons: frozenset[str], ctrl: Slot | None,
+               slots: list[Slot]) -> frozenset[str]:
+        """Let a running plan change its mind about direction, mid-air included.
+
+        A jump is issued as a plan — hold A for N frames, then run — and until
+        now nothing could touch it while it played. On a slow puzzle platformer
+        that is fine: you decide, then you move. On a fast one it is the whole
+        difference, because the decision that matters is taken *during* the
+        jump. The agent was not failing to understand that it can steer in the
+        air; it had no way to.
+
+        The button that gives the jump its height is left alone — releasing A
+        early shortens the jump, which is a different decision from steering —
+        and only the direction is reconsidered. Reconsidered against what the
+        eyes see, not against a verdict: with feedback in strict mode there are
+        no danger labels, so the rule is "something is close ahead in my lane
+        and closing", which is visible in pixels alone.
+        """
+        if not self.steer_running_plans or ctrl is None or not (buttons & DIRECTIONS):
+            return buttons
+        facing = "RIGHT" if "RIGHT" in buttons else "LEFT" if "LEFT" in buttons else None
+        if facing is None:
+            return buttons
+        sign = 1 if facing == "RIGHT" else -1
+        for s in slots:
+            if s is ctrl or s.small:
+                continue
+            dx = (s.cx - ctrl.cx) * sign          # positive: ahead of us
+            if not (0 < dx < STEER_AHEAD and abs(s.cy - ctrl.cy) < STEER_LANE):
+                continue
+            closing = (s.vx - self.tracker.scroll_dx) * sign < -STEER_CLOSING
+            if closing or dx < STEER_PANIC:
+                self.last_reason = f"steering off #{s.slot_id} ahead"
+                return buttons - {facing}
         return buttons

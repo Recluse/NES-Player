@@ -29,7 +29,7 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
-GAME = "DoubleDragon-Nes-v0"
+GAME = "DoubleDragon-Nes-v0"   # overridden by --game
 STATE = "default"
 CUT_DIFF = 46.0        # mean abs pixel change that counts as a new scene
 CUT_COOLDOWN = 30      # frames; a cut takes a few frames to finish
@@ -97,21 +97,23 @@ def run(agent: str, frames: int, seed: int, temperature: float,
         strip_every: int, out_dir: Path | None,
         video_out: Path | None = None, video_scale: int = 3,
         no_gate: bool = False, perception: str = "motion",
-        feedback_mode: str = "strict") -> dict:
+        feedback_mode: str = "strict", game: str = GAME,
+        no_steer: bool = False) -> dict:
     import cv2
 
     from nes_player.emulator.stable_retro import StableRetroAdapter
     from nes_player.policy.improve import VisualProgress
 
-    env = StableRetroAdapter(GAME, include_debug=True, state=STATE)
+    env = StableRetroAdapter(game, include_debug=True, state=STATE)
     if agent == "instinct":
         from nes_player.perception.feedback import make_feedback
         from nes_player.policy.instinct import InstinctPolicy
 
-        policy = InstinctPolicy(knowledge_path=f"runs/knowledge/{GAME}.json",
+        policy = InstinctPolicy(knowledge_path=f"runs/knowledge/{game}.json",
                                 perception=perception)
         feedback = make_feedback(feedback_mode)
         policy.curiosity_needs_progress = not no_gate
+        policy.steer_running_plans = not no_steer
         act = None
     else:
         from nes_player.policy.bc import BCPolicy
@@ -209,6 +211,9 @@ def main() -> int:
     ap.add_argument("--seed", type=int, default=None,
                     help="run this single seed instead of 0..runs-1")
     ap.add_argument("--first-seed", type=int, default=0)
+    ap.add_argument("--game", default=GAME)
+    ap.add_argument("--no-steer", action="store_true",
+                    help="instinct only: plans play out untouched, for an ablation")
     ap.add_argument("--feedback", choices=("strict", "privileged", "pixel"),
                     default="strict",
                     help="instinct only: where 'something good/bad happened' comes from")
@@ -232,7 +237,7 @@ def main() -> int:
                 vid = vid.with_name(f"{vid.stem}_seed{seed}{vid.suffix}")
         r = run(args.agent, frames, seed, args.temperature, args.strip_every, out,
                 vid, args.video_scale, args.no_curiosity_gate, args.perception,
-                args.feedback)
+                args.feedback, args.game, args.no_steer)
         r["seed"] = seed
         rows.append(r)
         print(json.dumps(r), flush=True)

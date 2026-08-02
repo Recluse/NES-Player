@@ -895,6 +895,30 @@ tracker; the comparison within each pair is fair.
 
 Script: `scripts/experiments/duel_best_x.py`.
 
+### Re-measured after the schedule confound was removed
+
+That rematch spawned `nes-player play` twice, and there the policy decided on a
+wall clock at 15 Hz while the planner replanned every `--repeat` **emulator**
+frames. So the two arms differed in schedule as well as in agent, and a busier
+machine would have changed the comparison — which makes "three times farther"
+a number that cannot be attributed to the planner.
+
+Repeated through the synchronous evaluator: one process, both arms, the planner
+offered exactly the policy's decision ticks and no others, and the decision
+indices compared afterwards rather than assumed equal. Eight paired seeds,
+3000 frames:
+
+| | best_x |
+|---|---|
+| BC | 267, 483, 323, 300, 322, 344, 404, 260 → **337.9** |
+| BC + planner | 612, 1010, 1008, 1005, 513, 609, 383, 784 → **740.5** |
+
+**+402.6, t = +4.50, 7W/1L.** The planner does help, and the effect survives
+the fix — but it is about 2.2×, not the 3–4× the confounded measurement
+suggested. The earlier figure should not be quoted.
+
+Script: `scripts/experiments/planner_duel.py`.
+
 ---
 
 ## Attention supervision from tracker boxes
@@ -1148,3 +1172,96 @@ pattern is the finding: a plausible number is not a measurement.
 | validation accuracy | cloneability, not skill | 0.567 against 0.981 played identically |
 | a self-improvement curve | different starting points | rollout seeds differed per round, so dips were seeds with deaths |
 | held-out evaluation | zero, every round | the start offset `seed × 37` idled seed 901 for 33,000 frames, into the attract demo |
+
+
+---
+
+## Four fixes to the object memory, and what they were worth
+
+The instinct policy could not learn that anything was dangerous on Super Mario
+Bros. — 60 contacts in a run, zero danger labels. Four separate causes, found by
+printing the game state frame by frame rather than by reasoning about the code.
+
+**The lives counter lags by 213 frames.** The hero touches a Goomba at frame
+291; the counter moves at 504, after the dying animation and the level restart.
+The attribution window was 45 frames for both score and death, so every death
+arrived long after its cause had expired. Two windows now: 45 for points, which
+appear immediately, and 260 for a death. With the wider window several contacts
+are in flight at once, so a death is credited to the **last** thing touched
+rather than to all of them — the wide-window version of a bug already fixed
+once.
+
+**Knowledge was written and never read.** `runs/knowledge/<game>.json` was saved
+after every calibration and loaded by nothing, while `reset` contained a branch
+saying "knowledge loaded — exploring" that could not be reached. Every run of
+every game therefore spent its first 512 frames standing still, re-measuring its
+own jump height. On Double Dragon that is 17% of a three-minute experiment; on
+Mario it is fatal, because the first Goomba arrives at frame 504 while the agent
+is still on the calibration protocol.
+
+**The recognition threshold was half of what it should be.** Measured over pairs
+of sightings that are certainly the same object — one track, at most eight
+frames apart — against pairs that are certainly not, the 16×16 grey crop
+separates them best at a distance of **55**. The code used 28. That is tight
+enough to file the same sprite as a new object whenever it animates, which is
+where 251 clusters in one run of a ten-object game came from. At 55 it is 108.
+
+**Fighting outranked avoiding.** An object that has killed us and never once
+paid for being hit is an obstacle, not an opponent, and the fight rules ran
+first, so the agent walked into the same Goomba on every life. The distinction
+comes from the memory rather than from knowing the game: a Double Dragon thug
+kills and also gives points when struck, so it is worth engaging.
+
+Super Mario Bros., distance over two minutes, eight paired seeds:
+
+| | distance |
+|---|---|
+| privileged, before these fixes | 556.9 |
+| strict, after | 674.5 |
+| privileged, after | **1070.7** |
+
+**+513.8 against the same arm before, t = +3.05, eight seeds out of eight.**
+Score appears on six of eight seeds where it had been zero everywhere.
+
+Double Dragon, three minutes, eight seeds: score 310.2 against 227.4
+(+82.9, t = +1.13, 6W/2L). The right direction, not significant — as expected,
+since what limits that game is not what it remembers.
+
+### A method note
+
+Four measurements before these said "no effect", and all four were taken with
+the feedback channel at its `strict` default, where the machinery being fixed is
+switched off by construction. The fix was being tested with the thing it fixes
+disabled.
+
+## Object recognition: two richer descriptors, both worse
+
+The 16×16 grey crop includes the scenery behind the object, so in principle the
+same Goomba against a hill and against a brick wall are two clusters. Two
+replacements were built and measured against it.
+
+**Masking the crop with the tracker's motion mask** changed nothing at all —
+eight paired seeds identical to the digit — and pushed the cluster count to the
+256 cap. A frame difference marks where the object *was* as well as where it
+*is*, so it outlines a smear rather than a sprite.
+
+**Separating the sprite from the background by colour** — the ring around a
+box is background by construction on a tile machine, so the colours in it are
+the background's — then describing what is left by a 12×12 silhouette and a
+64-bin palette histogram, canonicalised for mirroring so that a character facing
+left and right is one character.
+
+| descriptor | balanced accuracy |
+|---|---|
+| 16×16 grey crop | **0.849** |
+| background removed, silhouette + palette | 0.674 |
+
+The richer one accepts far too much (same-object 0.84, different-object 0.51):
+with the background gone, everything on one screen has the same few colours and
+a coarse silhouette. Deleted.
+
+The ground truth is what made this readable. Scored against "any two sightings
+of one track", both descriptors look mediocre and close together — 0.659 and
+0.690 — because a track that runs long enough drifts onto a different object,
+and the descriptor gets charged for the tracker's mistake. Restricting to
+sightings at most eight frames apart separates the two answers.

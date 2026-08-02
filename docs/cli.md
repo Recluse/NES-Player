@@ -74,9 +74,19 @@ choose buttons — so this is an **input**, and where it comes from decides whet
 | `pixel` | the on-screen panel, read like a person | the honest source, and not good enough yet |
 
 Measured. Replaying identical frames with the telemetry scrambled changed 51% of
-the actions before the fence existed and 0% after it. Turning the channel off
-cost nothing measurable in play (score −15.8, t = −0.40 over eight paired
-seeds), which says the labels were adding noise rather than knowledge.
+the actions before the fence existed and 0% after it.
+
+What the fence costs depends on the game, and the first answer was wrong. On
+Double Dragon it costs nothing (score −15.8, t = −0.40 over eight paired seeds).
+That measurement was taken while the danger machinery was broken in three
+separate ways, and generalising from it was a mistake: with those fixed, Super
+Mario Bros. gives 674.5 distance under `strict` against 1070.7 under
+`privileged` — **+396, t = +2.01**. On a game where the answer is to avoid
+things rather than hit them, being told nothing is expensive.
+
+The conclusion is not to lower the fence but to earn the signal honestly: a
+death is visible on the screen and audible in the jingle the play loop already
+detects.
 
 `pixel` is left in place and not default because it does not work yet: against
 memory over 4000 frames it agreed 12% of the time on Double Dragon, where the
