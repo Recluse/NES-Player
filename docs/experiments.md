@@ -1442,3 +1442,38 @@ So terrain perception is real and correct, and it is not the bottleneck. That is
 worth writing down as plainly as a win would be: three hours of work produced a
 capability the project needed and no improvement in play, because the thing
 being fixed was not the thing that was wrong.
+
+### Keeping the bricks
+
+Both combinations were deleted on the grounds that they measured worse, and that
+was the wrong call — an agent that finishes a level does not get there by one
+large correct idea but by a dozen small ones that each look like noise alone.
+They are back in `policy/combo.py` as named switches, off by default, with a
+sweep that measures combinations instead of single changes:
+
+| | reach | |
+|---|---|---|
+| network alone | 1188 | |
+| `pit_jump` | 1127 | −60, 2W/4L |
+| `stuck_help` | 1103 | −85, 3W/4L |
+| both | 973 | −215, 2W/6L |
+
+Still all worse, and the pair is worse than either — but now that is a
+measurement of a combination rather than a reason to throw a part away, and the
+next small ability can be measured against every subset instead of only against
+the plain network.
+
+### The agent does kill Goombas
+
+It stomps them, which is a partial skill worth building on rather than a total
+failure to route around. Counting the score changes over six seeds:
+
+| score change | count | meaning |
+|---|---|---|
+| +10 | 7 | one Goomba stomped |
+| +20 | 9 | two hundred points — a chain, or a shell |
+
+Sixteen scoring events against twenty-two deaths in comparable runs. The first
+attempt to count this returned **zero**, because the integration stores the
+score divided by ten and a stomp was being looked for as +100. A measurement in
+the wrong unit reads exactly like an absence.

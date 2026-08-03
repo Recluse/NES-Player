@@ -27,13 +27,17 @@ def run(checkpoint: str, seed: int, frames: int, temperature: float,
     from nes_player.cli.play import JumpShaper
     from nes_player.emulator.stable_retro import StableRetroAdapter
     from nes_player.policy.bc import BCPolicy
+    from nes_player.policy.combo import Abilities, ComboPolicy
 
     # The policy samples from its own softmax, so a run is only repeatable if
     # that draw is seeded too. Without this a run that finishes the level cannot
     # be played again to be recorded.
     np.random.seed(seed)
     env = StableRetroAdapter(GAME, include_debug=True, state="default")
-    policy = BCPolicy(checkpoint)
+    # "checkpoint" or "checkpoint:ability+ability" — see policy/combo.py
+    path, _, spec = checkpoint.partition(":")
+    policy = (ComboPolicy(path, GAME, Abilities.parse(spec)) if spec
+              else BCPolicy(path))
     # Jump height on the NES is how long A is held, and the policy cannot say
     # "hold": it emits one button set per frame. `play` turns a momentary A into
     # a real jump with this, and a measurement without it is measuring a
@@ -74,7 +78,8 @@ def run(checkpoint: str, seed: int, frames: int, temperature: float,
 
 def main() -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("checkpoints", nargs="+")
+    ap.add_argument("checkpoints", nargs="+",
+                    help="a checkpoint, or checkpoint:ability+ability")
     ap.add_argument("--runs", type=int, default=8)
     ap.add_argument("--frames", type=int, default=4000)
     ap.add_argument("--temperature", type=float, default=0.9)
