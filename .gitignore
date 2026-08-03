@@ -14,5 +14,5 @@ tas/*.fm2
 tas/*.fcm
 recordings/
 
-# Site videos are heavy and belong to the website repository
-web/media/
+# The website lives in its own repository now
+# (recluse-internal/nes-player/web), so nothing of it is here.
