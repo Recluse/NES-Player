@@ -1383,3 +1383,62 @@ The first version of that script cut each run short: it stopped as soon as the
 level number changed, and the level number moves during a death as well as at
 the end of a level, so every run ended at its first death. It reported
 1164 as 755 until that was removed.
+
+
+## Terrain: the one lethal thing that is not a sprite
+
+Everything the perception layer finds moves. The motion tracker finds it because
+it moves; the console's sprite table lists it because the hardware draws it as a
+sprite. A hole in the floor is neither, so to every part of this project a pit
+does not exist — which is why the agent walks into one at running speed. The
+owner put the diagnosis better than any instrument had: *it does not stand at
+the pit and it is not stuck, it just never tries to jump*.
+
+`perception/terrain.py` finds the floor without a model or a memory. A level is
+tiles over a flat background, and the background is whatever fills the top of
+the screen, so a column whose lower band is that colour has nothing to stand on.
+Overworld or cave, blue or black, the same test works: it asks "is there
+anything here", not "is this a floor". Verified live — the detector watches a
+pit's left edge scroll in at columns 226, 224, 221, 219, 216, 214.
+
+One guard was needed: a death fades the screen to black, black matches the
+background by definition, and the detector reported a hole across the whole
+width. More than 90% empty now means "not looking at a level".
+
+### Two ways of combining the network with the instincts, both worse
+
+| | reach | |
+|---|---|---|
+| network alone | 1130 | |
+| hand over when stuck | 856 | −274, 2W/4L |
+| network alone | 1188 | |
+| override when a pit is ahead | 1127 | −60, 2W/4L |
+
+The first failed for the reason the owner had already given: an agent that is
+never stuck cannot be helped by a rule that waits for it to be stuck. The
+second is sound and fires correctly — it simply has almost nothing to do.
+
+### Where the deaths actually are
+
+Eight seeds, 22 deaths, checking whether a hole was even on screen in the two
+seconds before each:
+
+| | |
+|---|---|
+| deaths with a hole visible | 5 |
+| deaths with no hole anywhere | **17** |
+
+And they are not scattered. Sixteen of the twenty-two happen at two places:
+
+    200, 201, 201, 202, 203, 203, 204, 204     the first Goomba
+    702, 702, 702, 702, 702, 702, 702, 702     the pipes
+    789, 1007, 1007, 1295, 1313, 1411
+
+Eight deaths on one coordinate is not bad luck, it is something the policy
+cannot do. Looking at those frames: the hero clears the first pipe and lands
+among two Goombas standing between the pipes.
+
+So terrain perception is real and correct, and it is not the bottleneck. That is
+worth writing down as plainly as a win would be: three hours of work produced a
+capability the project needed and no improvement in play, because the thing
+being fixed was not the thing that was wrong.

@@ -30,6 +30,7 @@ import numpy as np
 from nes_player.emulator.controller import resolve_conflicts
 from nes_player.perception.memory import ObjectMemory
 from nes_player.perception.motion import MotionTracker, Slot
+from nes_player.perception.terrain import gap_ahead
 
 NOOP: frozenset[str] = frozenset()
 RIGHT = frozenset({"RIGHT"})
@@ -80,6 +81,15 @@ WALL_EVIDENCE = 15    # frames of fruitless LEFT before concluding there is a wa
 # A rule can be harmless for the hand-written policy and lethal for whatever
 # learns from it, and both have to be measured.
 MOVE_EPS = 0.35       # world px/frame below which the hero counts as standing still
+
+# A hole in the floor is the one lethal thing on screen that is not an object:
+# it does not move, so the tracker never sees it, and it is background, so the
+# console's sprite table does not list it either. The agent therefore ran into
+# one at full speed — not stuck, not hesitating, simply never trying to jump.
+# This is the only rule here that looks at the picture rather than at slots.
+PIT_LOOKAHEAD = 72    # px ahead worth checking for a hole
+PIT_JUMP_AT = 34      # px from the edge at which the jump has to start
+PIT_COOLDOWN = 40     # frames before another hole may be reacted to
 AIRBORNE_VY = 1.0     # vertical px/frame above which the hero is off the ground
 
 WAIT_MIN = 120        # minimum frames to wait for gameplay to begin
@@ -181,6 +191,7 @@ class InstinctPolicy:
         self._attack_phase = 0
         self._facing: str | None = None      # last confident direction to the enemy
         self._wall_frames = 0                # consecutive frames of LEFT doing nothing
+        self._pit_cooldown = 0               # frames left before another hole counts
         self._plan: list[tuple[frozenset[str], int]] = []   # queue of (buttons, frames)
         self._cal_started = False
         self.tracker = self._new_tracker()
@@ -242,7 +253,7 @@ class InstinctPolicy:
             pressed = self._calibrate_step(best)
         else:
             ctrl = best if best is not None and best.ctrl_prob >= 0.55 else None
-            pressed = self._explore_step(slots, ctrl, verdicts)
+            pressed = self._explore_step(slots, ctrl, verdicts, frame_rgb)
             pressed = self._unstick_from_left_wall(pressed, best)
         # One resolver on the way out. The unstick guard turns LEFT into RIGHT
         # while a plan may still be holding LEFT, and a hand cannot press both.
@@ -343,7 +354,31 @@ class InstinctPolicy:
         moved = self._move_hist[-40:]
         return sum(1 for v in moved if v > MOVE_EPS) <= 3
 
-    def _explore_step(self, slots, ctrl, verdicts) -> frozenset[str]:
+    def _pit_step(self, frame_rgb, ctrl: Slot | None, hold: int) -> frozenset[str] | None:
+        """Jump a hole that is coming, before standing on the edge of it.
+
+        Ahead of everything else, including a fight: an enemy costs a life only
+        sometimes, and a pit costs one every time. It has to be checked before
+        the plan queue too, because a manoeuvre already running is exactly what
+        would otherwise carry the hero over the edge.
+        """
+        if ctrl is None or self._pit_cooldown > 0:
+            return None
+        facing = 1 if self.tracker.scroll_dx <= 0 else -1
+        d = gap_ahead(frame_rgb, ctrl.cx, facing, PIT_LOOKAHEAD)
+        if d is None or d > PIT_JUMP_AT:
+            return None
+        self._plan = [(JUMP_RUN, max(hold, 24)), (RUN, 12)]
+        self._pit_cooldown = PIT_COOLDOWN
+        self.last_reason = f"hole {d}px ahead — jumping it"
+        return self._take_from_plan()
+
+    def _explore_step(self, slots, ctrl, verdicts, frame_rgb=None) -> frozenset[str]:
+        self._pit_cooldown = max(0, self._pit_cooldown - 1)
+        if frame_rgb is not None:
+            pit = self._pit_step(frame_rgb, ctrl, self.knowledge.best_jump_hold())
+            if pit is not None:
+                return pit
         # Fighting outranks every manoeuvre, so it is checked BEFORE the plan
         # queue. Otherwise a long retreat from the stuck logic runs for 135
         # frames while an enemy stands next to us, unhit.

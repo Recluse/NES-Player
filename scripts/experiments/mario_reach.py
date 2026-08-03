@@ -14,24 +14,39 @@ import statistics
 import sys
 from pathlib import Path
 
+import numpy as np
+
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
 GAME = "SuperMarioBros-Nes-v0"
 LEVEL_END = 3266     # 1-1 is about this long, for reading the numbers as a share
 
 
-def run(checkpoint: str, seed: int, frames: int, temperature: float) -> dict:
+def run(checkpoint: str, seed: int, frames: int, temperature: float,
+        jump_hold: int = 32, repeat: int = 4) -> dict:
+    from nes_player.cli.play import JumpShaper
     from nes_player.emulator.stable_retro import StableRetroAdapter
     from nes_player.policy.bc import BCPolicy
 
+    # The policy samples from its own softmax, so a run is only repeatable if
+    # that draw is seeded too. Without this a run that finishes the level cannot
+    # be played again to be recorded.
+    np.random.seed(seed)
     env = StableRetroAdapter(GAME, include_debug=True, state="default")
     policy = BCPolicy(checkpoint)
+    # Jump height on the NES is how long A is held, and the policy cannot say
+    # "hold": it emits one button set per frame. `play` turns a momentary A into
+    # a real jump with this, and a measurement without it is measuring a
+    # different agent — one that can only hop a single frame's worth and cannot
+    # clear the first pipe of 1-1.
+    jump = JumpShaper(jump_hold) if jump_hold else None
     obs = env.reset(seed=seed)
     for _ in range(seed * 37):
         obs = env.step_buttons([frozenset()])
     best_x, deaths, lives = 0, 0, None
     level, levels = None, 0
-    for _ in range(frames):
+    held: frozenset = frozenset()
+    for _i in range(frames):
         d = obs.debug or {}
         x = int(d.get("xscrollHi", 0)) * 256 + int(d.get("xscrollLo", 0))
         best_x = max(best_x, x)
@@ -45,7 +60,12 @@ def run(checkpoint: str, seed: int, frames: int, temperature: float) -> dict:
             levels += 1               # finished one; keep going and say so
         level = now
         policy.push_audio(obs.audio_pcm)
-        pressed, _ = policy.act(obs.frame_rgb, temperature=temperature)
+        policy.observe(obs.frame_rgb, obs.audio_pcm)
+        if _i % repeat == 0:
+            held, _ = policy.decide(temperature=temperature)
+        pressed = held
+        if jump is not None:
+            pressed = jump.apply(pressed)
         obs = env.step_buttons([pressed - {"START", "SELECT"}])
     env.close()
     return {"seed": seed, "best_x": best_x, "deaths": deaths, "levels": levels,
@@ -58,12 +78,17 @@ def main() -> int:
     ap.add_argument("--runs", type=int, default=8)
     ap.add_argument("--frames", type=int, default=4000)
     ap.add_argument("--temperature", type=float, default=0.9)
+    ap.add_argument("--repeat", type=int, default=4,
+                    help="emulator frames between decisions, as in play")
+    ap.add_argument("--jump-hold", type=int, default=32,
+                    help="frames to hold A; 0 disables the shaper")
     args = ap.parse_args()
 
     out: dict[str, list[dict]] = {c: [] for c in args.checkpoints}
     for seed in range(args.runs):
         for ckpt in args.checkpoints:
-            r = run(ckpt, seed, args.frames, args.temperature)
+            r = run(ckpt, seed, args.frames, args.temperature, args.jump_hold,
+                    args.repeat)
             out[ckpt].append(r)
             print(json.dumps({"checkpoint": ckpt, **r}), flush=True)
 

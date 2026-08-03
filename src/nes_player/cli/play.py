@@ -24,7 +24,7 @@ from nes_player.cli.runtime import (
 )
 from nes_player.perception.title import TitleTracker
 
-BRAIN_HZ = 15                # policy decisions per second
+DECIDE_EVERY = 4             # emulator frames between decisions (~15 Hz at 60 fps)
 HUD_FIT_FRAMES = 240         # frames collected before the digit reader trains
 PROMPT_EVERY = 15            # brain ticks between "does the screen ask for a button?"
 FROZEN_FRAMES = 90           # identical frames that count as a pause
@@ -121,6 +121,9 @@ class Brain:
         self._stop = False
         self._fails = 0
         self.last_error: str | None = None
+        self._ticks_wanted = 0
+        self._ticks_done = 0
+        self.skipped = 0          # decisions the GPU could not keep up with
         self._thread: threading.Thread | None = None
 
     def start(self) -> None:
@@ -130,13 +133,35 @@ class Brain:
     def stop(self) -> None:
         self._stop = True
 
+    def request_tick(self) -> None:
+        """Called by the game loop every `action_repeat` emulator frames.
+
+        The clock used to decide this, at 15 Hz, and that made the agent a
+        different agent depending on what else the machine was doing. Recording
+        a video slows the loop; the brain kept its own rhythm; the number of
+        game frames between decisions changed, and with it the behaviour. The
+        symptom was visible without any instrument — the same checkpoint that
+        reaches x=2639 on a frame-indexed cadence stood at the first pipe for
+        most of a recording.
+
+        The thread stays: neural work off the game loop is what keeps the audio
+        clean. Only its pacing moves from the clock to the frame counter.
+        """
+        self._ticks_wanted += 1
+
     def _work(self) -> None:
         while not self._stop:
-            t0 = time.monotonic()
             frame = self.frame
-            if frame is None:
-                time.sleep(0.005)
+            if frame is None or self._ticks_done >= self._ticks_wanted:
+                time.sleep(0.002)
                 continue
+            # If the GPU falls behind, skip to the newest request rather than
+            # working through a backlog of stale frames — and count it, because
+            # a decision that never happened is a fact about the run.
+            missed = self._ticks_wanted - self._ticks_done - 1
+            if missed > 0:
+                self.skipped += missed
+            self._ticks_done = self._ticks_wanted
             try:
                 self._think(frame)
                 self._fails = 0
@@ -152,7 +177,6 @@ class Brain:
                     print(f"policy thread failed {self._fails}x: {self.last_error}",
                           flush=True)
                 time.sleep(0.05)
-            time.sleep(max(0.0, 1 / BRAIN_HZ - (time.monotonic() - t0)))
 
     def _think(self, frame) -> None:
         # Decide only. The game loop has already observed this frame and every
@@ -283,6 +307,8 @@ def cmd_play(args: argparse.Namespace) -> None:
                 # headless. Same checkpoint, different input, no error.
                 policy.observe(obs.frame_rgb, obs.audio_pcm)
                 brain.frame = obs.frame_rgb
+                if i % args.repeat == 0:
+                    brain.request_tick()
                 if locator:
                     locator.push_audio(obs.audio_pcm)
 
