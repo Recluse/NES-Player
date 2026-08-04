@@ -26,6 +26,7 @@ def run(checkpoint: str, seed: int, frames: int, temperature: float,
         jump_hold: int = 32, repeat: int = 4) -> dict:
     from nes_player.cli.play import JumpShaper
     from nes_player.emulator.stable_retro import StableRetroAdapter
+    from nes_player.perception.feedback import game_over
     from nes_player.policy.bc import BCPolicy
     from nes_player.policy.combo import Abilities, ComboPolicy
 
@@ -52,6 +53,11 @@ def run(checkpoint: str, seed: int, frames: int, temperature: float,
     held: frozenset = frozenset()
     for _i in range(frames):
         d = obs.debug or {}
+        # Past game over the console plays its own demo, which scrolls further
+        # than any of these policies manage. Counting it flattered every one of
+        # them, and flattered the worst ones most, because they got there first.
+        if game_over(d):
+            break
         x = int(d.get("xscrollHi", 0)) * 256 + int(d.get("xscrollLo", 0))
         best_x = max(best_x, x)
         lv = d.get("lives")

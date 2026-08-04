@@ -30,12 +30,12 @@ from pathlib import Path
 import numpy as np
 
 from nes_player.perception.feedback import make_feedback
+from nes_player.perception.motion import pick_hero
 from nes_player.perception.terrain import gap_ahead
 from nes_player.policy.bc import BCPolicy
 from nes_player.policy.instinct import PIT_JUMP_AT, PIT_LOOKAHEAD, InstinctPolicy
 
 JUMP_FRAMES = 26      # frames an imposed jump keeps the direction it was given
-CTRL_MIN = 0.55
 
 
 @dataclass
@@ -97,8 +97,8 @@ class ComboPolicy:
             frame_rgb, fb.score, fb.died)
         self._pit = None
         if self.abilities.pit_jump:
-            hero = max(slots, key=lambda s: s.ctrl_prob, default=None)
-            if hero is not None and hero.ctrl_prob > CTRL_MIN:
+            hero = pick_hero(slots)
+            if hero is not None:
                 d = gap_ahead(frame_rgb, hero.cx, 1, PIT_LOOKAHEAD)
                 if d is not None and d <= PIT_JUMP_AT:
                     self._pit = d

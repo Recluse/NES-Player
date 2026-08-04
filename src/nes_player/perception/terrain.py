@@ -69,13 +69,17 @@ def _drop_narrow(mask: np.ndarray, min_run: int) -> np.ndarray:
 
 
 def gap_ahead(frame_rgb: np.ndarray, hero_cx: float, facing: int = 1,
-              reach: int = 64) -> int | None:
+              reach: int = 64, gaps: np.ndarray | None = None) -> int | None:
     """Distance in pixels to the near edge of the next hole, or None.
 
     `facing` is +1 for right, -1 for left. Only the ground the hero is heading
     over is interesting; a hole behind is somewhere already survived.
+
+    `gaps` is the column mask when the caller already has it; asking two
+    questions of one frame should not scan it twice.
     """
-    gaps = floor_gaps(frame_rgb)
+    if gaps is None:
+        gaps = floor_gaps(frame_rgb)
     x0 = int(round(hero_cx))
     width = len(gaps)
     for d in range(4, reach):

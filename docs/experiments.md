@@ -1477,3 +1477,156 @@ Sixteen scoring events against twenty-two deaths in comparable runs. The first
 attempt to count this returned **zero**, because the integration stores the
 score divided by ten and a stomp was being looked for as +100. A measurement in
 the wrong unit reads exactly like an absence.
+
+## Six ways of measuring the wrong thing
+
+A day spent on the state teacher produced two working mechanisms and one firm
+negative, and most of it went on discovering that the instruments were lying.
+The six are listed together because they are the same mistake wearing six
+costumes, and each was found only because a number looked too tidy.
+
+**The console playing itself.** Self-improvement reported `eval_progress`
+702.0 — the same figure to the pixel, on six different seeds, for five rounds
+running. A frame-by-frame trace explained it: the agent died three times at
+the first Goomba, ran out of lives, and the attract-mode demo took over, which
+walks and scrolls and scores by itself. Every frame after that was measured as
+progress and trained on as the policy's own choices. 702 is where the demo
+parks. `cli/play.py` already had the rule; the measurement paths did not use
+it. With the demo excluded the pixel models fall — `bc_smb_new` 1188 → 1098,
+`bc_smb_all` 1092 → 925 — and the weaker one was flattered more, because it
+reached the demo sooner.
+
+**A reward that paid for dying.** Progress was the sum of forward pixels, so
+dying at 700 and walking back to 700 scored 1400, and a life cost 300 against
+a ceiling the policy could not pass. Twelve rounds of that bought deaths 3.0 →
+1.3 with progress falling 773 → 585: it had learned to stand still. Progress
+is now the furthest point reached, and a life costs 100.
+
+**Unseeded sampling.** The policy draws its action from its own softmax, and
+the rollout never seeded it, so "the same seeds every round" meant the same
+starting point and a different run. Removing the demo made the baseline go
+*up*, 693.8 → 801.7, which is impossible for a change that can only subtract —
+that was the noise, not the change.
+
+**The wrong operating point.** `_evaluate` sharpened to temperature 0.35
+regardless of how the rollouts ran, a default carried over from Double Dragon.
+Same weights, same six held-out seeds, only the temperature moving:
+
+| T | reached |
+|---|---|
+| 0.35 | 335.8 |
+| 0.6 | 908.3 |
+| 1.0 | **1779.5** |
+| 1.2 | 1008.3 |
+
+Five times the reach at the temperature the rollouts already used. A day of
+"the loop is not learning" was a policy trained at one operating point and
+graded at another.
+
+**Six seeds is not a sample.** With the temperature fixed the loop still chose
+badly, because it picks the best of many noisy measurements and the maximum of
+noisy numbers is biased upward by construction. One run selected a round that
+beat the incumbent by 5 on six seeds and lost to it by 237 on thirty-two. The
+held-out set is twenty-four now, with `eval_every` to keep the cost bearable.
+
+**Verifying on the selection set.** The last one was self-inflicted while
+checking the others. A forty-round run selected round 27, and a paired test
+said it beat its starting point by +176.4 (t=+2.02). Twenty-four of those
+forty seeds were the set the round had been *selected* on. Repeated on seeds
+the selection never saw:
+
+| | selection seeds | clean seeds |
+|---|---|---|
+| progress | +176.4, t=+2.02 | **−10.3, t=−0.09** |
+| clean | −25.6, t=−0.25 | −102.8, t=−0.97 |
+
+The whole effect was contamination.
+
+### What was actually learned
+
+Two mechanisms, both confirmed by behaviour rather than by a summary statistic.
+
+**Enemies were a labelling problem, not a perception problem.** The teacher
+died at the first Goomba with the Goomba plainly in its input — `present 1`,
+closing from dx +0.44 to +0.06 at the same height — while its running-jump
+probability sat at 0.02 and plain `RIGHT` rose instead: it was letting go of
+the run button and walking into it. The reason is in the data. Jump rate by
+situation, against each dataset's own baseline:
+
+| | our demos | expert TAS |
+|---|---|---|
+| pit ahead | +20.4 pts | +7.8 pts |
+| enemy ahead | **+1.2 pts** | **+11.5 pts** |
+
+Our own recorded play does not jump at enemies at all, and the clone
+reproduced that faithfully — a +20.4 lift in the data became +23.1 in the
+network, a +1.2 lift became about +2. Mixing the expert run in at a fifth of
+the weight moved the jump probability at contact from 0.02 to about 0.5 and
+cut deaths by a quarter. It did **not** change distance (t=+0.35 and t=−1.15),
+which is what the counting showed instead: first deaths at the Goomba halved,
+14 → 7 of 32 runs, and moved forward to the next obstacle rather than
+disappearing, 7 → 11 at x 600–799. Five runs finished with no deaths at all,
+against none before. Averages could not see this because the next obstacle is
+four hundred pixels along.
+
+**Stalls were a physics problem.** Of 117 real stalls across 32 runs — frozen
+x that ended with the agent moving again, so not death animations — 90 were at
+x 600–799, up to 1089 frames motionless while pressing run-and-jump. Jump
+height on the NES is how long A is held, and this policy resamples every frame,
+so it releases A partway up and the jump dies there. `JumpShaper` had existed
+for the pixel models since the beginning and `mario_reach.py` even names the
+symptom in a comment — an agent without it "cannot clear the first pipe of
+1-1". The teacher never had it. Holding for 32 frames cut stalls 114 → 33.
+
+### Self-imitation, six configurations, nothing
+
+Elite buffer persisted across rounds, best-round checkpointing, corrected
+temperature, jump shaper inside the rollouts, twenty-four held-out seeds,
+forty rounds. No configuration beat its own pretrained starting point on seeds
+it had not been selected on. The mechanism is not mysterious: cloning one's own
+sampled actions pulls the policy toward its own mean harder than reward-ranked
+selection pulls it forward. Recorded as a property of the method here rather
+than as parameters not yet found.
+
+The champion remains a pretrain: `state_smb_pre4`, with expert data mixed in
+and the jump held, at 1278.5 over forty clean seeds against the best pixel
+student's 1098.
+
+## One pretrain is a noisy artifact
+
+The status-bar sprite was being mistaken for the player in 4.0% of frames — a
+parked sprite that scores exactly 1.00 for control, ties with Mario, and wins
+the tie-break in `max(slots, key=ctrl_prob)`. Six call sites took that plain
+maximum. Fixing it is obviously right regardless of what it buys: those frames
+measured every object position from a fixed point in the interface.
+
+What it bought, measured, is nothing — and finding that out produced the more
+useful result. Retraining on corrected data scored 386 below the old model at
+t=−2.47, which reads as a regression. Three pretrains on *identical* data,
+differing only in the torch seed, say otherwise:
+
+| pretrain | reached | clean | val_acc |
+|---|---|---|---|
+| corrected, seed 0 | 964.3 | 634.1 | 0.604 |
+| corrected, seed 1 | 1246.4 | 906.6 | 0.612 |
+| corrected, seed 2 | 1159.5 | 903.6 | 0.612 |
+| old data | 1350.5 | 924.9 | 0.605 |
+
+**282 points of spread from the seed alone.** The apparent regression is barely
+larger than that, and the old model is itself one draw; against the corrected
+mean of 1123 it comes to z≈1.35. Nothing.
+
+Two things follow. Every single-pretrain comparison on this page is
+underpowered, including expert-data mixing — that conclusion ("no change in
+distance") happens to survive, but it was never demonstrable with one training
+run per arm. The behavioural evidence is what carries those findings: jump
+probability at contact moving 0.02 → 0.5, first deaths at the Goomba halving
+and relocating, stalls falling 114 → 33. Counts of specific events, not means
+of a noisy aggregate.
+
+And validation accuracy is flat at 0.604–0.612 across the three while play
+varies by 282. It measures cloneability, not skill, which this project already
+knew and keeps rediscovering.
+
+The method to use from here is three pretrains per arm against three, not one
+against one. Three times the cost, and the alternative is chasing noise.

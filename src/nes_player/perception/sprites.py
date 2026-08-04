@@ -35,8 +35,6 @@ SPRITE_W = 8
 # not been worth reading PPUCTRL to find out. Revisit if masks look clipped.
 SPRITE_H = 8
 CHECK_EVERY = 600         # frames between replay-fidelity checks
-
-
 def sprite_boxes(ram: np.ndarray) -> np.ndarray:
     """Visible sprites as (x, y) pairs, uint8, shape (n, 2)."""
     oam = ram[OAM_PAGE:OAM_PAGE + 4 * OAM_SPRITES].reshape(OAM_SPRITES, 4)

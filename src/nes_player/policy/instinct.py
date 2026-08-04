@@ -29,7 +29,7 @@ import numpy as np
 
 from nes_player.emulator.controller import resolve_conflicts
 from nes_player.perception.memory import ObjectMemory
-from nes_player.perception.motion import MotionTracker, Slot
+from nes_player.perception.motion import MotionTracker, Slot, pick_hero
 from nes_player.perception.terrain import gap_ahead
 
 NOOP: frozenset[str] = frozenset()
@@ -226,7 +226,7 @@ class InstinctPolicy:
                  if self.perception == "sprites"
                  else self.tracker.update(frame_rgb, self._pressed))
         verdicts = self.memory.update(frame_rgb, slots, self._frame, score, died)
-        best = max(slots, key=lambda s: s.ctrl_prob, default=None)
+        best = pick_hero(slots)
         self._scroll_hist.append(self.tracker.scroll_dx)
         # How fast the hero is moving through the world, camera removed. On a
         # platformer this is most of the story: the screen does not scroll until

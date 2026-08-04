@@ -60,6 +60,35 @@ class Slot:
         return 1 / (1 + np.exp(-self.ctrl_score / 2))
 
 
+CTRL_MIN = 0.55       # confidence below which no slot is "me"
+# A slot centred this high is part of the interface. The score band is HUD_H
+# tall and a sprite sitting on its bottom edge has its centre just below that,
+# so the line is one sprite lower than the band itself.
+HERO_MIN_CY = HUD_H + 8
+
+
+def pick_hero(slots: list[Slot]) -> Slot | None:
+    """The slot being controlled, or None.
+
+    Taking the most-controlled slot is not enough on its own. Super Mario Bros.
+    parks sprite 0 in the status bar to time its scroll split; it never moves,
+    and the tracker scores it at exactly 1.00 — the same as Mario — so the two
+    tie and the winner is whichever order `max` happened to see them in:
+
+        f216  Mario cx=119.5 cy=159.5 p=1.00 | static cx=91.5 cy=32.5 p=1.00
+        f217  static cx=91.5 cy=32.5 p=1.00 | Mario cx=119.5 cy=156.5 p=1.00
+
+    Measured over 1491 frames of live play the status bar won 4.0% of them, and
+    in those frames every object position in the teacher's state is relative to
+    a fixed point in the interface and the floor scan starts from the wrong
+    column. No NES game puts the player inside the status bar, so this is not a
+    rule about Mario.
+    """
+    playfield = [s for s in slots if s.cy >= HERO_MIN_CY]
+    hero = max(playfield, key=lambda s: s.ctrl_prob, default=None)
+    return hero if hero is not None and hero.ctrl_prob >= CTRL_MIN else None
+
+
 def _slice_stats(labels: np.ndarray, comp: int, lo: int, hi: int, axis: int,
                  hud_h: int) -> tuple[int, int, int, int, float, float] | None:
     """Bounding box and centroid of one component inside a slice of the frame.

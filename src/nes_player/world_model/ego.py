@@ -22,7 +22,7 @@ from torch import nn
 
 from nes_player.data.reader import Episode
 from nes_player.emulator.controller import BUTTONS
-from nes_player.perception.motion import MotionTracker
+from nes_player.perception.motion import MotionTracker, pick_hero
 from nes_player.policy.bc import ActionVocab, device
 
 CROP = 48   # crop around the hero, in source-frame pixels
@@ -44,7 +44,7 @@ def extract_trajectory(episode_dir: str | Path, out_npy: str | Path | None = Non
     for i in range(len(ep)):
         pressed = mask_to_frozen(int(actions[i]))
         slots = tracker.update(frames[i], pressed)
-        best = max(slots, key=lambda s: s.ctrl_prob, default=None)
+        best = pick_hero(slots)
         if best is not None and best.ctrl_prob > 0.7 and best.missed == 0:
             last = (best.cx, best.cy)
             out[i] = (best.cx, best.cy, 1.0)

@@ -122,6 +122,19 @@ class NoFeedback:
         return Feedback(0, False)
 
 
+def game_over(debug: dict | None) -> bool:
+    """Out of lives, so whatever plays now is not the agent.
+
+    The counter wraps past zero, which stable-retro reports signed. What comes
+    after is the console's own attract-mode demo: it walks, it scrolls, it
+    scores. Anything that keeps measuring past this point is measuring the
+    demo — one evaluation reported the same progress, to the pixel, on every
+    seed of every round, because that is where the demo parks.
+    """
+    lives = (debug or {}).get("lives")
+    return lives is not None and lives < 0
+
+
 @dataclass
 class PrivilegedFeedback:
     """From emulator memory. Exact, and a cheat — say so out loud."""

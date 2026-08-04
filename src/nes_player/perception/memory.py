@@ -15,6 +15,8 @@ from dataclasses import dataclass
 import cv2
 import numpy as np
 
+from nes_player.perception.motion import pick_hero
+
 PATCH = 16
 # Distance below which two patches are the same object. Measured rather than
 # guessed: over pairs of sightings that are certainly the same thing — one
@@ -148,7 +150,7 @@ class ObjectMemory:
 
     def update(self, frame_rgb, slots, frame_index: int, score: int, died: bool) -> dict[int, str]:
         """Returns slot_id -> verdict, for rendering."""
-        controlled = max(slots, key=lambda s: s.ctrl_prob, default=None)
+        controlled = pick_hero(slots)
         verdicts: dict[int, str] = {}
         for s in slots:
             if s.missed > 0:

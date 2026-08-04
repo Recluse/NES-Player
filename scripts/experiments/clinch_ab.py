@@ -65,7 +65,7 @@ def run(frames: int, seed: int, split: bool, engage_dy: int | None = None,
                 score0 = d.get("score", 0)
             score = max(0, d.get("score", 0) - score0) if score0 is not None else 0
             pressed, slots, _ = policy.step(obs.frame_rgb, score, False)
-            hero = max(slots, key=lambda s: s.ctrl_prob, default=None)
+            hero = motion.pick_hero(slots)
             # The pathology this measures directly: the agent walks into the
             # left edge, gets no scroll, reads that as being stuck, and retreats
             # into the same wall again. Score barely notices; this does.

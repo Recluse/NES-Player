@@ -31,33 +31,46 @@ from torch import nn
 
 from nes_player import provenance
 from nes_player.data.reader import Episode
+from nes_player.perception.feedback import game_over
+from nes_player.perception.motion import pick_hero
 from nes_player.perception.sprites import SpriteTracker, episode_sprites
+from nes_player.perception.terrain import floor_gaps, gap_ahead
 
 # How many objects besides the hero the state describes, nearest first. Six
 # covers a Double Dragon crowd; beyond that they are off screen or irrelevant.
 N_OTHERS = 6
 PER_OBJECT = 5                       # dx, dy, vx, vy, present
-STATE_DIM = PER_OBJECT * (1 + N_OTHERS) + 1     # + camera scroll
+# + camera scroll, + how far the floor holds ahead, + whether it holds here
+STATE_DIM = PER_OBJECT * (1 + N_OTHERS) + 3
+GAP_REACH = 96                       # how far ahead a hole is worth reporting
 # Same geometric spacing as the pixel model's frame stack, for the same reason:
 # a window that reaches back without growing the input.
 STATE_OFFSETS = (8, 4, 2, 1)
 INPUT_DIM = STATE_DIM * len(STATE_OFFSETS)
-CTRL_MIN = 0.55                      # confidence needed to call a slot "me"
 SCREEN_W, SCREEN_H = 240.0, 224.0
 VEL_SCALE = 8.0
 
 
-def features(slots: list, scroll_dx: float) -> np.ndarray:
-    """One frame of state: the hero, then the nearest objects, all relative.
+def features(slots: list, scroll_dx: float,
+             frame_rgb: np.ndarray | None = None) -> np.ndarray:
+    """One frame of state: the hero, the nearest objects, and the floor.
 
     Positions are relative to the hero on purpose. Absolute screen coordinates
     would make the teacher memorise places, and the places change every screen;
     "an enemy is twenty pixels to my right" is the same fact everywhere.
+
+    The floor is here because a pit is the one lethal thing that is not a
+    sprite. Every measurement of the pit problem so far changed the *policy*
+    while leaving the teacher's input blind to holes, which is why none of them
+    could help: a network cannot learn to jump at the right moment from numbers
+    that never mention the edge. Two of them do now — how far the ground holds
+    ahead, and whether it holds underfoot.
     """
     out = np.zeros(STATE_DIM, np.float32)
-    hero = max(slots, key=lambda s: s.ctrl_prob, default=None)
-    if hero is None or hero.ctrl_prob < CTRL_MIN:
-        out[-1] = scroll_dx / VEL_SCALE
+    out[-2] = 1.0        # no hole in reach until one is found
+    hero = pick_hero(slots)
+    if hero is None:
+        out[-3] = scroll_dx / VEL_SCALE
         return out
     out[:PER_OBJECT] = (hero.cx / SCREEN_W, hero.cy / SCREEN_H,
                         hero.vx / VEL_SCALE, hero.vy / VEL_SCALE, 1.0)
@@ -68,7 +81,14 @@ def features(slots: list, scroll_dx: float) -> np.ndarray:
         out[o:o + PER_OBJECT] = ((s.cx - hero.cx) / SCREEN_W,
                                  (s.cy - hero.cy) / SCREEN_H,
                                  s.vx / VEL_SCALE, s.vy / VEL_SCALE, 1.0)
-    out[-1] = scroll_dx / VEL_SCALE
+    out[-3] = scroll_dx / VEL_SCALE
+    if frame_rgb is not None:
+        gaps = floor_gaps(frame_rgb)
+        d = gap_ahead(frame_rgb, hero.cx, 1 if hero.vx >= 0 else -1,
+                      GAP_REACH, gaps=gaps)
+        out[-2] = 1.0 if d is None else d / GAP_REACH
+        x = int(round(hero.cx))
+        out[-1] = float(0 <= x < len(gaps) and gaps[x])
     return out
 
 
@@ -121,7 +141,7 @@ class StatePolicy:
     def act(self, frame_rgb: np.ndarray, ram: np.ndarray,
             temperature: float = 1.0) -> tuple[frozenset[str], np.ndarray]:
         slots = self.tracker.update(frame_rgb, self._pressed, ram)
-        self._history.append(features(slots, self.tracker.scroll_dx))
+        self._history.append(features(slots, self.tracker.scroll_dx, frame_rgb))
         x = torch.from_numpy(stack(self._history)).unsqueeze(0).to(self.dev)
         with torch.no_grad():
             logits = self.net(x)[0]
@@ -144,7 +164,12 @@ def episode_states(ep: Episode) -> np.ndarray:
     is not emulated again — the table was already checked against the frames
     when it was made.
     """
-    cache = ep.path / "states.v1.npy"
+    # v2: the hero is picked with `pick_hero`, which refuses the status bar.
+    # The width did not change when that did, so a shape check would have
+    # served v1 vectors — built around a fixed point in the interface on 4% of
+    # frames — to a model that thinks they are current. The version is in the
+    # name so meaning, not just shape, has to match.
+    cache = ep.path / "states.v2.npy"
     if cache.exists():
         m = np.load(cache)
         if m.shape[1] == STATE_DIM:
@@ -158,8 +183,9 @@ def episode_states(ep: Episode) -> np.ndarray:
     out = np.zeros((len(boxes), STATE_DIM), np.float32)
     pressed: frozenset[str] = frozenset()
     for i in range(len(boxes)):
-        slots = tracker.update(np.asarray(frames[i]), pressed, boxes=boxes[i])
-        out[i] = features(slots, tracker.scroll_dx)
+        frame = np.asarray(frames[i])
+        slots = tracker.update(frame, pressed, boxes=boxes[i])
+        out[i] = features(slots, tracker.scroll_dx, frame)
         mask = int(actions[i, 0])
         pressed = frozenset(b for k, b in enumerate(BUTTONS) if mask & (1 << k))
     np.save(cache, out)
@@ -171,6 +197,19 @@ def stacked_dataset(states: np.ndarray) -> np.ndarray:
     n = len(states)
     idx = np.stack([np.clip(np.arange(n) - (o - 1), 0, None) for o in STATE_OFFSETS])
     return states[idx].transpose(1, 0, 2).reshape(n, INPUT_DIM)
+
+
+def episode_dirs(spec: str | Path) -> list[Path]:
+    """One episode, a directory of them, or several of either, comma separated."""
+    out: list[Path] = []
+    for part in str(spec).split(","):
+        root = Path(part)
+        if (root / "metadata.json").exists():
+            out.append(root)
+        else:
+            out.extend(sorted(d for d in root.iterdir()
+                              if (d / "metadata.json").exists()))
+    return out
 
 
 def pretrain(episode_dir: str | Path, out_dir: str | Path, epochs: int = 40,
@@ -188,14 +227,7 @@ def pretrain(episode_dir: str | Path, out_dir: str | Path, epochs: int = 40,
 
     torch.manual_seed(seed)
     np.random.seed(seed)
-    ep_dirs: list[Path] = []
-    for part in str(episode_dir).split(","):
-        root = Path(part)
-        if (root / "metadata.json").exists():
-            ep_dirs.append(root)
-        else:
-            ep_dirs.extend(sorted(d for d in root.iterdir()
-                                  if (d / "metadata.json").exists()))
+    ep_dirs = episode_dirs(episode_dir)
     eps = [Episode(d) for d in ep_dirs]
     print(f"episodes: {len(eps)}", flush=True)
 
@@ -264,7 +296,13 @@ def pretrain(episode_dir: str | Path, out_dir: str | Path, epochs: int = 40,
 # ---------- improvement by result, not by imitation ----------
 
 DEFAULT_GAME = "DoubleDragon-Nes-v0"
-DEATH_COST = 300.0     # a life is worth this much progress
+# What a life costs. It was 300, and on Mario that number ran the whole loop:
+# the policy could not get past the pit at x~700, so no amount of trying was
+# worth one death, and twelve rounds of selection bought a fall in deaths
+# (3.0 -> 1.3) with progress going *down* (773 -> 585). It had learned to stand
+# still. Kept small enough now to prefer surviving and never to pay for
+# refusing to move.
+DEATH_COST = 100.0
 SCORE_WEIGHT = 1.0
 LEVEL_BONUS = 1000.0   # finishing a level beats any amount of walking
 IDLE_STEP, IDLE_MAX = 37, 1800   # start offset per seed, capped at 30 seconds
@@ -279,15 +317,29 @@ class GameProgress:
     Super Mario Bros. publishes its own x position and level number, which vary
     between policies by hundreds rather than by ten. Where the game tells us,
     listen to the game.
+
+    Two numbers come out of it. `total` is every forward pixel added up, which
+    is what the camera can measure and all a game without an x can offer.
+    `reached` is the furthest point in the level, which is what the question
+    "how far did it get" actually means — walking the first screen four times
+    after four deaths is not four screens of progress, and paying for it is how
+    a policy learns that dying and restarting beats going forward.
     """
 
     def __init__(self) -> None:
         self.total = 0.0
         self.levels = 0
+        self._best = 0.0
+        self._banked = 0.0
         self._x: int | None = None
         self._level: int | None = None
         self.from_ram = False
         self._visual = None
+
+    @property
+    def reached(self) -> float:
+        """Furthest into the game, levels already finished included."""
+        return self._banked + self._best if self.from_ram else self.total
 
     def update(self, debug: dict, frame_rgb) -> None:
         if "xscrollLo" not in debug:
@@ -307,9 +359,12 @@ class GameProgress:
             if 0 < dx < 128:   # a level restart moves it back; that is not progress
                 self.total += dx
         self._x = x
+        self._best = max(self._best, float(x))
         level = int(debug.get("levelHi", 0)) * 4 + int(debug.get("levelLo", 0))
         if self._level is not None and level > self._level:
             self.levels += 1
+            self._banked += self._best   # x starts over in the new level
+            self._best = 0.0
         self._level = level
 
 
@@ -318,12 +373,34 @@ def _rollout(arg) -> dict:
 
     Run in a separate process: rollouts are the whole cost of this loop and
     they are independent, exactly like the attention masks.
+
+    `jump_hold` turns a momentary A into a held one. Jump height on the NES is
+    duration, and this policy picks its buttons afresh every frame, so at any
+    probability short of certainty it releases A partway up and the jump dies
+    there. `cli/play.py` and `mario_reach.py` have always shaped the jump for
+    the pixel models; the teacher never had it, and it showed — 90 of its 117
+    stalls were at the first pipe of 1-1, standing still for up to 1089 frames
+    pressing run-and-jump against a wall it could not clear. Holding for 32
+    frames cut stalls by 71%.
+
+    What is stored as the label is the network's own choice, not the shaped
+    one. The shaper is part of how buttons reach the console, the same for
+    every policy; teaching the network to predict its output would be teaching
+    it to imitate a wrapper.
     """
-    checkpoint, seed, frames, temperature, game, state = arg
+    checkpoint, seed, frames, temperature, game, state, jump_hold = arg
+    from nes_player.cli.play import JumpShaper
     from nes_player.emulator.stable_retro import StableRetroAdapter
 
+    # The policy draws its action from its own softmax, so "the same seeds every
+    # round" is only the same starting point, not the same run, unless the draw
+    # is seeded too. Without this the held-out curve carries enough noise to
+    # hide the thing it exists to show: one baseline came back 108 higher after
+    # a change that can only ever lower it.
+    np.random.seed(seed)
     env = StableRetroAdapter(game, include_debug=True, state=state)
     policy = StatePolicy(checkpoint)
+    jump = JumpShaper(jump_hold) if jump_hold else None
     progress = GameProgress()
     obs = env.reset(seed=seed)
     # Each rollout starts at a different moment, or every one of them measures
@@ -337,6 +414,15 @@ def _rollout(arg) -> dict:
     states: list[np.ndarray] = []
     labels: list[int] = []
     score0, lives0, lives_now, deaths = None, None, None, 0
+    # How far it got before dying once. `reached` is a maximum over the whole
+    # run and there are three lives inside one frame budget, so dying costs a
+    # few hundred frames and nothing else — you respawn and walk the same
+    # ground again. Under that measure a change that consists entirely of
+    # dying less (expert data cut deaths by a quarter, t well past noise)
+    # cannot show up at all. Finishing a level means not dying, so this is
+    # reported alongside rather than instead: both are true, they answer
+    # different questions.
+    clean = 0.0
     for i in range(frames):
         d = obs.debug or {}
         if score0 is None and i > 200:
@@ -346,34 +432,62 @@ def _rollout(arg) -> dict:
             if lives0 is None:
                 lives0 = lv
             if lives_now is not None and lv < lives_now:
+                if deaths == 0:
+                    clean = progress.reached
                 deaths += 1
             lives_now = lv
+        # Out of lives: the frames after this are the attract-mode demo, and
+        # they were being measured as progress and trained on as choices.
+        if game_over(d):
+            break
         pressed, _ = policy.act(obs.frame_rgb, env._env.get_ram(), temperature)
         states.append(stack(policy._history))
         labels.append(policy.last_index)
+        if jump is not None:
+            pressed = jump.apply(pressed)
         obs = env.step_buttons([pressed - {"START", "SELECT"}])
         progress.update(obs.debug or {}, obs.frame_rgb)
     env.close()
+    if not states:      # game over before it ever acted; nothing to train on
+        states, labels = [np.zeros(INPUT_DIM, np.float32)], [0]
 
     score = max(0, (obs.debug or {}).get("score", 0) - (score0 or 0))
-    reward = (progress.total + SCORE_WEIGHT * score
+    reward = (progress.reached + SCORE_WEIGHT * score
               + LEVEL_BONUS * progress.levels - DEATH_COST * deaths)
-    return {"seed": seed, "reward": float(reward), "progress": round(progress.total, 1),
+    if deaths == 0:
+        clean = progress.reached      # never died, so the whole run was clean
+    return {"seed": seed, "reward": float(reward), "progress": round(progress.reached, 1),
+            "clean": round(clean, 1),
             "levels": progress.levels, "score": int(score), "deaths": deaths,
             "states": np.stack(states).astype(np.float32),
             "labels": np.asarray(labels, np.int64)}
 
 
 def _evaluate(checkpoint: Path, seeds: list[int], frames: int, workers: int,
-              game: str, state: str | None) -> dict:
-    """The same seeds every round, at low temperature: the actual progress curve."""
+              game: str, state: str | None, temperature: float,
+              jump_hold: int) -> dict:
+    """The same seeds every round, at the temperature the policy is used at.
+
+    This used to sharpen to 0.35 regardless, a default carried over from
+    Double Dragon, and on Mario that grades a policy nobody would deploy. Same
+    weights, same six held-out seeds, only the temperature moving:
+
+        T=0.35   reached  335.8
+        T=0.6    reached  908.3
+        T=1.0    reached 1779.5
+
+    Five times the reach at the temperature the rollouts already ran at. A
+    whole day of "the loop is not learning" was a policy being trained at one
+    operating point and measured at another.
+    """
     from concurrent.futures import ProcessPoolExecutor
 
     with ProcessPoolExecutor(max_workers=workers) as pool:
-        rs = list(pool.map(_rollout, [(str(checkpoint), s, frames, 0.35, game, state)
-                                      for s in seeds]))
+        rs = list(pool.map(_rollout, [(str(checkpoint), s, frames, temperature,
+                                       game, state, jump_hold) for s in seeds]))
     return {"eval_reward": round(float(np.mean([x["reward"] for x in rs])), 1),
             "eval_progress": round(float(np.mean([x["progress"] for x in rs])), 1),
+            "eval_clean": round(float(np.mean([x["clean"] for x in rs])), 1),
             "eval_levels": round(float(np.mean([x["levels"] for x in rs])), 2),
             "eval_score": round(float(np.mean([x["score"] for x in rs])), 1),
             "eval_deaths": round(float(np.mean([x["deaths"] for x in rs])), 2)}
@@ -384,19 +498,35 @@ def self_improve(checkpoint: str | Path, out_dir: str | Path, rounds: int = 6,
                  temperature: float = 1.0, epochs: int = 8, lr: float = 3e-4,
                  demo_dir: str | Path | None = None, demo_frac: float = 0.5,
                  workers: int | None = None,
-                 eval_seeds: tuple[int, ...] = (901, 902, 903, 904, 905, 906),
+                 eval_seeds: tuple[int, ...] = tuple(range(901, 925)),
                  game: str = DEFAULT_GAME, state: str | None = "default",
+                 jump_hold: int = 0, eval_every: int = 1,
                  ) -> list[dict]:
-    """Play, keep the rollouts that did best, retrain on those. Repeat.
+    """Play, keep the rollouts that did best ever, retrain on those. Repeat.
 
-    Two guards against the collapse this project already hit once, where
-    retraining on the top two of eight round after round produced a policy so
-    deterministic that six evaluation runs came back identical:
+    Three guards against the collapse this project keeps hitting, where
+    retraining round after round produces a policy worse than the one it
+    started from:
 
     - a wider slice is kept (a third, not a quarter);
     - the original demonstrations are mixed back in every round, so the policy
       is pulled towards *better than the demos* rather than away from any
-      behaviour that a lucky rollout happened not to use.
+      behaviour that a lucky rollout happened not to use;
+    - the kept rollouts persist across rounds rather than being this round's
+      six. Without that, a round trains only on what it just happened to draw
+      and forgets what the round before it learned; measured on Mario, the
+      first round dropped the held-out reach from 336 to 203 and eight further
+      rounds never recovered it, while the best single rollout of round zero
+      had got 96% of the way through the level. Good runs are rare, and the
+      loop was throwing each one away the moment it was used once.
+
+    The held-out set is twenty-four seeds, not six. Six was too few to select
+    on, and selecting on it is what the loop does every round: one run picked
+    a round that beat the incumbent by 5 on six seeds and lost to it by 237 on
+    thirty-two. Every confusing "best round" this loop has produced traces
+    back to that. Widening the set costs more per round than the round does,
+    so `eval_every` exists to spend it less often; a round that is not
+    measured cannot be chosen, which is the safe way to be wrong.
     """
     import os
     import shutil
@@ -415,8 +545,7 @@ def self_improve(checkpoint: str | Path, out_dir: str | Path, rounds: int = 6,
     if demo_dir:
         from nes_player.policy.bc import ActionVocab
 
-        eps = [Episode(d) for d in sorted(Path(demo_dir).iterdir())
-               if (d / "metadata.json").exists()]
+        eps = [Episode(d) for d in episode_dirs(demo_dir)]
         vocab = ActionVocab(meta["vocab_masks"])
         demo_x = np.concatenate([stacked_dataset(episode_states(e)) for e in eps])
         demo_y = np.concatenate([vocab.encode(e.actions[:, 0]) for e in eps])
@@ -429,16 +558,21 @@ def self_improve(checkpoint: str | Path, out_dir: str | Path, rounds: int = 6,
     eval_seeds = list(eval_seeds)
     log: list[dict] = [{"round": -1, "rollout_mean": None, "kept": [],
                         **_evaluate(out, eval_seeds, frames, n_workers,
-                                    game, state)}]
+                                    game, state, temperature, jump_hold)}]
     print(json.dumps(log[0]), flush=True)   # where it started, before any round
+    # The pretrained weights are the incumbent: if no round beats them, they win.
+    best_eval, best_round = log[0]["eval_progress"], -1
+    best_state = {k: v.detach().cpu().clone() for k, v in net.state_dict().items()}
+    elite: list[dict] = []        # the best rollouts of all rounds, not this one
 
     for r in range(rounds):
         with ProcessPoolExecutor(max_workers=n_workers) as pool:
             results = list(pool.map(_rollout, [
-                (str(out), r * rollouts + k, frames, temperature, game, state)
+                (str(out), r * rollouts + k, frames, temperature, game, state,
+                 jump_hold)
                 for k in range(rollouts)]))
-        results.sort(key=lambda x: -x["reward"])
-        best = results[:keep]
+        elite = sorted(elite + results, key=lambda x: -x["reward"])[:keep]
+        best = elite
         # Rollout seeds differ every round on purpose — training on one fixed
         # opening teaches that opening. But that makes the round's own mean
         # useless as a progress curve, because it compares different starting
@@ -446,10 +580,23 @@ def self_improve(checkpoint: str | Path, out_dir: str | Path, rounds: int = 6,
         # same seeds every round, never trained on.
         rec = {"round": r,
                "rollout_mean": round(float(np.mean([x["reward"] for x in results])), 1),
-               "kept": [round(x["reward"], 1) for x in best],
-               **_evaluate(out, eval_seeds, frames, n_workers, game, state)}
+               "kept": [round(x["reward"], 1) for x in best]}
+        # Evaluating every round costs more than the round does once the
+        # held-out set is wide enough to trust, and a round that is not
+        # measured simply cannot be chosen — which is the safe direction.
+        if r % eval_every == 0 or r == rounds - 1:
+            rec.update(_evaluate(out, eval_seeds, frames, n_workers, game,
+                                 state, temperature, jump_hold))
         log.append(rec)
         print(json.dumps(rec), flush=True)
+        # The weights just evaluated are the ones still in `net`; snapshot them
+        # before this round overwrites them. Selection is noisy and a round can
+        # be worse than the one before it — keeping only the last means a run
+        # that peaked at round six and collapsed by nine returns the collapse.
+        if rec.get("eval_progress", -1) > best_eval:
+            best_eval, best_round = rec["eval_progress"], r
+            best_state = {k: v.detach().cpu().clone()
+                          for k, v in net.state_dict().items()}
 
         x = np.concatenate([b["states"] for b in best])
         y = np.concatenate([b["labels"] for b in best])
@@ -472,13 +619,19 @@ def self_improve(checkpoint: str | Path, out_dir: str | Path, rounds: int = 6,
         torch.save({k: v.detach().cpu() for k, v in net.state_dict().items()},
                    out / "model.pt")
 
+    torch.save(best_state, out / "model.pt")
+    print(f"kept round {best_round} (reached {best_eval})", flush=True)
     meta["source"] = "state-self-improve"
+    meta["best_round"] = best_round
     meta["improve_log"] = log
     (out / "meta.json").write_text(json.dumps(meta, indent=2))
     provenance.write(out, config={"kind": "state-self-improve", "rounds": rounds,
                                   "rollouts": rollouts, "keep": keep,
                                   "frames": frames, "temperature": temperature,
                                   "epochs": epochs, "lr": lr,
+                                  "jump_hold": jump_hold,
+                                  "eval_seeds": len(eval_seeds),
+                                  "eval_every": eval_every,
                                   "demo_dir": str(demo_dir), "from": str(checkpoint)},
                      game=game)
     return log
