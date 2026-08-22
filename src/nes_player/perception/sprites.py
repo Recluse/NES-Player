@@ -25,7 +25,7 @@ import numpy as np
 from nes_player.data.reader import Episode
 from nes_player.emulator.controller import BUTTONS
 
-SPRITES_VERSION = 1
+SPRITES_VERSION = 2
 OAM_PAGE = 0x200          # shadow OAM: the source of the per-frame DMA
 OAM_SPRITES = 64
 HIDDEN_Y = 0xEF           # the usual way to park an unused sprite off-screen
@@ -35,14 +35,59 @@ SPRITE_W = 8
 # not been worth reading PPUCTRL to find out. Revisit if masks look clipped.
 SPRITE_H = 8
 CHECK_EVERY = 600         # frames between replay-fidelity checks
+# This rule is wrong about who the player is in roughly a quarter of frames —
+# measured with the trained policy driving, an enemy was chosen as the hero in
+# 26.9% of them (18.3 / 31.9 / 30.4 over three seeds). The mechanism is partly
+# understood: a stationary player earns no score while the decay keeps running,
+# so a stalled hero fades and a drifting enemy overtakes him, at ctrl_prob 0.42
+# against 0.77. Two fixes were tried and neither survived measurement.
+# Skipping the update when nothing moved: 26.9% -> 25.5%, inside the seed
+# spread. Additionally penalising movement while no direction is pressed:
+# 12.3% -> 22.0% on the seed it was built against, because Mario keeps sliding
+# after the button is released and the penalty lands on him too.
+# One fix survived measurement: vertical response to the jump button, below.
+JUMP_EPS = 0.3
+
+
 def sprite_boxes(ram: np.ndarray) -> np.ndarray:
-    """Visible sprites as (x, y) pairs, uint8, shape (n, 2)."""
+    """Visible sprites as (x, y, tile), uint8, shape (n, 3).
+
+    The tile index is the game's own name for a visual component, and it used
+    to be dropped here. Position alone says where something is and nothing
+    about what it is, which left identity to be guessed from a pixel crop —
+    and that crop is mostly background, so it could tell two sightings apart
+    but never say which known thing either one was.
+    """
     oam = ram[OAM_PAGE:OAM_PAGE + 4 * OAM_SPRITES].reshape(OAM_SPRITES, 4)
     vis = oam[oam[:, 0] < HIDDEN_Y]
     # The stored y is one less than the drawn y — the PPU renders a sprite on
     # the scanline after the one in the table.
     return np.stack([vis[:, 3], (vis[:, 0].astype(np.uint16) + 1)
-                     .clip(0, 255).astype(np.uint8)], axis=1)
+                     .clip(0, 255).astype(np.uint8), vis[:, 1]], axis=1)
+
+
+#: Mario, as the console itself knows him. Screen x, screen y, and the two
+#: signed velocity bytes, found by matching every byte in the page against the
+#: quantity it should equal: $3AD is within 0.94 px of the camera-relative
+#: world x, $CE reproduces the screen y exactly, and $57/$9F correlate +0.94
+#: with the per-frame change in each. The additions put him in the same frame
+#: as a tracked box, whose centre sits +8/+16 from the sprite's corner —
+#: measured over 12000 frames, not derived, so it is a calibration.
+MARIO = (0x3AD, 0xCE, 0x57, 0x9F)
+MARIO_CENTRE = (8.0, 16.0)
+
+
+class RamHero:
+    """The hero as the console reports him, shaped like a tracked one."""
+
+    slot_id, missed, age, ctrl_prob = -1, 0, 999, 1.0
+
+    def __init__(self, ram: np.ndarray):
+        x, y, vx, vy = (int(ram[a]) for a in MARIO)
+        self.cx = x + MARIO_CENTRE[0]
+        self.cy = y + MARIO_CENTRE[1]
+        self.vx = float(vx - 256 if vx > 127 else vx)
+        self.vy = float(vy - 256 if vy > 127 else vy)
 
 
 class ReplayMismatch(Exception):
@@ -96,7 +141,7 @@ def episode_sprites(ep: Episode) -> np.ndarray:
     actions = ep.actions
     n = int(actions.shape[0])
     env, _ = _open_matching_env(ep, int(actions[0, 0]))
-    out = np.zeros((n, OAM_SPRITES, 2), np.uint8)
+    out = np.zeros((n, OAM_SPRITES, 3), np.uint8)
     try:
         out[0] = _pad(sprite_boxes(env._env.get_ram()))
         for i in range(1, n):
@@ -114,7 +159,7 @@ def episode_sprites(ep: Episode) -> np.ndarray:
 
 
 def _pad(boxes: np.ndarray) -> np.ndarray:
-    out = np.zeros((OAM_SPRITES, 2), np.uint8)
+    out = np.zeros((OAM_SPRITES, 3), np.uint8)
     out[:len(boxes)] = boxes[:OAM_SPRITES]
     return out
 
@@ -127,7 +172,7 @@ def sprite_mask(boxes: np.ndarray, frame_hw: tuple[int, int],
 
     h, w = frame_hw
     full = np.zeros((h, w), np.uint8)
-    for k, (x, y) in enumerate(boxes):
+    for k, (x, y, _tile) in enumerate(boxes):
         if x == 0 and y == 0:
             continue          # padding
         x = int(x) + (0 if lead_dx is None else int(lead_dx[k]))
@@ -195,18 +240,27 @@ class SpriteTracker:
         # without joining two characters standing apart.
         h, w = frame_rgb.shape[:2]
         canvas = np.zeros((h, w), np.uint8)
-        for x, y in boxes:
+        for x, y, _tile in boxes:
             if x == 0 and y == 0:
                 continue          # padding in a cached table
             canvas[int(y):int(y) + SPRITE_H, int(x):int(x) + SPRITE_W] = 255
         canvas = cv2.dilate(canvas, np.ones((3, 3), np.uint8))
         canvas[:HUD_H] = 0          # the HUD is not part of the world
         n, _, stats, cent = cv2.connectedComponentsWithStats(canvas)
-        # ponytail: two characters in a clinch merge into one component, as they
-        # do for the motion tracker. Splitting them needs the per-sprite tile
-        # ids; worth it only if the clinch turns out to matter.
+        # ponytail: two characters in a clinch still merge into one component.
+        # The tile ids are here now, so splitting them is possible; it stays
+        # undone until a clinch is shown to cost something.
         dets = [(stats[i][0], stats[i][1], stats[i][2], stats[i][3],
                  float(cent[i][0]), float(cent[i][1])) for i in range(1, n)]
+        # Which tiles make up each object. An object is several 8x8 sprites and
+        # the set of their tile indices is what the game calls the thing —
+        # exact, and with no background in it, unlike a crop of the screen.
+        det_tiles: list[set] = []
+        for x, y, bw, bh, _cx, _cy in dets:
+            det_tiles.append({
+                int(t) for sx, sy, t in boxes
+                if not (sx == 0 and sy == 0)
+                and x - 1 <= int(sx) <= x + bw and y - 1 <= int(sy) <= y + bh})
 
         taken = set()
         for slot in self._slots:
@@ -223,6 +277,7 @@ class SpriteTracker:
                 slot.vy *= 0.8
                 continue
             taken.add(best)
+            slot.tiles = frozenset(det_tiles[best])
             x, y, bw, bh, cx, cy = dets[best]
             slot.vx = (1 - VEL_EMA) * slot.vx + VEL_EMA * (cx - slot.cx)
             slot.vy = (1 - VEL_EMA) * slot.vy + VEL_EMA * (cy - slot.cy)
@@ -235,11 +290,20 @@ class SpriteTracker:
                 world_vx = slot.vx - self.scroll_dx
                 slot.ctrl_score = (0.98 * slot.ctrl_score
                                    + 0.35 * float(np.clip(world_vx * direction, -1.5, 1.5)))
+            # Sideways evidence dries up when the player is not going anywhere,
+            # and this agent stalls constantly: with RIGHT held, its world
+            # velocity is +0.155 and the camera is barely moving. Jumping does
+            # not need him to be going anywhere. Nothing else on screen rises
+            # because A was pressed, so an object going up while A is held is
+            # about as clean a signal of control as exists here.
+            if "A" in pressed and slot.vy < -JUMP_EPS:
+                slot.ctrl_score += 0.35 * min(-slot.vy, 1.5)
         for k, d in enumerate(dets):
             if k not in taken:
                 x, y, bw, bh, cx, cy = d
                 self._slots.append(Slot(self._next_id, (x, y, bw, bh), cx, cy,
-                                        small=bw * bh < 64))
+                                        small=bw * bh < 64,
+                                        tiles=frozenset(det_tiles[k])))
                 self._next_id += 1
         self._slots = [s for s in self._slots
                        if s.missed <= (300 if s.ctrl_prob > 0.7 else STALE_AFTER)]

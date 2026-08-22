@@ -725,8 +725,13 @@ class BCPolicy:
         return self._sample(logits, temperature)
 
     def _sample(self, logits: torch.Tensor, temperature: float):
-        probs = torch.softmax(logits / temperature, dim=0).cpu().numpy()
-        idx = int(np.random.choice(len(probs), p=probs / probs.sum()))
+        # Temperature zero means greedy, not a division by zero. Dividing
+        # produced NaN logits and numpy then refused the draw, which is a
+        # confusing way to learn that a deterministic policy was wanted;
+        # StatePolicy has always guarded this and this class did not.
+        probs = torch.softmax(logits / max(temperature, 1e-6), dim=0).cpu().numpy()
+        idx = (int(probs.argmax()) if temperature <= 0
+               else int(np.random.choice(len(probs), p=probs / probs.sum())))
         ranked = sorted(zip(self.vocab.names, probs.tolist(), strict=True),
                         key=lambda t: -t[1])
         return mask_to_pressed(self.vocab.masks[idx]), ranked

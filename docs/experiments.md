@@ -1630,3 +1630,1583 @@ knew and keeps rediscovering.
 
 The method to use from here is three pretrains per arm against three, not one
 against one. Three times the cost, and the alternative is chasing noise.
+
+## Reaching further, and what that did not buy
+
+Six configurations of self-imitation had failed, and the measurements said why:
+on one life the agent reached x 650-720 of a 3266-pixel level and died, so the
+rest of the game was territory it had never entered. Nothing that reweights
+frames it already has can teach what is not in them.
+
+Go-Explore keeps an archive of places reached, returns to one by restoring the
+emulator rather than replaying it, and explores onward. Sixty iterations of
+uniformly random button-holds took the frontier to 2352 — nearly twice what the
+trained policy averages — in about a minute. A longer run cleared **1-1 and 1-2
+back to back with no deaths** and entered 1-3, verified by replaying the found
+sequence from a cold start and reading WORLD 1-3 off the screen.
+
+Three of its own faults were found by that clear, each because a number looked
+wrong rather than by inspection:
+
+- The frontier sat at 3130 for fourteen hundred iterations and was not stuck.
+  It had reached the flagpole on iteration 100; the explore segment was 300
+  frames, shorter than flag-descent-castle-next-screen, so every segment ended
+  inside the celebration.
+- The cell key was (level, camera x). The camera stops before a level ends, so
+  every state on the last stretch collapsed into one cell.
+- `pick` rated cells against the global maximum x, and x restarts at zero in a
+  new level — so the first cells of a freshly opened level scored below every
+  cell of the one just finished, and the search abandoned each frontier the
+  moment it reached it. After entering 1-2 the archive had gained five cells in
+  two hundred iterations. Fixing this got 1-2 finished and 1-3 started.
+
+### Coverage was not the bottleneck
+
+The obvious next move is to train on the newly reachable ground. The search
+wrote 300 segments — all of 1-1, all of 1-2, part of 1-3 — against existing
+datasets that live entirely in x 0-720. Three pretrains per arm, forty held-out
+seeds no selection had touched:
+
+| | reached | clean | levels in 120 runs |
+|---|---|---|---|
+| first fifth only | **1123.4** | **815** | 2 |
+| plus whole level | 887.6 | 464 | 0 |
+
+Worse, and on `clean` — distance before the first death — clearly so, 815 to
+464 against arm spreads of 282 and 383.
+
+The reason was predictable and was predicted before the run: Go-Explore presses
+buttons at random, so a surviving segment is a *lucky* random one, not a
+skilled one. Cloning it teaches randomness that happened to work once. Being
+able to reach a place is not the same as having something worth imitating
+there, and the data has to be good rather than merely well-located.
+
+That points at what Go-Explore actually prescribes for its second phase, which
+is not cloning the exploration: start the agent near the end of a found
+trajectory and walk the starting point backwards as it succeeds, so it learns
+its *own* actions in those places. Not attempted yet.
+
+### The backward curriculum: local skill, global loss
+
+Go-Explore's own phase two is not cloning the exploration. It puts the agent a
+few frames from the end of a found trajectory, lets it play to the finish
+itself, and moves the start back when it wins often enough — so the actions
+learned are the agent's own, and the trajectory only ever supplies starting
+positions.
+
+It works at what it does. From nothing, the agent learned to finish the last
+**19.3%** of a two-level route by itself, rung by rung, with a real difficulty
+gradient: 8/8 on the first rungs, then 6/8, then 4/8 where a rung it had failed
+at 3/8 became passable after training on the previous one's wins. It stalled at
+level 1-2, x≈2188, and six further passes could not clear it.
+
+Measured on the actual game, from the start, it is a clear regression:
+
+| | pre4 | after curriculum | |
+|---|---|---|---|
+| reached | 1350.5 | 867.7 | −482.8, t=−3.44, 12W/28L |
+| clean | 924.9 | 526.1 | −398.8, t=−2.70, 6W/26L |
+
+Twenty-two passes of gradient steps on one narrow stretch deep inside 1-2,
+against an evaluation that plays from the beginning of 1-1. The policy
+specialised where it was trained and lost where it was not; mixing the original
+demonstrations back in at half the batch did not anchor it.
+
+That is three attempts in a row — self-imitation, whole-level data, and this —
+where training that moves the data away from the opening of the game makes
+performance at the opening worse, in one case while genuinely improving at the
+thing it trained on. The common factor is worth stating as the next hypothesis
+rather than a conclusion: the teacher is a 256-wide MLP over 38 numbers, and it
+may simply be too small to hold both the opening of 1-1 and the end of 1-2 at
+once. That is testable by widening it before trying any of these again.
+
+### It is not capacity
+
+Three methods lost ground at the opening whenever training moved away from it,
+so the teacher being too small to hold both ends of the game was the obvious
+suspect: a 256-wide MLP over 38 numbers is not much. Running the same two arms
+at four times the width says no.
+
+| | width 256 | width 1024 |
+|---|---|---|
+| first fifth only | 1123.4 (spread 282) | 1166.4 (spread 293) |
+| plus whole level | 887.6 (spread 383) | 965.8 (spread 486) |
+| gap | −235.8 | −200.6 |
+
+Neither arm moved beyond its own seed spread and the gap is unchanged. With
+three seeds an arm this cannot prove a null, so the claim is only that there is
+no evidence widening helps — but there is certainly none, and the hypothesis is
+dropped rather than tuned.
+
+What survives is the original reading: Go-Explore data is random play that
+happened to live, and no amount of model is going to make imitating it produce
+skill. The curriculum's regression is likewise about which frames it saw for
+twenty-two passes, not about how many weights it had.
+
+Recording the width in the checkpoint was needed to run this at all — it had
+been a default argument nobody stored, so every loader rebuilt 256 and a wider
+model could not have been reloaded.
+
+## Telling the policy what an object is: blocked on the descriptor
+
+The teacher's state gives six anonymous objects — dx, dy, velocity, present. A
+coin, a Goomba, a pipe top and a platform are the same numbers under that, so
+it cannot tell what to avoid from what to land on. The object memory now
+produces real danger verdicts, so the obvious move is to hand them over.
+
+Three things had to be built first, and they were worth building. The memory
+could not be saved at all, despite a docstring claiming it outlives episodes,
+so every session relearned the same enemies from the same deaths. Asking it a
+question used to teach it — `update` counts a sighting, which a policy checking
+"is that dangerous" must not do. And the checkpoint did not record its game, so
+the lookup would have quietly returned nothing.
+
+The verdict rule also needed tightening, and the archive shows why: a cluster
+touched 307 times with 5 deaths (0.02) sat beside one touched 29 times with 8
+(0.28). The first is something brushed past constantly, the second is an enemy,
+and the old rule — one contact, one death — called both dangerous. Two deaths
+minimum plus a rate of 0.15 keeps the second and drops the first.
+
+Then the feature failed, for a reason worth recording. With nine well-evidenced
+danger clusters the flag still came on in **98% of frames**, and no match
+threshold fixes it:
+
+| match distance | frames with a threat flagged |
+|---|---|
+| 55 | 98% |
+| 30 | 98% |
+| 20 | 98% |
+| 12 | 0% |
+
+There is nothing in between. Genuine matches and everything else sit at the
+same distance, because the descriptor is a 16×16 grey crop *including
+background*, the background is brick, and brick is everywhere. The clusters
+themselves are sound — six of the nine prototypes are visibly the same dark
+blob on brick, which is a Goomba — so the memory has learned a real enemy. It
+simply cannot answer "is **this** object that enemy".
+
+A flag that is on 98% of the time carries no information, so the flags were
+taken back out rather than trained on: the cache rebuild and three pretrains
+would have measured nothing. The plumbing stays, including `verdict_of`, which
+matches without counting a sighting.
+
+This is the same descriptor already known to be the weak part — two richer ones
+were tried and both scored worse at clustering. The task here is different
+though: not "are these two sightings the same thing" but "which known thing is
+this", and the crop is much worse at the second. Cropping to the sprite tiles
+rather than the tracker's box is the untried option.
+
+### The console already names the parts
+
+The crop fails because it is a picture of a place, not a description of a
+thing. The sprite table is four bytes per entry — y, **tile index**, attributes,
+x — and the tile index is the game's own name for a visual component.
+`sprite_boxes` discards it on its first line, keeping only x and y.
+
+Clustering visible sprites by position and keeping their tiles, over 1500
+frames of running and jumping through 1-1:
+
+    0xff                          cy 24 always, ignores input   status bar
+    0x70,0x71 / 0x72,0x73         cy 188/200, ignores the jump   Goomba
+    0x32,0x33,0x34,0x35           cy moves with the jump         Mario
+    0x36..0x39                    cy moves with the jump         Mario, next frame
+
+Forty-nine distinct signatures over those frames, against 256 saturated pixel
+clusters on comparable data, and the three things above are cleanly separable —
+which the crop could not do at any threshold. Identity is exact rather than a
+distance, and there is no background in it.
+
+Two caveats found in the same measurement, before building anything on it.
+Mario's signature *changes as he animates*, so a whole-set signature is not
+stable for one object; the tile has to be the atom, with an object's identity
+being the tiles it is made of. And NES games reuse tile slots per level, so
+identity is reliable within a level and not necessarily across a game.
+
+Settled afterwards by cropping the sprites out of a frame and looking at them,
+which is not an inference and should have come first. Tiles 0x32-0x3C are drawn
+at Mario's position, 0x70-0x73 at the Goomba's, 0xFF is the transparent
+sprite-0 timing marker, and 0xFC is a blank padding tile that shows whatever is
+behind it — so it appears in almost every object and is useless as an
+identifier.
+
+An intermediate measurement said those Goomba tiles sat inside the hero's own
+object in 43.8% of frames, and that was read as the identification being wrong.
+It was not. Restricted to frames where Mario is demonstrably on screen, the
+hero is a Goomba in **0 of 202**. The 43.8% is entirely frames where Mario is
+absent — dying, respawning, between levels — where a stale enemy slot keeps
+enough control score to be chosen by default. That is a real fault, and a
+different one: `pick_hero` should decline when the player is not there rather
+than return the best of what remains.
+
+A flag based on tile identity marks 41.8% of object sightings here against the
+crop's 98% of frames — not the same denominator, so not a clean comparison, and
+the honest fire-rate test still has to be run on the same measure once the
+tiles reach the episode caches. They are not there yet: the caches store (x, y)
+only, so this needs the sprite tables rewritten before it can be trained on.
+
+## Five ways of seeing better, and none of them helped
+
+Identifying which object the player controls was wrong in 26.9% of frames. The
+cause is a coupling that is invisible in the code: control was scored only
+sideways, as velocity times the pressed direction, and that evidence dries up
+when the player is not going anywhere — with RIGHT held, Mario's world velocity
+is +0.155 and the camera is barely moving. This agent stalls constantly, so the
+true hero earned almost nothing, his score decayed, and any drifting enemy
+overtook him. Perception needed the agent to move, and the agent was stuck.
+
+Jumping does not need him to be going anywhere, and nothing else on screen goes
+up because A was pressed. Scoring that too:
+
+| | hero correct while the player is on screen |
+|---|---|
+| sideways only | 66.5% (80.4 / 57.2 / 61.8) |
+| plus jump response | **88.3%** (84.7 / 95.1 / 85.1) |
+
+Three other things were tried first and all were worse: keeping the same object
+until it disappears (28.6%), the same with a margin before switching (29.9%),
+and the same again gated on tiles (29.9%, byte-identical, the tile filter never
+fired). What redirected the search was counting the ceiling — the tracker finds
+Mario in 3323 of 3330 frames and he simply fails the confidence threshold in
+911 of them, so the chooser was never the problem.
+
+Retrained on the corrected features, three pretrains against three:
+
+| | reached |
+|---|---|
+| broken hero | 1123.4 (spread 282) |
+| corrected hero | 968.7 (spread 533) |
+
+No difference (t≈−0.84). Measured at inference only it looked slightly worse
+still, which it had to: the model had been trained on states measured from the
+wrong object, so changing perception underneath it is a distribution it never
+saw.
+
+### The pattern
+
+That is five independent improvements to what the agent perceives or how much
+it has seen, and not one of them changed how well it plays:
+
+| | result | effect on play |
+|---|---|---|
+| pit and floor detection | works, and the network uses it | none |
+| richer object descriptors | both worse than a grey crop | none |
+| whole-level data coverage | 300 segments across 1-1, 1-2, 1-3 | worse |
+| four times the network width | trains fine | none |
+| hero identification 66.5% → 88.3% | measured, holds on three seeds | none |
+
+The one intervention that did change behaviour was about labels — mixing an
+expert run in moved the jump probability at an enemy from 0.02 to 0.5 — and
+even that left distance unmoved.
+
+This is the founding hypothesis of `state_teacher.py`, arrived at again from
+five directions: "the teacher's advantage cannot be that it sees more; the
+agent above saw everything and still stood still". Perception is not the
+bottleneck and has not been for some time. What remains is what the agent does
+with what it sees, and the only large measured win in this project belongs to
+that side of the line — the planner, at +403 distance and t=+4.50.
+
+The hero fix is kept regardless. It is a correctness result on its own terms,
+everything downstream reads those object positions, and it costs nothing.
+
+## The world model has no world in it
+
+The planner is the one large measured win this project has — +403 distance,
+t=+4.50 — and it stopped helping once the world model got stronger. That was
+recorded as a curiosity. It has an explanation.
+
+`EgoPlanner` scores a behaviour template by the hero's predicted change in
+**screen** x over sixteen frames. The camera follows the player, so his screen
+position is held near the middle no matter how fast he runs, and screen
+displacement stops describing progress. Rolling every template through the
+model with the trained policy driving:
+
+| template | camera scrolling | camera still |
+|---|---|---|
+| run | −17.23 | −3.48 |
+| jump now | −8.85 | +4.30 |
+| jump later | −8.23 | +4.70 |
+| wait | −36.51 | −9.90 |
+| back off | −43.76 | −22.87 |
+
+While the camera scrolls every option predicts moving backwards, the best
+available score is negative, and `run` ranks *below* both jumps. The planner
+duly jumps: 200 jump choices against 38 runs over the same rollouts. It is not
+choosing to jump, it is choosing the least-negative number in a coordinate
+system that has gone blind.
+
+And it goes blind exactly when the agent is doing well. Standing still, the
+scores are positive and ordered sensibly; running with the camera in tow, they
+invert. A better model predicts the screen-lock more accurately — that is,
+predicts closer to zero for everything — which is why improving the model
+removed the planner's advantage instead of increasing it.
+
+The root is one line in `ego.py`: trajectories are extracted as `(cx, cy)`,
+the hero's position **on screen**. Everything downstream inherits it. Progress
+in a scrolling game lives in world coordinates, which are screen position plus
+accumulated scroll, and the scroll is already measured every frame by the
+tracker — it is simply thrown away at this point.
+
+Not fixed here: it means re-extracting the trajectories, retraining the ego
+model, and re-measuring the planner. Recorded because "the planner stopped
+helping" has stood as an unexplained fact for some time, and it is not a
+mystery, it is a coordinate system.
+
+### Fixing the coordinates, and finding the real problem underneath
+
+The world model now predicts progress through the level rather than movement
+across the screen: `ego.py` keeps both frames, because the crop it looks at is
+cut from the screen while the thing it must predict is invisible there.
+
+One trap on the way. World x rose on 83% of steps and still finished an episode
+at −4408: a death or level change replaces the picture and phase correlation
+reports it as an enormous scroll, so a few scene cuts swamped the sum. Clamped
+to 6 px a frame, world x runs 48 → 1508 across an episode whose screen x never
+leaves 47..143 — fifteen hundred pixels of progress the model could not see.
+
+The coordinate fault is genuinely fixed:
+
+| template | before (screen) | after (world) |
+|---|---|---|
+| run | −17.23 | +30.12 |
+| jump now | −8.85 | +35.58 |
+| wait | −36.51 | +32.19 |
+| back off | −43.76 | +12.76 |
+
+Nothing predicts backwards any more and `back off` is properly worst. But
+`wait` outranks `run`, and measured against the plain policy on identical
+decision ticks the planner is far worse than useless:
+
+    best_x   bc 1058.2   bc+planner 553.9   −504.4, t=−3.44, 2W/6L
+
+Because the model barely uses the actions at all. Its action advantage — how
+much worse a rollout gets when the actions are shuffled — is 1.09, and it was
+1.19 in screen coordinates. In world terms almost all of the next step is
+inertia, so a model can drive its loss down by extrapolating velocity and never
+learning what a button does.
+
+Making the head predict the residual, `head(h) + vel`, so inertia is free and
+only the action remains to explain, changed nothing: advantage 1.085, and the
+ordering got worse, with `wait` taking first place outright. Reverted. The
+indifference is not caused by the shape of the target.
+
+So the planner cannot work yet, and the reason is not the planner. A search
+over actions is worthless on a model that predicts nearly the same future
+whichever action it is given, and this one does — in both coordinate systems,
+with either target. Before planning is worth revisiting, the model has to be
+shown to depend on the buttons: an advantage of 1.09 over shuffled actions is
+close to not using them.
+
+That also puts a question mark over the +403 the planner once measured. It is
+recorded here as obtained with a weak model that happened to help; on the
+current model, with the coordinates now correct, the planner loses by 504.
+
+## Six things wrong with one experiment
+
+The model was shown to depend on the buttons. It took four repairs, and the
+game did not care about any of them.
+
+**The target was noise.** `extract_trajectory` built world x from the pixel
+motion tracker, whose hero box scatters 50 px against the console's own copy of
+Mario's position; per-frame the target correlated +0.21 with the truth at an
+error of 4.5 px, against a signal whose standard deviation is 1.0 px. The
+sprite tracker was already in the repository, already exact — 0.0 px error up
+to the 90th percentile, and the remaining 4% are not near misses but the
+tracker naming a different object, an error that jumps straight to 87 px.
+Switching to it, and refusing any step larger than 8 px as a change of subject
+rather than a change of position, took the per-frame correlation to +0.72 at
+0.84 px, the 16-frame correlation to +0.99, and the fraction of frames with a
+usable hero from 84% to 99%.
+
+**The horizon was too short for the question.** Asked of the emulator itself,
+holding B+RIGHT rather than nothing is worth 1.7 px over 16 frames, 5.9 over
+32, 15.9 over 64; the spread across the four candidate actions grows from 7.7
+px to 157.5. Mario is heavy and a quarter of a second is mostly inertia. The
+model was not failing to see what the buttons do — over that horizon they
+barely do anything. `SEQ` went to 48.
+
+**Training was a regime that does not exist.** Every step of the training
+rollout was handed a fresh crop from the frame it was predicting, while the
+planner has one frame and must imagine forward. With the crop frozen, the
+48-step rollout collapsed towards a constant: ±8 px for every action where the
+game spans −42 to +29. Training on one crop and imagination — which is also
+48× cheaper in encoder calls — moved the action advantage from 1.03 to **2.39**
+and the open-loop rollout error from 3.68 to 0.94. From a standstill the model
+finally ranked the four actions in the right order, and its spread across them
+matched the emulator's 57.8 px against 66.7.
+
+**Four fifths of the counterfactual data was the game playing itself.** The
+branch collector saves a state, replays each candidate action, and restores; out
+of lives, SMB runs its own attract-mode demo, and 488 of 604 branch points came
+back byte-identical across all four actions. Four copies of one trajectory
+carrying four different action labels is not neutral data, it is supervision
+that the buttons do nothing — the loss is smallest exactly at the
+action-averaged prediction. With a `game_over` guard the dead fraction fell to
+18.8%, and the four actions separated for the first time: over 55 frames,
+noop +19.1, left −23.9, run +40.3, jump +43.9, where before they had all been
++13 give or take half a pixel.
+
+**The duel was measuring through the wrong sensor.** `planner_duel.py` tracked
+with `MotionTracker` while every target the model learned came from the sprite
+table, and with `CROP` at 48 px a 50 px centring error decides whether the crop
+contains the hero at all. It also took the first slot above a confidence
+threshold rather than the best one — SMB parks a static sprite in the status
+bar that scores 1.00 — and never passed the camera scroll.
+
+**And the planner had no idea anything could kill it.** `memory.update` was
+called with `died=False`, a literal. The object memory learns which things are
+dangerous only from being told the hero died, so no cluster was ever blamed,
+no verdict ever reached "danger", and the collision half of the score was dead:
+zero threats offered across 432 replans, in every duel ever run. What the
+planner has been maximising all along is `dx_total` and nothing else — a
+controller whose entire objective is "go right fast", in a game about not
+dying. Wiring lives through detects the deaths (3 in 3000 frames) but the
+verdict still needs two deaths blamed on one visual cluster, which a single
+3000-frame run cannot supply; the memory has to be built up and persisted
+across runs before the term can fire.
+
+The claim that `_score` mixes world and screen coordinates was checked and is
+false: the initial offset is taken at one instant, and both bodies move in
+world terms from there.
+
+The scoreboard, all on identical decision ticks against the same reactive
+policy at 1058.2:
+
+| planner arm | best_x |
+| --- | --- |
+| the model that ignored actions | 553.9 |
+| model retrained on a clean target | 531.1 |
+| plus the sensor fixed in the duel | 577.9 |
+| plus 16 frames of plan commitment | 638.5 |
+| plus clean counterfactual branches | 579.4 |
+| plus the death signal wired through | 590.1 |
+
+Every measurement of the model improved, several of them by more than a
+factor of two, and the game metric moved from 553.9 to 638.5 at best — still
+40% below simply doing what the policy says. This is the case the literature
+warns about directly: lower prediction error does not buy better control. The
+model now knows Mario's physics on average and still picks the same best action
+as the emulator only 10 times in 27, because it is shown a 48×48 square around
+the hero, and the pit he is about to run into is not in it.
+
+Plan commitment is the one change that moved anything on its own, and it is
+worth keeping for the reason it was made: replanning every four frames while
+emitting only the first press means A is never held the ten to sixteen frames a
+jump needs. One seed reached 1005 where every previous run of every previous
+configuration stopped at 628.
+
+### A Goomba is a reward
+
+The danger verdict was wired up and still never fired, so the memory was built
+over 40,000 frames instead of 3,000: 32 deaths, 10 restarts, 149 clusters. The
+three clusters with the most deaths against them all came back **"reward"**.
+
+That is not a bug, it is Super Mario Bros. Stomping a Goomba is worth 100
+points and it kills only when the stomp is missed, so it is touched far more
+often than it kills — 5 deaths in 133 contacts, 4 in 362, 4 in 192. Neither
+`DANGER_DEATHS` nor `DANGER_RATE` is met, the score test is, and the most
+dangerous object in the game is filed under things that pay. Out of 149
+clusters exactly one earned "danger".
+
+The category was the wrong question. A planner does not need to know whether
+something is dangerous; it needs a number to weigh a collision by, and the
+tally already holds one. `risk_of` returns deaths over contacts, every object
+is now offered to the planner rather than only confirmed threats, and the
+collision term is scaled by it: a Goomba weighs 0.038, a cloud 0.0.
+
+Measured, with the memory built once and loaded, against the same reactive
+policy at 1058.2:
+
+    bc+planner 631.6   −426.6, t=−2.65, 3W/5L
+
+Against 638.5 for the same model with the collision term dead. The risk term
+is neutral on the game metric; it is kept because what it replaces is provably
+a no-op, not because it was shown to help.
+
+Ten duels now put the planner between 531 and 639 whatever is done to it, while
+the policy it overrides ranges 563 to 1550. The planner does not add to the
+policy, it caps it: it takes the wheel on most decision ticks, and five
+templates scored by predicted progress off a 48×48 crop cannot do what the
+policy learned from demonstration. The next thing worth trying is not a better
+model of the same thing — it is letting the planner see past the crop, or
+scoring plans by something other than distance.
+
+## The planner was never the problem
+
+Swap the learned model for the console itself — save the state, play each
+candidate for real, read Mario's own coordinate and his own death, restore —
+and change nothing else. The five crude templates stay, the commitment stays,
+and the policy's own next moves join the candidate list, rolled out as a
+sequence rather than as a first press.
+
+Four seeds, 3000 frames, against the same reactive policy:
+
+| arm | best_x | median | deaths | vs bc | t |
+| --- | --- | --- | --- | --- | --- |
+| bc | 668.5 | 652.0 | 11 | | |
+| oracle h=48 | 2860.0 | 3105.5 | 2 | +2191.5 | +8.25 |
+| oracle h=96 | 2497.5 | 2733.0 | 5 | +1829.0 | +4.45 |
+| oracle h=144 | 2445.0 | 2681.5 | 4 | +1776.5 | +3.80 |
+
+Four times the distance, a fifth of the deaths, three seeds of four finishing
+the level. Confirmed on eight seeds that took no part in any tuning: +1804.4,
+t=+4.78, median 3113.
+
+Two things fall out of it. The shorter horizon wins, which contradicts the
+argument that put `SEQ` at 48 in the first place — that reasoning was about a
+learned model's ability to tell actions apart, not about planning, and with an
+exact model a longer horizon only adds ways to be wrong. And the oracle picks
+the policy's own plan about 72% of the time: "BC as a prior" did not have to be
+built, an honest search arrives at it.
+
+Then price the model against the objective by swapping only the model back:
+
+| arm | best_x | deaths | vs bc | t |
+| --- | --- | --- | --- | --- |
+| bc | 668.5 | 11 | | |
+| learned h=48 | 794.5 | 12 | +126.0 | +0.74 |
+| oracle h=48 | 2860.0 | 2 | +2191.5 | +8.25 |
+
+Identical candidates, identical scorer, identical commitment. **The learned
+model captures 126 of 2192 points — 6% of what a perfect model is worth.** Where
+the oracle takes the policy's plan 126–144 times out of 188, the learned model
+takes it 5–18 times and calls for a jump in a quarter of all ticks instead.
+It does not merely mispredict; it systematically overrules a good plan.
+
+So the objective, the templates, the horizon and the commitment are all
+adequate, and the entire remaining gap is the model. This retires the earlier
+wording that "the model is not the bottleneck" — what the duels showed was that
+further accuracy on (dx, dy) does not help, which is a different claim. A model
+can predict its chosen quantities perfectly and still be blind for control: in
+front of a pit both `run` and `jump` have plausible kinematics for thirty
+frames, and the outcome is decided by the edge of the platform, which is not in
+the crop.
+
+### Pessimism is not a substitute for a model
+
+If a weak model overrules a good policy, make it earn the wheel: override only
+when a plan beats the policy's own by a margin. On the four development seeds
+the curve looked convincing — 794.5 at margin 0, 937.0 at 20, 1041.0 at 60,
+with deaths falling 12, 9, 7 — and beyond 120 it collapses to exactly the
+policy's own number three times over, which at least proves the harness
+degenerates honestly.
+
+On eight seeds that had no part in choosing it, margin 60 scores 909.4 against
+the policy's 892.2: **+17.1, t=+0.12.** The +372.5 was the margin being fitted
+to the seeds it was measured on — the same mistake that once turned +176.4 into
+−10.3, made again with the warning already written down. On the fresh seeds the
+planner picks the policy 169 times out of 177, so the arm is the policy wearing
+a planner's overhead.
+
+The oracle number is now the yardstick. A new model is not "n% more accurate",
+it is "n% of 1804", and today's is at 1%.
+
+### Refusing to name the hero makes it worse
+
+The 4% of frames where the tracker names the wrong object are not noise around
+a good answer, they are a different answer: the error jumps from 0 px to 87.
+So `pick_hero` was given the obvious guard — a minimum confidence, a margin
+over the runner-up, and a requirement that the slot was actually seen this
+frame rather than being one of the ghosts the tracker keeps alive for 300
+missed frames.
+
+Measured on the same 900 frames of live play:
+
+| | before | after |
+| --- | --- | --- |
+| frames with a hero | 892 | 843 |
+| error beyond 16 px | 3% | **7%** |
+| the 0.55–0.80 band | 22 frames, 50% bad | 53 frames, 79% bad |
+
+Backwards, and the reason is that the guard aims at the wrong half of the
+distribution. `missed == 0` throws out **Mario himself** on the frames where
+the tracker lost him for a step — behind scenery, or merged with an enemy —
+and he was the right answer there, with high confidence and a position one
+frame old. With him gone the field is left to some other object, which then
+wins unopposed. A margin cannot catch that: it is not a tie, it is a lone wrong
+candidate.
+
+Reverted. The same trick does work in the branch collector and is kept there,
+where it took hero visibility from 56% to 95% — but that is a different
+question. Choosing a reference point once, before branching, is better done by
+declining a doubtful moment; per-frame tracking has no such luxury, because
+declining leaves a vacuum that something else fills.
+
+What this actually argues for is not refusing but not losing: carrying the
+hero's identity between frames instead of recomputing an argmax on every one.
+
+## A battery of decisions, and the death that cannot be avoided
+
+A duel costs twenty minutes and answers with a number noisier than most of what
+it is asked to measure. Prediction error costs seconds and measures the wrong
+thing. So the benchmark was rebuilt out of the question the planner actually
+asks: play, and wherever the six candidate plans genuinely diverge, record the
+frame, the hero, and what the console says each plan is worth. Scoring any
+model on the saved battery then needs no emulator and takes seconds.
+
+The first build admitted any point where some plan died — 28 of 200 — and the
+model chose a dying plan at every one of them. Before writing that down it was
+worth checking, and the check overturned it: at all 28 points **all six plans
+die.** Mario was already doomed when the branch was taken. Nothing there is a
+decision.
+
+Tightening the rule to deaths that are actually avoidable — some plan dies,
+some plan lives — finds **zero such points in 13,560 frames**. Within a
+48-frame horizon, death in this game is never a choice: either it is not
+visible yet, or it is already settled.
+
+That retires a whole line of work. The collision term, the danger verdicts, the
+death-rate weighting — none of them could have helped at this horizon, and
+measured, none of them did. It also explains the oracle's death count, which is
+2 against the policy's 11 with no death term in its score at all: safety is not
+foreseen one plan ahead, it emerges from repeatedly taking the plan that gets
+furthest, because dying costs progress across all the plans that follow.
+
+On the 200 surviving points, against a chance rate of 0.167:
+
+| model | top-1 | pairwise | mean regret |
+| --- | --- | --- | --- |
+| ego_world_v6 | 0.275 | 0.667 | 12.5 px |
+| ego_world_v7 | 0.330 | 0.769 | 12.5 px |
+
+Median regret is 0 px for both: at most points the choice is harmless and the
+damage is concentrated in a few expensive mistakes — the same shape as the
+tracker's error, where 96% of frames are exact and the rest are wrong by 87 px.
+Note that v7 ranks better here while scoring worse in the duel, which is a
+warning about both instruments: the battery is a proxy measured on 200 points,
+the duel is the real thing measured on eight.
+
+## Which of the three suspects it was
+
+A learned model that ranks plans badly can be failing in three places: what the
+observation contains, what the loss rewards, or what forty-eight recurrent
+steps do to an error. A duel cannot separate them, so remove two of the three —
+one forward pass from one observation straight to the six returns the console
+measured, no trajectory and no recurrence — and then vary only the input.
+
+4000 branch points across 41 playthroughs, split by playthrough because
+neighbouring points are seconds apart in one stretch of level. Trained listwise
+against `softmax(G / 20 px)`, each point weighted by how much the choice is
+worth, because the returns are mostly ties with a few expensive exceptions and
+squared error on the value optimises a median that is already right.
+
+Held out, 936 points from ten playthroughs the probe never saw:
+
+| | top-1 | pairwise | regret | p90 |
+| --- | --- | --- | --- | --- |
+| always bc | 0.643 | — | 7.4 | 32.0 |
+| always jump now | 0.085 | — | 5.0 | 20.0 |
+| ego_world_v6 (recurrent, crop) | 0.261 | 0.646 | 6.1 | 23.5 |
+| probe, crop + velocity | 0.299 | 0.841 | **3.9** | 13.5 |
+| probe, + overview strip | 0.246 | 0.859 | **2.8** | **7.0** |
+| probe, + OAM + grounded | 0.311 | 0.864 | 3.0 | 7.0 |
+| probe, privileged RAM | 0.363 | 0.853 | **2.4** | **3.5** |
+
+The recurrent model and the first probe see **exactly the same thing** — the
+48×48 crop and the hero's velocity — and the probe halves the regret and takes
+pairwise ordering from 0.65 to 0.84. Dropping the rollout and scoring the loss
+on the decision is worth more than anything that was ever done to the
+observation. That is the answer: the largest single culprit was the chain, not
+the eyes.
+
+The observation is not innocent either, and the number says exactly how guilty.
+The overview strip barely moves the mean, 3.9 to 2.8, and halves the tail, 13.5
+to 7.0 — the crop is adequate on the ordinary frame and blind precisely where
+it is expensive, which is the pit that starts beyond its right edge. Sprite
+positions on top of the strip add nothing further. The console's own numbers
+reach 2.4 with a p90 of 3.5, so between the best pixels and perfect knowledge
+there is still a factor of two in the tail.
+
+For scale, the ego model at 6.1 px is barely better than always doing what the
+policy says at 7.4. Ranked by what it buys, from the current 6.1:
+
+    direct prediction + a listwise loss   6.1 -> 3.9
+    an overview strip as well             3.9 -> 2.8   (p90 13.5 -> 7.0)
+    perfect knowledge of the state        2.8 -> 2.4   (p90 7.0 -> 3.5)
+
+One more thing worth keeping: every probe has a *worse* top-1 than always
+following the policy, which is right 64% of the time, and every probe has far
+less regret. The policy's mistakes are rare and expensive; a probe's are
+frequent and cheap. Top-1 and regret disagree here, and control cares about the
+second.
+
+## The probe drives, and the audit says what it costs
+
+The plan-value probe needs no emulator to run: the policy's plan is a *slot* it
+was trained to value, not a sequence to be simulated, so it ranks six options
+from one frame and either lets the policy keep the wheel or executes a
+template. That makes it the first arm here that is a controller rather than a
+measuring device.
+
+Twelve seeds, 9000 frames, progress counted across level boundaries because the
+camera's x restarts at zero and a longer window measured on `xscroll` scores a
+run *lower* the moment it finishes 1-1:
+
+    bc        1392.2   median 1482.5   deaths 67
+    bc+probe  1240.0   median 1162.5   deaths 74   −152.2, t=−0.99, 5W/7L
+
+A draw, after six configurations that lost by 400 to 500. Widening the window
+bought almost nothing for either arm — 1209 to 1392 for the policy across three
+times the frames, and the furthest of all 24 runs is 1909, which on a
+level-folded scale means **nobody finished 1-1**. Six deaths per run each. The
+runs are limited by dying, not by time, and the extra frames buy more attempts
+at the same wall. That also explains the oracle's four-fold margin: it is the
+only arm that does not die.
+
+Then the audit — the oracle evaluating every decision the probe makes, on the
+trajectory the probe itself produced. 1626 decisions:
+
+    regret        mean 2.55 px    median 0.00    p90 0.0
+    P(regret > 16 px)   5.4%
+    P(regret > 32 px)   4.8%
+    P(regret > 64 px)   0.2%
+    CVaR worst 5%       46.6 px
+    the policy's plan was best in 85%; the probe took it 11%
+    chose a plan that dies:  50 / 1626
+
+Two hypotheses die here. **Distribution shift is not the explanation**: online
+regret on the probe's own states is 2.55 px against 2.8 px measured offline on
+the policy's states. The probe is exactly as good where it drives as where it
+was tested. And **average regret is the wrong summary** — the median is zero, so
+most decisions are free, and everything is in a 5% tail worth 46.6 px.
+
+The number that matters is the last one. **3.1% of the probe's decisions choose
+a plan that kills Mario.** And it contradicts the earlier finding that no death
+is avoidable within 48 frames: that was measured on the policy's trajectory.
+Once the probe drives, avoidable deaths exist, and it walks into fifty of them.
+
+A fatal *label* is not a death, though, and the counts say so plainly. The
+audit ran on four seeds, not the twelve of the duel above: 1626 decisions is
+406 a run, the 50 fatal choices are 12.5 a run, and the runs actually died 5
+times each. Two and a half fatal labels per death. A plan is scored over 48
+frames but only its first 16 are executed before the controller replans, so
+some of those futures are never reached, and several consecutive decisions
+looking at the same approaching death are one event and not three. Reading the
+3.1% as "this is the death rate" would be wrong, and any head trained on these
+labels has to group them by the death they anticipate, or one future corpse
+becomes a fistful of correlated positives.
+
+So the next thing the probe needs is not a better estimate of distance. It
+needs to predict that a plan is fatal, and refuse it — and the label it learns
+should be the consequence of the decision, which is "execute the commitment,
+hand back to the controller, and see", not "hold this plan for 48 frames".
+
+### A perfect safety head is worth nothing
+
+Before training a head to predict that a plan is fatal, borrow one: let the
+probe score exactly as before, and let the console mask off every candidate it
+knows will kill him. The probe then takes its best surviving plan. This is the
+same substitution that settled the planner question — put the ideal component
+in first and measure its ceiling.
+
+The mask does its job. Audited, the arm makes **zero avoidable fatal choices**;
+the only fatal picks left are states where all six plans die, and nine such
+labels turn out to be three actual deaths.
+
+Eight fresh seeds, 9000 frames:
+
+    bc                   978.5   median  746.0   deaths 48
+    bc+probe+veto:next  1098.8   median 1062.5   deaths 49   +120.2, t=+0.70
+
+**Deaths: 48 against 49.** A perfect safety oracle, removing every avoidable
+fatal choice, changes the death count by one in the wrong direction.
+
+So deaths are not caused at the moment the planner sees them. By the time any
+of the six plans can be evaluated, the outcome is already settled — which is
+the same thing the battery said when it found no avoidable death in 13,560
+frames of the policy's play, and the two together now say it about both
+trajectories. A hazard head, learned or perfect, is looking too late. That
+question is closed without building one.
+
+Which leaves the oracle's own death count to explain: 2 against the policy's
+11, with no death term in its score at all. It avoids death by being right
+about *progress* far enough out that the paths towards death score badly before
+they become inescapable. Safety here is not a constraint to be added, it is
+what an accurate long-range return already implies — and the probe cannot
+reproduce it because its errors, though rare, are concentrated exactly in the
+states that precede trouble.
+
+### Near-perfect decisions, and still a draw
+
+Collecting on the probe's own trajectory — the DAgger states, the ones the
+policy never visits — produced 3096 oracle-labelled decisions across eight
+seeds, and the audit of them settles the remaining question before the data was
+even used for training.
+
+    regret        mean 1.20 px    median 0.00    p90 0.0
+    P(regret > 16 px)   2.9%      CVaR worst 5%   23.8 px
+    the policy's plan was best in 88%; the probe took it 12%
+    chose a plan that dies:  115 / 3096
+      of those:  0 avoidable,  115 with every plan fatal
+      about 36 distinct deaths behind those 115 labels
+
+**Not one of the 115 fatal choices had a safe alternative.** Every time the
+probe picked a plan that kills, all six plans killed. The veto experiment
+showed this with the mask switched on; here it is with the mask off, on a
+different set of seeds, and it is the same. Death is never a choice at the
+moment the planner is asked.
+
+And the decisions are close to optimal: 1.20 px of mean regret against 7.4 for
+always deferring to the policy. The probe is nearly as good as the console at
+the question it is asked, on the states it actually visits, and the game is
+still a draw — 1229.4 against 1126.8, t=+0.63.
+
+So per-decision regret is the wrong accounting for a sequential problem. A
+choice with zero immediate regret still puts Mario in a different place, and a
+48-frame return cannot see that one of two equally-good-looking places is a
+corner. The oracle wins on the same horizon and the same six plans because its
+numbers are exact, and among the near-ties it takes the one that is genuinely
+better — hundreds of times, compounding into a trajectory that never reaches
+the wall at all.
+
+That is the argument for a terminal value, arriving from measurement rather
+than from theory: the 48-frame return has been imitated to 1.2 px and imitating
+it better cannot help, because what it leaves out is everything after frame 48.
+
+## Five ways of spoiling a perfect model, and none of them reproduce the probe
+
+The probe ranks plans with a within-point correlation of 0.73 against the
+console's own numbers — measured after centring, because a raw correlation is
+swamped by the fact that at a good moment every plan does well and at a bad one
+every plan does badly. Its mean regret is 2.8 px where always deferring to the
+policy costs 7.4 and its own state-blind average order costs 7.2. It is not a
+constant and it is not blind. And it draws.
+
+So the question was what kind of imperfection turns a planner that nearly
+finishes the level into one that draws. Take the oracle's own values and spoil
+them, five ways, six seeds each, everything else identical:
+
+| what was done to the oracle's numbers | best_x | deaths | vs bc |
+| --- | --- | --- | --- |
+| nothing | 2098.0 | 10 | +971.5 |
+| gaussian, σ = 1.2 px — the probe's error | 2401.3 | 13 | +1274.8 |
+| gaussian, σ = 4 px | 2443.7 | 13 | +1317.2 |
+| gaussian, σ = 12 px | 1824.8 | 15 | +698.3 |
+| σ = 1.2 px frozen to Mario's position | 2598.2 | 7 | +1471.7 |
+| σ = 4 px frozen to position | 2514.3 | 9 | +1387.8 |
+| ±25 px on 5% of scores, exact otherwise | 2383.7 | 10 | +1257.2 |
+| ±50 px on 5% of scores, exact otherwise | 2713.8 | 9 | +1587.3 |
+
+The policy scores 1126.5 on these seeds. **Nothing here breaks it.** Not the
+size of the error, not its persistence — a mistake that repeats every time
+Mario stands in the same place is no worse than one redrawn each visit — and
+not its shape, with a tail of fifty pixels on one decision in twenty.
+
+Three hypotheses died in that table. That a pixel of error crosses a decisive
+boundary; that a deterministic error traps a controller which loops back to the
+place it misjudges; that the damage lives in a heavy tail the mean hides. All
+were plausible, all are wrong, and the probe's deficiency is not describable as
+noise on correct values at any magnitude, persistence or shape.
+
+### One real mismatch, found while looking
+
+The controller was not executing the plan it scored. The probe values plans
+48 frames long, and the arm executed templates **rebuilt at the commitment
+length**, which is not the same recipe:
+
+    jump later, as valued:     12 frames of running, then 4 of jump
+    jump later, as executed:   12 frames of running, then 10 of jump — 22 long
+
+That is the template the probe picks most often. Fixed to a straight prefix of
+the plan that was scored, and measured on fresh seeds: 1083.9 against the
+policy's 1140.9, t=−0.40. Unchanged, as expected for sixteen frames out of
+forty-eight — but the controller now does what the number describes, which it
+did not before.
+
+## The same harness, and a win that was the seeds
+
+Every comparison so far ran the oracle in one script and the probe in another.
+Putting the probe inside `oracle_mpc` leaves exactly one thing different
+between the arms — who assigns the numbers. The policy's candidate is built the
+same way, the commitment is the same, the executed prefix is the same.
+
+Eight seeds it had never seen, 9000 frames:
+
+| arm | best_x | median | deaths | vs bc | t |
+| --- | --- | --- | --- | --- | --- |
+| bc | 919.8 | 786.0 | 50 | | |
+| oracle-5×48 | 2351.4 | 2132.5 | 44 | +1431.6 | +4.51 |
+| probe | 1267.5 | 1159.0 | 46 | **+347.8** | **+2.87** |
+
+**The probe beats the policy**, significantly, for the first time. In its own
+script the same checkpoint drew twice — −57 and −152 — so the harness was worth
+about four hundred points, and the two scripts differ in how the policy's
+option is executed: here it is a pre-sampled sequence held for the commitment,
+there the policy re-decides live every four frames.
+
+The capture of the oracle's gain, per seed and not pooled, with death as the
+only thing that stops either arm:
+
+    seed 700  bc 1319  probe 1313  oracle 2354   -0.01
+    seed 701  bc  785  probe 1003  oracle 1900   +0.20
+    seed 702  bc  702  probe 1673  oracle 3114   +0.40
+    seed 703  bc  789  probe 1011  oracle 1911   +0.20
+    seed 704  bc 1563  probe 2106  oracle 1408   -3.50
+    seed 705  bc  702  probe 1007  oracle 3105   +0.13
+    seed 706  bc  787  probe  720  oracle 3113   -0.03
+    seed 707  bc  711  probe 1307  oracle 1906   +0.50
+
+    median +0.16, bootstrap 95% CI [-0.03, +0.40]
+
+Two things to keep honest here. The ratio is far noisier than the difference —
+its denominator is a random variable, and on seed 704 the oracle scored *below*
+the policy, which makes that row meaningless rather than terrible. And the
+median capture of 16% has a confidence interval touching zero, so the right
+summary is the difference: +347.8 at t=+2.87, with the share of the ceiling it
+represents somewhere between nothing and forty per cent.
+
+Still, after a week in which every arm lost or drew, a learned scorer inside
+the planner is finally ahead of the policy it overrides.
+
+### Except it was not the harness, and probably not a win
+
+The claim above that the harness is worth four hundred points was made without
+running the other harness on the same seeds. Doing that: `probe_duel` on seeds
+700–707 gives bc 919.8 and probe 1359.8, **+440.0** — the same baseline to the
+decimal and a slightly larger margin than the script that was supposed to be
+better. The harness is worth nothing. The seeds were worth everything.
+
+Executing the policy's option as a held sequence rather than a live
+re-decision, tested with `--bc-live` on those seeds, is also worth nothing:
+probe 1340.5 against 1267.5, the wrong way for the hypothesis and inside the
+noise either way.
+
+Every paired seed the probe has ever run, pooled:
+
+| seeds | n | bc | probe | difference | t |
+| --- | --- | --- | --- | --- | --- |
+| 200–211 | 12 | 1392.2 | 1240.0 | −152.2 | −0.99 |
+| 600–607 | 8 | 1140.9 | 1083.9 | −57.0 | −0.40 |
+| 700–707 | 8 | 919.8 | 1359.8 | +440.0 | +2.39 |
+| **all** | **28** | | | **+44.2** | **+0.43** |
+
+Bootstrap 95% CI on the pooled difference: [−148, +241]. Fifteen wins,
+thirteen losses.
+
+So the probe is **not** established as better than the policy. One set of eight
+seeds happened to be hard for the policy and kind to the probe, and on it the
+difference reached t=+2.39; two other sets went the other way. The heading
+above stands as written because it is what the run said, and this is what
+checking it said.
+
+The lesson is about the instrument, not the model. The policy's own score
+ranges 920 to 1392 across seed sets of eight, which is larger than any effect
+measured all week. Eight seeds cannot resolve differences of this size, and
+every conclusion in this file that rests on eight — including several that were
+reported as settled — is worth only as much as that.
+
+## Thirty-two seeds, and what survives them
+
+Eight seeds cannot resolve this game: the policy's own mean ran from 920 to
+1392 across sets of eight, which is larger than any effect measured in a week
+of work. So the standard moved to 32, and the three arms were run again on
+seeds 1000–1031, none of them used for anything before.
+
+| arm | best_x | median | deaths | vs bc | t | W/L |
+| --- | --- | --- | --- | --- | --- | --- |
+| bc | 1027.0 | 1006.0 | 176 | | | |
+| oracle-5×48 | 2666.5 | 3110.5 | 163 | +1639.5 | +13.47 | 31/1 |
+| probe | 1302.2 | 1318.0 | 200 | +275.1 | +2.64 | 24/8 |
+
+Bootstrap 95% CI: oracle [+1397, +1865], probe **[+74, +480]**.
+
+Two things settle here. The oracle's ceiling is not a seed effect — 31 wins in
+32, t=+13.47, and it is worth about 1.6× the policy's entire score. And the
+probe **is** better than the policy after all: +275.1 with a confidence
+interval clear of zero, 24 wins to 8.
+
+Which reinstates, in weaker form, the claim retracted a few hours earlier. The
+retraction was right on what was then known — three sets of eight seeds
+disagreeing in sign, pooling to +44 with an interval spanning zero — and the
+properly powered run says the effect is real but **smaller than the +440 that
+prompted the excitement**. The honest number is +275, and the honest lesson is
+that the earlier +440 and the earlier −152 were the same experiment, both
+undersampled.
+
+Median capture of the oracle's gain is 0.13. A learned scorer takes an eighth
+of what a perfect one is worth, and that eighth is now measured rather than
+hoped for.
+
+## Item 2: a tail on the score, and a metric that was hiding the answer
+
+Scoring a plan by its own progress says nothing about whether the place it
+lands in is a corner. So each candidate now plays only the sixteen frames that
+will actually be executed, and then the policy keeps playing for another
+ninety-six — the score becomes the consequence of the *decision*, not the
+progress of an open-loop template.
+
+The first run of this reported +201.7 at t=+1.17 and looked like nothing. It
+was the metric. `oracle_mpc` measured progress by the camera's x, which resets
+to zero at a level boundary, and 26 of 32 runs now finish 1-1 — so every good
+run was being capped at about 3120 and everything after it discarded. The same
+bug was fixed in `probe_duel` a day earlier and not carried across. Folded
+across levels, the same 32 seeds say:
+
+| arm | best_x | median | deaths | finished 1-1 | reached 1-3 | vs bc |
+| --- | --- | --- | --- | --- | --- | --- |
+| bc | 1027.0 | 1006.0 | 176 | 0/32 | 0/32 | |
+| oracle-5×48 | 5166.5 | 7110.5 | 163 | 20/32 | 0/32 | +4139.5, t=+9.23 |
+| oracle + tail | **6618.1** | 7122.0 | 147 | **26/32** | **4/32** | +5591.1, t=+11.46 |
+
+Paired, the tail is worth **+1451.6** over the plain oracle, t=+1.91, CI
+[−23, +2922], 23 wins to 8, sign test p=0.0053. Stated carefully: the tail
+improves the result on most seeds and raises clears of 1-1 from 20/32 to 26/32,
+and the size of the mean gain is estimated only loosely. The interval includes
+zero because a level boundary makes the distribution lumpy — clearing 1-1 jumps
+the score by four thousand — so the sign test is the more expressive
+instrument here.
+
+McNemar on the clears themselves is *not* significant: 11 seeds cleared only
+with the tail, 5 only without, exact two-sided p = 0.21. Sixteen discordant
+pairs are too few. The consistent result is on progress, not on completions.
+
+Deaths per run barely separate the arms, because the better ones spend their
+extra time in level geometry they have never seen. Normalised by distance
+covered they separate sharply:
+
+| arm | deaths per run | per 1000 px of progress |
+| --- | --- | --- |
+| bc | 5.50 | 5.36 |
+| oracle-5×48 | 5.09 | 0.99 |
+| oracle + tail | 4.59 | **0.69** |
+
+The policy dies eight times as often per pixel earned as the oracle with a
+tail.
+
+Two things worth keeping separate from the headline. **The policy finished 1-1
+in none of 32 runs**, so the "wall at 1900" written up yesterday was a fact
+about the policy, not the game: the oracle walks through it, and with a tail it
+gets into 1-3. And the earlier claim that the horizon should stay at 48 stands —
+this is not a longer horizon for the *plan*, it is a continuation under a fixed
+policy after the plan ends, which is what a terminal value approximates.
+
+## The tail target is mostly the continuation's dice
+
+Learning the tail return should have been the payoff: a perfect planner using
+it gains +1451 over one that does not, so the target is worth something. Trained
+on 4000 points across 41 playthroughs, ranked on the advantage over the policy's
+own slot, with separate heads for dying in the tail and crossing a level:
+
+| input | top-1 | pairwise | regret | p90 |
+| --- | --- | --- | --- | --- |
+| always bc | 0.428 | — | 33.3 | 110.0 |
+| always jump now | 0.156 | — | 28.1 | 102.0 |
+| strip | 0.257 | 0.535 | 27.9 | 99.0 |
+| + OAM | 0.261 | 0.541 | 28.2 | 97.0 |
+| privileged RAM | 0.296 | 0.523 | 25.8 | 96.0 |
+
+Pairwise barely above a coin, and **the console's own memory does no better**.
+On the 48-frame target the same probe with the same inputs reached pairwise
+0.859 and 2.8 px against 7.4. When privileged state cannot predict a label, the
+label is usually not a function of the state.
+
+It is not. The continuation is the policy sampling at temperature 0.9, so the
+same decision is followed by different play each time it is scored. Measuring
+that directly — every candidate scored twice from one save state, with the
+policy drawing differently:
+
+    continuation at temperature 0.9
+      spread across candidates within a point       21.6 px
+      spread between two scorings of the same one   22.4 px
+      centred correlation, the part a ranking uses  +0.312
+      same best candidate both times                50%
+
+    continuation at temperature 0
+      spread across candidates                       5.8 px
+      spread between two scorings                    0.0 px
+      centred correlation                           +1.000
+      same best candidate both times                100%
+
+**The noise in the label is the same size as the signal**, and the oracle
+choosing the best of six agrees with itself half the time. No learner can do
+better than the reproducible part, and at a centred correlation of 0.31 there
+is very little of it.
+
+Which also explains why the oracle *plays* better with the tail while the
+target is unlearnable. The oracle is not estimating an expectation — it sees
+one realised future, and a future that survived 112 frames really is better
+than one that died in them. The learner is asked for the mean over futures,
+and no single example in the data is that mean.
+
+The fix is to fix the continuation. `BCPolicy._sample` divided by the
+temperature without a guard, so asking for a deterministic policy produced NaN
+logits and a refusal from numpy rather than greedy play; `StatePolicy` had
+always guarded it. With that repaired, temperature 0 gives a target that
+reproduces exactly, and a spread across candidates of 5.8 px which is now all
+signal.
+
+## The learned tail probe, in the game (2026-08-21)
+
+With a target that reproduces, the probe learns. On 962 held-out decisions
+from ten runs it beats both the policy and the best constant template:
+
+    always bc                pairwise 0.516   regret 23.0 px
+    always "jump now"        pairwise 0.530   regret 19.4 px
+    probe, pixels            pairwise 0.558   regret 15.6 px
+    probe, sprite boxes      pairwise 0.560   regret 17.9 px
+    probe, console RAM       pairwise 0.586   regret 14.4 px
+
+The baselines in that table used to be measured over all four thousand points
+while the probes were measured over the nine hundred held out — two different
+sets read as one comparison. They are now on the same split.
+
+Then the same probes, scoring inside the planner, over thirty-two paired
+seeds. Progress is folded across levels; the ceiling arm scores every
+candidate through the console with a 96-frame continuation.
+
+    bc                  median   787   mean   896   clears  0/32   deaths 70
+    probe, pixels       median  1321   mean  1344   clears  0/32   deaths 85
+    probe, console RAM  median   786   mean   990   clears  0/32   deaths 85
+    exact tail          median  3121   mean  4257   clears 12/32   deaths 42
+
+    probe, pixels       +449 px  [+225, +675]   t = +3.77   wins 26/32
+    probe, console RAM   +94 px  [ -79, +272]   t = +1.04
+    exact tail         +3361 px  [+2598, +4176] t = +8.09   wins 32/32
+
+The learned probe is worth 13% of the exact tail. The effect is real — it
+beats the policy on 26 of 32 seeds — and it is nowhere near half.
+
+**The offline metric inverts the ordering.** Console RAM is the best input by
+regret and the worst by progress, with an interval across zero. Regret is
+measured at the states the *policy* reached; the probe drives the game
+somewhere else, and the sharper the fitted function, the worse it travels. So
+offline pairwise and regret are a filter, never an acceptance test.
+
+That also names the bottleneck, and it is not perception: a perfect
+description of the console state does not help. It is the distribution of
+states the labels come from.
+
+## Doom has no boundary (2026-08-21)
+
+Every fatal decision has no safe alternative, so the choice that kills must be
+an earlier one. `doomed.py` looks one level further: play each candidate's
+commitment, then ask the console whether *every* plan from the state it lands
+in dies. A decision where some candidates lead to such a state and some do not
+is the last moment where the choice still matters.
+
+    lookahead   safe    boundary   lost
+     48 frames  95.7%      0.0%    4.3%
+     96 frames  92.4%      0.0%    7.6%
+    192 frames  87.5%      0.0%   12.5%
+
+368 decisions, eight runs, three horizons. **The boundary class is empty at
+all three.** A position is either wholly recoverable or wholly lost, and
+which of the six macro-templates is taken never decides it. The same thing
+appears independently in the offline data: of 962 held-out decisions, 94 have
+a death, and in all 94 every candidate dies.
+
+Labelling doom is therefore not a direction — there is nothing at the
+boundary to label. Whatever separates a run that dies from one that does not
+happens either further back than 192 frames or at a finer grain than these
+six templates can express.
+
+## A perfect hero does not help (2026-08-21)
+
+Item 4 was hero tracking as data association — a beam or an HMM instead of the
+current greedy pick. Before writing one, measure what the tracker gets wrong,
+against the console's own Mario. His screen position is at $3AD and $CE and
+his velocities at $57 and $9F, located by matching every byte in the page
+against the quantity it should equal: 0.94 px and 0.00 px of disagreement,
+correlations of +0.94.
+
+Over 12000 frames the tracker returns no hero at all in 23% of them, and of
+the rest, after removing the constant offset between a box centre and a
+sprite corner, 74.4% are within 4 px of Mario and 17% are more than 32 px
+away — a different sprite entirely. The planner is therefore looking at the
+right object in roughly 57% of frames.
+
+That is a real fault. It is not a limiting one. A probe trained on the
+console's hero and playing with the console's hero, over the same 32 paired
+seeds:
+
+    probe, tracked hero   +449 px  [+225, +675]   t = +3.77
+    probe, console hero   +387 px  [+204, +580]   t = +3.88
+
+    console minus tracked  -62 px  [-342, +217]   t = -0.43   better on 14/32
+
+Perfect identity is worth nothing measurable, and if anything slightly less
+than the tracker. Offline it looked marginally better — pairwise 0.591
+against 0.558 — which is the same inversion the privileged-input arm showed.
+
+So data association is not the bottleneck either, and the HMM is not worth
+writing. Between this, the privileged-input arm and the five perturbation
+experiments, everything on the perception side has now been given the
+console's own answer and none of it moved the game.
+
+## DAgger made it worse (2026-08-21)
+
+The probe scores best offline on the input that plays worst, so what limits it
+is not what it sees but where it is asked to look: regret is measured at the
+states the policy reached, and the probe drives elsewhere. The standard answer
+is DAgger — collect from the learner's own trajectory, label with the same
+oracle, aggregate, retrain. `decision_battery build --driver` does exactly
+that, on seeds disjoint from the evaluation set.
+
+4000 new points over 42 runs, 508 of them containing a death against the
+original 426 — the probe does take the game to worse places, as expected.
+Trained on the union of old and new, 8000 points, and played on the same 32
+paired seeds:
+
+    bc                median   787   deaths 70
+    probe, original   median  1321   deaths 85   +449 px [+222, +692]
+    probe, DAgger     median   643   deaths 44   -110 px [-253,  +34]
+
+Worse than the probe it came from, and worse than the policy. What it chooses
+says why:
+
+                     bc   jump later  wait  back off  jump now  run
+    original        48%      29%       4%      2%       11%      7%
+    after DAgger    18%      30%      21%     14%        9%      9%
+
+It became timid. Waiting went from 4% to 21%, backing off from 2% to 14%,
+deference to the policy from 48% to 18%, and deaths halved. It learned not to
+die instead of learning to advance: the new data is richer in deaths, death is
+terminal in the target, and so aggregation moved the objective towards
+avoidance. DAgger supplied many examples of where the probe goes wrong and
+none of where it should have gone instead.
+
+The distribution-shift explanation is therefore not confirmed in its naive
+form. It may still be right with a balanced target, an oracle continuation
+instead of the policy's, or more than one round — but none of that is
+measured, and the record should not read as though it were.
+
+## Neither replanning more often nor refusing to answer (2026-08-21)
+
+Two cheap things the design had never varied, on the same 32 paired seeds.
+
+    bc                       median   787   deaths 70
+    probe, commit 16         median  1321   deaths 85   +449 px
+    probe, commit 8          median  1008   deaths 85   +303 px
+    ensemble of 3, defer     median  1011   deaths 89   +270 px
+
+    commit 8   vs the probe it came from: -146 px [-444, +146]  better on 15/32
+    ensemble   vs the probe it came from: -179 px [-441,  +63]  better on 16/32
+
+Both intervals cross zero and both win on half the seeds, so the honest
+reading is no effect either way — and certainly not the gain being looked for.
+Neither goes into the controller.
+
+What each rules out is worth more than the arms themselves.
+
+Halving the commitment does not help, so the probe's errors are not rare
+mistakes that persist too long. Replanning twice as often re-derives the same
+wrong answer twice as often. That argues against the whole family of
+"correct more frequently" fixes.
+
+Three probes trained from different seeds agree precisely where all three are
+wrong together, so disagreement is a poor detector of error. The fault is not
+variance across training runs — an ensemble would find that — but a bias they
+share: they learned the same wrong function rather than three noisy versions
+of the right one.
+
+Which is also what DAgger's failure said. Three independent measurements point
+the same way: the value function this data and this architecture can produce
+is systematically the wrong one, and neither the rate of correction, nor a
+vote, nor fresh states change it.
+
+## Reproducible and wrong: the two continuations (2026-08-21)
+
+Searching a macro-action space with the oracle made it worse — 2744 against
+5119 over eight seeds, with CEM taken in only 13% of decisions. Widening the
+candidate set cannot hurt a planner whose scores are correct, and the scores
+are not: under a continuation at temperature 0.9 the same plan scored twice
+differs by 22 px while different plans differ by 21. The best of thirty-eight
+noisy draws is the luckiest one.
+
+If that is the whole story, a continuation that reproduces should raise the
+ceiling. It lowers it. The same oracle, the same 32 paired seeds, differing
+only in the temperature the value is measured under:
+
+    bc                       median   787   clears  0/32   deaths 70
+    oracle, tail at T = 0.9  median  3121   clears 12/32   deaths 42   +3361 px
+    oracle, tail at T = 0    median  2362   clears  7/32   deaths 48   +2458 px
+
+    T=0 minus T=0.9:  -903 px [-1959, +211]   better on 8/32
+
+Temperature 0 is not the same policy with the noise removed. It is a
+different, greedier policy, and a deterministic policy in this game stalls: it
+takes the same argmax against the same pipe forever. Its value is perfectly
+reproducible and describes a continuation that never happens, because when the
+planner does hand back the wheel, the policy plays at 0.9.
+
+So the two available targets are both defective, in opposite ways: at 0.9 the
+label is relevant and half noise, at 0 it is reproducible and biased. The
+morning's fix traded variance for bias without noticing the trade.
+
+This also re-prices the learned probe. It was trained on the deterministic
+target, so what it imitates is a scorer worth +2458, not +3361, and its share
+is 449/2458 = 18% rather than 13%.
+
+And it names something that has not been tried: the mean over several draws of
+the 0.9 continuation. N times the cost, but relevant and reproducible at once,
+which neither existing target is.
+
+## The optimiser's curse, demonstrated by reversing it (2026-08-21)
+
+The same CEM search, the same eight seeds, the same macro-action vocabulary,
+differing only in the continuation the value is measured under:
+
+    tail at T = 0.9   templates median 5119, clears 4/8
+                      + CEM     median 2744, clears 0/8
+                      cem minus templates  -2041 px [-3902, -189]   4/8
+
+    tail at T = 0     templates median 2634, clears 2/8
+                      + CEM     median 7128, clears 5/8
+                      cem minus templates  +2168 px [+645, +4090]   8/8
+
+The sign reverses. With a noisy score, widening the candidate set loses 2041
+px; with a reproducible one it gains 2168, on every seed rather than half.
+Taking the best of many noisy estimates selects for the overestimated, and
+here that is not a correction but the difference between clearing 1-1 in none
+of eight runs and in five.
+
+Both defects are visible at once in the medians:
+
+                      templates   + CEM
+    tail at T = 0.9        5119    2744
+    tail at T = 0          2634    7128
+
+Noise hurts in proportion to how widely you maximise; bias hurts the same
+either way. With six candidates the noise largely averages out and the bias of
+a stalling greedy continuation is what shows; with thirty-eight the noise
+dominates everything.
+
+7128 is the furthest anything in this project has reached, and it came from
+enlarging the action vocabulary — which the first, mis-scored run had made
+look worthless. Eight seeds, so it is remeasured at 32 before anything is
+built on it.
+
+## The ceiling was never the ceiling (2026-08-21)
+
+Averaging the tail over four draws of the same 0.9 continuation, six templates
+as always, 32 paired seeds:
+
+    bc                            median   787   clears  0/32   deaths 70
+    probe, learned                median  1321   clears  0/32   deaths 85   +449
+    oracle, tail at T = 0         median  2362   clears  7/32   deaths 48  +2458
+    oracle, one draw at T = 0.9   median  3121   clears 12/32   deaths 42  +3361
+    oracle, four draws at T = 0.9 median  7117   clears 20/32   deaths 20  +4590
+
+    four draws minus one:  +1229 px [+234, +2206]  t = +2.36  better on 21/32
+
+The median more than doubles, clears go from 12 to 20 of 32, and deaths halve
+— with no change to the candidate set. The only difference is that the value
+is an average of four futures instead of one.
+
+Everything measured against "the exact tail" today was measured against one
+draw from a noisy distribution. The target the probe was trained to imitate is
+worth +2458 or +3361 depending on which defect it carries; a properly defined
+one is worth +4590. A share of the gap that read as 13% is 18% against the
+target actually used, and less than 10% against the target that should have
+been used.
+
+With the CEM reversal this is one mechanism, and it accounts for the whole
+day: noise in the score hurts in proportion to how widely it is maximised.
+Six candidates, moderately — 3361 where 4590 was available. Thirty-eight,
+catastrophically — 2744 where 7128 was. A learned probe is a noisier estimator
+still, which is the company its 18% keeps.
+
+Which means the negative results of the day — DAgger, the shorter commitment,
+the ensemble's refusal — were all measured against a mis-specified ceiling on
+a target that was half dice. They are not safe to keep as refutations, and
+they need remeasuring against a target that is properly defined.
+
+## On a target that is properly defined, the probe is worth nothing (2026-08-21)
+
+The averaged tail — four draws of the 0.9 continuation — is the first target
+that is both relevant and reproducible. 4000 points, 39 runs, same collector.
+Offline the learned probes only draw level with a constant:
+
+    always bc          pairwise 0.491   regret 28.1
+    always "jump now"  pairwise 0.562   regret 16.7
+    probe, pixels      pairwise 0.567   regret 17.0
+    probe, OAM         pairwise 0.548   regret 16.5
+    probe, console RAM pairwise 0.513   regret 15.2
+
+And in the game, over the same 32 paired seeds:
+
+    probe on the deterministic target   median 1321   +449 px  t = +3.77
+    probe on the averaged target        median  785     -9 px  t = -0.10
+
+The interval is [-170, +172]. Not a weak effect — no effect. What it chooses
+changed completely:
+
+                      bc   jump now   run   jump later  wait  back off
+    deterministic    48%       11%     7%          29%    4%        2%
+    averaged         16%       36%    26%          14%    5%        4%
+
+The old probe handed the wheel back half the time; the new one almost always
+imposes its own choice, usually a jump, and arrives exactly where the policy
+would have.
+
+Three explanations, and the measurements so far do not separate them:
+
+1. The old +449 was noise exploitation. The target was half dice, the probe
+   found structure in it, and the structure happened to help.
+2. The old target's *bias* was accidentally useful. A deterministic
+   continuation is a greedy policy that stalls, so a plan that survives it is
+   one that gets clear of trouble. That may be a better heuristic than the
+   true expectation.
+3. The averaged target is simply harder: less spread between candidates means
+   less signal per point at the same sample size.
+
+The second is the most interesting and the most likely: a correctly defined
+value can be a worse thing to learn than an incorrectly defined one, when the
+error points somewhere useful.
+
+## The control that should have been first (2026-08-21)
+
+Take the same template every decision. No state, no learning, no branching.
+32 paired seeds, the same as everything else:
+
+    bc                            median   787   clears  0/32  deaths 70      +0
+    probe, averaged target        median   785   clears  0/32  deaths 85      -9
+    probe, deterministic target   median  1321   clears  0/32  deaths 85    +449
+    always "jump now"             median  2600   clears 12/32  deaths 42   +3178
+    oracle, one draw              median  3121   clears 12/32  deaths 42   +3361
+    oracle, four draws            median  7117   clears 20/32  deaths 20   +4590
+
+Priced against the habit rather than the policy:
+
+    oracle, four draws   +1412 px [+241, +2468]  t = +2.41  better on 23/32
+    oracle, one draw      +183 px [-905, +1263]  t = +0.32  better on 18/32
+    probe, deterministic -2729 px                           better on  1/32
+    probe, averaged      -3187 px                           better on  0/32
+
+Three things follow, and none of them are comfortable.
+
+**A single-draw oracle is indistinguishable from a fixed habit.** The +3361
+that every learned model was priced against all day is 95% "commit to a jump
+for sixteen frames" and 5% choosing.
+
+**The learned probe loses to the habit on 32 seeds out of 32.** Its +449 over
+the policy was less than a free heuristic gives, and every "share of the
+ceiling" computed today used a denominator that was mostly free.
+
+**The value of choosing is +1412, not +4590.** That is what the averaged
+oracle has over the habit, and it is the only part any learned scorer could
+ever have been competing for. The rest is the policy's inability to commit to
+a macro-action, which needs no model at all.
+
+The measurement costs four minutes and it should have been the first arm ever
+run. Every fraction in the sections above is being restated against this
+denominator.
+
+## Commitment, not choice (2026-08-21)
+
+All three forward habits, each taking one template every decision and holding
+it for sixteen frames:
+
+    bc                        median   787   clears  0/32   deaths 70      +0
+    always "run"              median  2409   clears  7/32   deaths 53   +2418
+    always "jump now"         median  2600   clears 12/32   deaths 42   +3178
+    always "jump later"       median  2828   clears 13/32   deaths 51   +3358
+    oracle, one draw          median  3121   clears 12/32   deaths 42   +3361
+    oracle, four draws        median  7117   clears 20/32   deaths 20   +4590
+
+    oracle, four draws  minus the best habit:  +1232 px [+235, +2220] t=+2.41
+    oracle, one draw    minus the best habit:     +3 px [-990,  +973] t=+0.01
+
+Three pixels. An arm that rewinds the console, scores six plans through 144
+frames of future each and spends 160000 emulator frames a run plays exactly as
+well as "always jump, a little late". The two numbers, +3358 and +3361, come
+from independent runs.
+
+**What works is committing, not choosing.** Every habit that moves right and
+holds its plan for sixteen frames is worth two to three thousand pixels; the
+policy, re-deciding every four frames, is worth none of it. It never really
+jumps, because it never holds A long enough.
+
+**One thing from the whole day survives as a real gain: averaging the tail.**
+It is the only arm that beats a habit — +1232, 20 clears against 13, and 20
+deaths against 51. That is what choosing well is worth, and it is 3.7 times
+smaller than the number called "the ceiling" this morning.
+
+So the problem is not to learn a plan's value; a constant needs no value and
+does nearly as well. The problem is to learn the exception — *when not to
+jump* — which is 20 deaths against 51, a rare-event detection rather than an
+estimation.
+
+## Two different cures, one destination (2026-08-21)
+
+CEM at 32 seeds, continuation at temperature 0:
+
+    templates            median 3054   clears  8/32   deaths 36
+    templates + CEM      median 7122   clears 18/32   deaths 12   +1656  t=+3.31
+
+    cem minus the best habit:      +985 px [ -41, +2033]  t = +1.86  24/32
+    cem minus the averaged oracle: -247 px [-1359,  +906]  t = -0.42  21/32
+
+The search with a clean score and the six templates with an averaged score
+arrive at the same place — 7122 against 7117 by median, 18 clears against 20.
+Two unrelated treatments of the same disease, landing together, which suggests
+they now share whatever the next barrier is.
+
+Against the habit, though, CEM's +985 has an interval touching zero. Only the
+averaged tail separates from a free heuristic with confidence: +1232
+[+235, +2220].
+
+Of everything tried, exactly one thing reliably beats doing the same simple
+action every time: averaging the value over several futures.
+
+## Averaging saturates at four draws (2026-08-21)
+
+    oracle, one draw     median 3121   clears 12/32   deaths 42   +3361
+    oracle, four draws   median 7117   clears 20/32   deaths 20   +4590
+    oracle, eight draws  median 7114   clears 18/32   deaths 27   +4215
+
+    eight minus four:  -375 px [-1390, +689]  t = -0.68  better on 12/32
+
+Nothing. Eight draws are not better than four. Averaging is not a knob to keep
+turning but a one-off repair: the damage was done by the single draw, and four
+already removes it. Every future measurement can use four and pay no more.
+
+The day in three lines: a free habit is worth +3358 and matches a single-draw
+oracle to three pixels; averaging over four futures is worth +1232 on top of
+the habit and is the only thing that reliably beats it; the learned probe
+beats the habit on none of 32 seeds.
+
+## Retraction: the habit control was an oracle (2026-08-22)
+
+The section above is wrong and is withdrawn. `--fixed` short-circuited the
+score to a one-hot but did not stop the scoring loop, which appended the
+console's real values to the same list; the maximum then took the oracle's
+answer whenever any plan gained more than one pixel. The arms called "always
+jump later" and "always jump now" chose their template 42% and 45% of the
+time and the oracle's pick the rest, so what looked like a free habit beating
+a planner was two oracles being compared with each other — which is also the
+whole of the three-pixel coincidence between them.
+
+With the loop actually skipped, a real constant is worth **-266 px** against
+the policy, not +3178. Blindly holding one template walks into things.
+
+Withdrawn: "always jumping is worth +3178", "a single-draw oracle is
+indistinguishable from a fixed habit", "the value of choosing is +1412".
+Unaffected: the averaged tail's +1229 over a single draw, its saturation at
+four draws, and the CEM reversal — none of those arms use `--fixed`.
+
+The question the control was meant to answer — how much of the oracle's gain
+is commitment rather than choice — is still open and still worth answering.
+
+## The habits, measured honestly (2026-08-22)
+
+With the scoring loop actually skipped, 32 paired seeds:
+
+    bc                     median  787   clears 0/32   deaths 70       +0
+    always "jump later"    median  483   clears 0/32   deaths 43     -413
+    always "jump now"      median  604   clears 0/32   deaths  0     -292
+    always "run"           median  628   clears 0/32   deaths 96     -268
+    oracle, one draw       median 3121   clears 12/32  deaths 42    +3361
+    oracle, four draws     median 7117   clears 20/32  deaths 20    +4590
+
+Every constant is worse than the policy. Commitment alone explains none of the
+oracle's advantage: what the oracle has is choice, and the earlier picture —
+a large gap between a planner with correct values and everything else — is
+restored intact.
+
+"Always jump now" is the instructive one: no deaths at all in 32 runs, and
+604 px. It jumps in place forever, perfectly safe and perfectly stuck.
+
+The rescue arm — keep the habit unless the console says this plan is fatal —
+lands on 483, identical to the habit it protects. A death veto on top of a
+constant buys nothing, which is the same answer `doomed.py` gave from the
+other direction: the plans that kill are not the ones a veto can see.

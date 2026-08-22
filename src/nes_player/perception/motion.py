@@ -54,6 +54,10 @@ class Slot:
     missed: int = 0
     ctrl_score: float = 0.0   # EMA agreement between vx and LEFT/RIGHT presses
     small: bool = False       # blob under MIN_AREA: a bullet, or scenery
+    # Which sprite tiles this object is drawn from, when the tracker knows.
+    # The motion tracker works from pixel differences and cannot know, so it
+    # leaves this empty; the sprite tracker reads it out of the table.
+    tiles: frozenset = frozenset()
 
     @property
     def ctrl_prob(self) -> float:

@@ -10,6 +10,8 @@ knowledge about the enemies it keeps meeting instead of relearning them after
 every death.
 """
 
+from __future__ import annotations
+
 from dataclasses import dataclass
 
 import cv2
@@ -40,6 +42,16 @@ EFFECT_WINDOW = 45    # frames after a contact in which points count
 # caused it had expired, so nothing on that game was ever labelled dangerous:
 # 60 contacts, zero danger labels.
 DEATH_WINDOW = 400
+# What it takes to call something dangerous. One death after one contact used
+# to be enough, and on a real archive that labels almost everything: the
+# tallies from 200 explored segments include a cluster touched 307 times with
+# 5 deaths (0.02) sitting beside one touched 29 times with 8 (0.28). The first
+# is something you brush past constantly, the second is an enemy. With the old
+# rule both were "danger" and the flag was on in 98% of frames, which tells a
+# policy nothing. Two deaths minimum kills the single coincidences; the rate
+# kills the ubiquitous.
+DANGER_DEATHS = 2
+DANGER_RATE = 0.15
 
 
 
@@ -54,7 +66,7 @@ class ObjectCluster:
 
     @property
     def verdict(self) -> str:
-        if self.contacts >= 1 and self.deaths > 0:
+        if self.deaths >= DANGER_DEATHS and self.deaths >= DANGER_RATE * self.contacts:
             return "danger"
         if self.contacts >= 1 and self.score_gain >= 50:
             return "reward"
@@ -94,6 +106,24 @@ class ObjectMemory:
             return False
         c = self.clusters[cid]
         return c.deaths > 0 and c.score_gain <= 0
+
+    def risk_of(self, slot_id: int) -> float:
+        """How often touching this thing has ended in death, in [0, 1].
+
+        The "danger" verdict turns out to be unreachable for the objects that
+        matter. Built over 40k frames and 32 deaths, the three clusters with
+        the most deaths against them all came back "reward": a Goomba is worth
+        100 points when stomped and kills only when it is not, so it is touched
+        far more often than it kills — 5 deaths in 133 contacts — and both
+        `DANGER_RATE` and the reward test are satisfied by the same object.
+        A planner does not need the label anyway. It needs a number to weigh a
+        collision by, and the tally already holds one.
+        """
+        cid = self._slot_cluster.get(slot_id)
+        if cid is None:
+            return 0.0
+        c = self.clusters[cid]
+        return c.deaths / max(c.contacts, 1)
 
     def begin_episode(self) -> None:
         """Forget what was still in flight; keep what was learned.
@@ -202,6 +232,56 @@ class ObjectMemory:
             alive = {s.slot_id for s in slots}
             self._slot_cluster = {k: v for k, v in self._slot_cluster.items() if k in alive}
         return verdicts
+
+    def save(self, path) -> None:
+        """Keep what was learned about objects between sessions.
+
+        The docstring at the top of this file has always said the memory
+        outlives episodes, and inside one process it does — but nothing ever
+        wrote it down, so every run started over knowing nothing and relearned
+        the same Goombas from the same deaths. What is stored is the
+        prototypes and their tallies; the pending contacts and slot mapping are
+        deliberately dropped, being about a run rather than about objects.
+        """
+        from pathlib import Path
+
+        p = Path(path)
+        p.parent.mkdir(parents=True, exist_ok=True)
+        np.savez_compressed(
+            p,
+            protos=(self._protos if self._protos is not None
+                    else np.zeros((0, PATCH, PATCH), np.float32)),
+            seen=np.array([c.seen for c in self.clusters], np.int64),
+            contacts=np.array([c.contacts for c in self.clusters], np.int64),
+            score_gain=np.array([c.score_gain for c in self.clusters], np.float32),
+            deaths=np.array([c.deaths for c in self.clusters], np.int64),
+        )
+
+    @classmethod
+    def load(cls, path) -> ObjectMemory:
+        m = cls()
+        d = np.load(path)
+        m._protos = d["protos"].astype(np.float32)
+        m.clusters = [
+            ObjectCluster(i, m._protos[i], int(d["seen"][i]),
+                          int(d["contacts"][i]), float(d["score_gain"][i]),
+                          int(d["deaths"][i]))
+            for i in range(len(m._protos))
+        ]
+        return m
+
+    def verdict_of(self, patch_source, bbox) -> str:
+        """What this thing on screen is, according to what has been learned.
+
+        Matching only — nothing is added and no tally moves. A policy asking
+        "is that dangerous" must not teach the memory that it saw something.
+        """
+        if not self.clusters:
+            return "unknown"
+        patch = self._patch(patch_source, bbox)
+        d = np.sqrt(((self._protos - patch[None]) ** 2).mean(axis=(1, 2)))
+        k = int(d.argmin())
+        return self.clusters[k].verdict if d[k] < MATCH_DIST else "unknown"
 
     def summary(self, top: int = 6) -> list[str]:
         rows = sorted(self.clusters, key=lambda c: -(c.contacts + c.seen / 1000))[:top]

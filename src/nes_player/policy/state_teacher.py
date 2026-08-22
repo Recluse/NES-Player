@@ -40,6 +40,15 @@ from nes_player.perception.terrain import floor_gaps, gap_ahead
 # covers a Double Dragon crowd; beyond that they are off screen or irrelevant.
 N_OTHERS = 6
 PER_OBJECT = 5                       # dx, dy, vx, vy, present
+# A per-object "is this dangerous" flag was built here and taken out again. The
+# object memory does learn real enemies — six of its nine danger prototypes are
+# visibly the same dark blob on brick — but asking it about one specific object
+# does not work. Its descriptor is a 16x16 grey crop that includes background,
+# the background is brick, and brick is everywhere: the flag came on in 98% of
+# frames. No match threshold fixes it, 55 through 20 all give 98% and 12 gives
+# 0%, so genuine matches and everything else sit at the same distance. The
+# blocker is the descriptor, not the idea; `verdict_of` is kept for when there
+# is something better to ask.
 # + camera scroll, + how far the floor holds ahead, + whether it holds here
 STATE_DIM = PER_OBJECT * (1 + N_OTHERS) + 3
 GAP_REACH = 96                       # how far ahead a hole is worth reporting
@@ -48,11 +57,35 @@ GAP_REACH = 96                       # how far ahead a hole is worth reporting
 STATE_OFFSETS = (8, 4, 2, 1)
 INPUT_DIM = STATE_DIM * len(STATE_OFFSETS)
 SCREEN_W, SCREEN_H = 240.0, 224.0
+OBJECTS_PATH = "runs/knowledge/objects_{game}.npz"
 VEL_SCALE = 8.0
 
 
+_OBJECTS: dict[str, object] = {}
+
+
+def load_objects(game: str | None):
+    """What has been learned about this game's objects, or None.
+
+    Cached per game: `reset()` runs once per rollout and there are hundreds of
+    rollouts in an evaluation, so reading and decompressing the file each time
+    would cost more than the rollout. Absent knowledge is not an error — a game
+    nothing has been learned about yet simply gets zeros, which is what the
+    network saw before any of this existed.
+    """
+    if game is None:
+        return None
+    if game not in _OBJECTS:
+        from nes_player.perception.memory import ObjectMemory
+
+        p = Path(OBJECTS_PATH.format(game=game))
+        _OBJECTS[game] = ObjectMemory.load(p) if p.exists() else None
+    return _OBJECTS[game]
+
+
 def features(slots: list, scroll_dx: float,
-             frame_rgb: np.ndarray | None = None) -> np.ndarray:
+             frame_rgb: np.ndarray | None = None,
+             memory=None) -> np.ndarray:
     """One frame of state: the hero, the nearest objects, and the floor.
 
     Positions are relative to the hero on purpose. Absolute screen coordinates
@@ -128,20 +161,26 @@ class StatePolicy:
         self.meta = json.loads((path / "meta.json").read_text())
         self.vocab = ActionVocab(self.meta["vocab_masks"])
         self.dev = device()
-        self.net = StateNet(len(self.vocab.masks)).to(self.dev)
+        # Width comes from the checkpoint. Defaulting it here would load a
+        # 1024-wide model into a 256-wide one and fail on the state dict —
+        # or worse, succeed partially on some future architecture.
+        self.net = StateNet(len(self.vocab.masks),
+                            width=self.meta.get("width", 256)).to(self.dev)
         self.net.load_state_dict(torch.load(path / "model.pt", map_location=self.dev))
         self.net.eval()
         self.reset()
 
     def reset(self) -> None:
         self.tracker = SpriteTracker()
+        self.memory = load_objects(self.meta.get("game"))
         self._history: list[np.ndarray] = [np.zeros(STATE_DIM, np.float32)]
         self._pressed: frozenset[str] = frozenset()
 
     def act(self, frame_rgb: np.ndarray, ram: np.ndarray,
             temperature: float = 1.0) -> tuple[frozenset[str], np.ndarray]:
         slots = self.tracker.update(frame_rgb, self._pressed, ram)
-        self._history.append(features(slots, self.tracker.scroll_dx, frame_rgb))
+        self._history.append(
+            features(slots, self.tracker.scroll_dx, frame_rgb, self.memory))
         x = torch.from_numpy(stack(self._history)).unsqueeze(0).to(self.dev)
         with torch.no_grad():
             logits = self.net(x)[0]
@@ -164,12 +203,13 @@ def episode_states(ep: Episode) -> np.ndarray:
     is not emulated again — the table was already checked against the frames
     when it was made.
     """
-    # v2: the hero is picked with `pick_hero`, which refuses the status bar.
-    # The width did not change when that did, so a shape check would have
-    # served v1 vectors — built around a fixed point in the interface on 4% of
-    # frames — to a model that thinks they are current. The version is in the
-    # name so meaning, not just shape, has to match.
-    cache = ep.path / "states.v2.npy"
+    # v3: control is now also scored on the response to the jump button, which
+    # moved hero identification from 66.5% to 88.3% correct. Every vector built
+    # before that was measured from the wrong object in a quarter of frames.
+    # v2 was the same width with a different meaning, which is why the version
+    # lives in the name: a shape check would have served the old numbers to a
+    # model that had no way to know they were stale.
+    cache = ep.path / "states.v3.npy"
     if cache.exists():
         m = np.load(cache)
         if m.shape[1] == STATE_DIM:
@@ -180,12 +220,13 @@ def episode_states(ep: Episode) -> np.ndarray:
     boxes = episode_sprites(ep)
     frames, actions = ep.frames, ep.actions
     tracker = SpriteTracker()
+    memory = load_objects(ep.metadata.get("game"))
     out = np.zeros((len(boxes), STATE_DIM), np.float32)
     pressed: frozenset[str] = frozenset()
     for i in range(len(boxes)):
         frame = np.asarray(frames[i])
         slots = tracker.update(frame, pressed, boxes=boxes[i])
-        out[i] = features(slots, tracker.scroll_dx, frame)
+        out[i] = features(slots, tracker.scroll_dx, frame, memory)
         mask = int(actions[i, 0])
         pressed = frozenset(b for k, b in enumerate(BUTTONS) if mask & (1 << k))
     np.save(cache, out)
@@ -214,7 +255,7 @@ def episode_dirs(spec: str | Path) -> list[Path]:
 
 def pretrain(episode_dir: str | Path, out_dir: str | Path, epochs: int = 40,
              batch_size: int = 512, lr: float = 1e-3, val_frac: float = 0.1,
-             seed: int = 0) -> dict:
+             seed: int = 0, width: int = 256) -> dict:
     """Clone the recorded play from state, as a starting point for improvement.
 
     This is not expected to be *good* — cloning tops out at the policy that
@@ -246,7 +287,7 @@ def pretrain(episode_dir: str | Path, out_dir: str | Path, epochs: int = 40,
     yva = torch.from_numpy(np.concatenate(ys[-n_val_eps:]))
 
     dev = device()
-    net = StateNet(len(vocab)).to(dev)
+    net = StateNet(len(vocab), width=width).to(dev)
     opt = torch.optim.Adam(net.parameters(), lr=lr)
     xva_d, yva_d = xva.to(dev), yva.to(dev)
     history, best_acc, best_state = [], -1.0, None
@@ -282,12 +323,17 @@ def pretrain(episode_dir: str | Path, out_dir: str | Path, epochs: int = 40,
     meta = {"vocab_masks": vocab.masks, "vocab_names": vocab.names,
             "state_dim": STATE_DIM, "input_dim": INPUT_DIM,
             "state_offsets": list(STATE_OFFSETS), "n_others": N_OTHERS,
+            "width": width,
             "episode": str(episode_dir), "history": history,
+            # Needed to find the object knowledge at play time. Without it
+            # `load_objects` gets None and the danger flags stay zero — a
+            # silent no-op that looks exactly like the feature not helping.
+            "game": eps[0].metadata.get("game"),
             "val_acc": best_acc, "source": "state-pretrain"}
     (out / "meta.json").write_text(json.dumps(meta, indent=2))
     provenance.write(out, config={"epochs": epochs, "lr": lr, "seed": seed,
                                   "val_frac": val_frac, "batch_size": batch_size,
-                                  "kind": "state-pretrain"},
+                                  "width": width, "kind": "state-pretrain"},
                      episodes=ep_dirs, game=eps[0].metadata.get("game"))
     print(f"val_acc={best_acc:.3f}")
     return meta
@@ -551,7 +597,8 @@ def self_improve(checkpoint: str | Path, out_dir: str | Path, rounds: int = 6,
         demo_y = np.concatenate([vocab.encode(e.actions[:, 0]) for e in eps])
 
     dev = device()
-    net = StateNet(len(meta["vocab_masks"])).to(dev)
+    net = StateNet(len(meta["vocab_masks"]),
+                   width=meta.get("width", 256)).to(dev)
     net.load_state_dict(torch.load(out / "model.pt", map_location=dev))
     opt = torch.optim.Adam(net.parameters(), lr=lr)
     n_workers = workers or max(1, min(rollouts, (os.cpu_count() or 4) - 2))

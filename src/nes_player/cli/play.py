@@ -399,12 +399,18 @@ def cmd_play(args: argparse.Namespace) -> None:
 
                 if planner is not None and i % args.repeat == 0:
                     if top:
-                        # Only CONFIRMED threats: phantom ones (clouds, blocks)
-                        # made the planner flinch and lose ground.
-                        dangers = [(sl.cx, sl.cy, sl.vx, sl.vy) for sl in slots
-                                   if sl is not top[0]
-                                   and verdicts.get(sl.slot_id) == "danger"]
-                        pl = planner.plan(obs.frame_rgb, top[0], dangers)
+                        # Every object carries the rate at which touching it has
+                        # killed us, and the score weighs the collision by it.
+                        # Filtering on a "danger" verdict instead kept phantom
+                        # threats out — clouds and blocks made the planner
+                        # flinch — but it also kept out the Goombas, whose tally
+                        # reads "reward" because stomping one is worth 100.
+                        dangers = [(sl.cx, sl.cy, sl.vx, sl.vy,
+                                    memory.risk_of(sl.slot_id))
+                                   for sl in slots if sl is not top[0]]
+                        pl = planner.step(obs.frame_rgb, top[0], dangers,
+                                          scroll_dx=tracker.scroll_dx,
+                                          repeat=args.repeat)
                         plan_pressed = pl.pressed
                         if i % 28 == 0:
                             thoughts.add(f"f{i}: plan '{pl.name}' score={pl.score:.0f}")

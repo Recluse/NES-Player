@@ -55,3 +55,34 @@ def test_action_vocab_roundtrip():
     # round-tripping through meta.json gives back the same masks
     v2 = ActionVocab(masks=list(v.masks))
     assert np.array_equal(v2.encode(actions), enc)
+
+
+def test_a_wider_teacher_reloads_at_its_own_width(tmp_path):
+    """A checkpoint that does not record its width cannot be reloaded: the
+    loader would build the default 256 and fail on the state dict."""
+    import json
+
+    import torch
+
+    from nes_player.policy.state_teacher import StateNet, StatePolicy
+
+    net = StateNet(7, width=64)
+    (tmp_path / "meta.json").write_text(json.dumps({
+        "vocab_masks": [0, 1, 8, 64, 128, 130, 131], "width": 64}))
+    torch.save(net.state_dict(), tmp_path / "model.pt")
+    loaded = StatePolicy(tmp_path)
+    assert loaded.net.net[0].out_features == 64
+
+
+def test_a_checkpoint_from_before_the_width_was_recorded_still_loads(tmp_path):
+    import json
+
+    import torch
+
+    from nes_player.policy.state_teacher import StateNet, StatePolicy
+
+    net = StateNet(7)
+    (tmp_path / "meta.json").write_text(json.dumps({
+        "vocab_masks": [0, 1, 8, 64, 128, 130, 131]}))
+    torch.save(net.state_dict(), tmp_path / "model.pt")
+    assert StatePolicy(tmp_path).net.net[0].out_features == 256

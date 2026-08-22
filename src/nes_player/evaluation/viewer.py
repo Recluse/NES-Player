@@ -37,6 +37,31 @@ HINT_HOLD = 12   # frames a button stays held after a click on the drawn pad
 WINDOW = "NES Player"
 
 
+def _mux(video: str, wav: str) -> None:
+    """Put the sound inside the video, if there is anything here to do it with.
+
+    cv2 writes picture only, so every recording came out silent while its
+    audio sat in a .wav nobody joined. Without ffmpeg the pair is left as it
+    was, which is what used to happen anyway.
+    """
+    import shutil
+    import subprocess
+
+    ff = shutil.which("ffmpeg")
+    if not ff:
+        return
+    out = video + ".muxing.mp4"
+    done = subprocess.run(
+        [ff, "-y", "-loglevel", "error", "-i", video, "-i", wav,
+         "-c:v", "copy", "-c:a", "aac", "-b:a", "128k", "-shortest", out],
+        capture_output=True)
+    if done.returncode == 0 and Path(out).exists():
+        Path(out).replace(video)
+        Path(wav).unlink(missing_ok=True)
+    else:
+        Path(out).unlink(missing_ok=True)
+
+
 class Viewer:
     """`show()` is called from the worker thread and returns the user command —
     None, 'quit' or 'restart' — that the GUI thread left for it."""
@@ -287,11 +312,13 @@ class Viewer:
 
                 import numpy as np
 
-                with wave.open(self._video_out + ".wav", "wb") as w:
+                wav = self._video_out + ".wav"
+                with wave.open(wav, "wb") as w:
                     w.setnchannels(1)
                     w.setsampwidth(2)
                     w.setframerate(self._sample_rate)
                     w.writeframes(np.concatenate(self._audio).tobytes())
+                _mux(self._video_out, wav)
         if self._window_ready:
             cv2.destroyAllWindows()
 

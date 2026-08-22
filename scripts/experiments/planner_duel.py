@@ -11,6 +11,15 @@ every frame, decisions on a fixed grid of frame indices, and the planner
 offered exactly those same ticks and no others. The decision indices are
 compared afterwards rather than assumed equal.
 
+The perception here has to be the perception the model was trained through, and
+for a long time it was not: this script tracked with `MotionTracker`, whose box
+scatters 50 px against the console's own copy of Mario's position, while every
+target the ego model learned came from the sprite table, which is exact in 96%
+of frames. With CROP at 48 px, that difference decides whether the crop handed
+to the model contains the hero at all. It also took the first slot above a
+confidence threshold rather than the best one, and SMB parks a static sprite in
+the status bar that scores 1.00.
+
     uv run python scripts/experiments/planner_duel.py runs/bc_smb_av \
         --ghost runs/ego_smb4 --runs 8
 """
@@ -25,20 +34,27 @@ import numpy as np
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
 IDLE_STEP, IDLE_MAX = 37, 1800
-CTRL_PROB = 0.7
 
 
 def run(checkpoint: str, ghost_path: str | None, game: str, state: str | None,
-        frames: int, seed: int, temperature: float, repeat: int) -> dict:
+        frames: int, seed: int, temperature: float, repeat: int,
+        knowledge: str | None = None) -> dict:
     from nes_player.emulator.stable_retro import StableRetroAdapter
     from nes_player.evaluation.evaluator import evaluate
     from nes_player.perception.memory import ObjectMemory
-    from nes_player.perception.motion import MotionTracker
+    from nes_player.perception.motion import pick_hero
+    from nes_player.perception.sprites import SpriteTracker, sprite_boxes
     from nes_player.policy.bc import BCPolicy
 
     env = StableRetroAdapter(game, include_debug=True, state=state)
     policy = BCPolicy(checkpoint)
-    tracker, memory = MotionTracker(), ObjectMemory()
+    tracker = SpriteTracker()
+    # What is dangerous cannot be learned inside one 3000-frame run: a verdict
+    # needs deaths blamed on one appearance and a run supplies about three
+    # deaths in total. Built once by scripts/experiments/build_danger.py and
+    # loaded here, the memory arrives with 32 deaths' worth of opinion.
+    memory = (ObjectMemory.load(knowledge) if knowledge and Path(knowledge).exists()
+              else ObjectMemory())
     planner = None
     if ghost_path:
         from nes_player.policy.planner import EgoPlanner
@@ -46,28 +62,42 @@ def run(checkpoint: str, ghost_path: str | None, game: str, state: str | None,
 
         planner = EgoPlanner(GhostPredictor(ghost_path))
 
-    state_bag = {"best_x": 0, "slots": [], "verdicts": {}, "plans": 0}
+    state_bag = {"best_x": 0, "slots": [], "verdicts": {}, "plans": 0,
+                 "scroll_dx": 0.0, "lives": None}
 
     def on_frame(i, obs, action):
         d = obs.debug or {}
         x = d.get("xscroll", d.get("xscrollHi", 0) * 256 + d.get("xscrollLo", 0))
         if x < 6000:
             state_bag["best_x"] = max(state_bag["best_x"], x)
+        # The object memory learns which things are dangerous by being told
+        # when the hero died; this passed a literal False, so nothing was ever
+        # blamed, no cluster ever reached a "danger" verdict, and the planner's
+        # collision term was dead in every duel ever run — measured, zero
+        # threats offered across 432 replans. Lives come from emulator memory,
+        # which is teacher-side information, the same as `--feedback privileged`.
+        lives, was = d.get("lives"), state_bag["lives"]
+        died = was is not None and lives is not None and lives < was
+        state_bag["lives"] = lives
         # Perception runs every frame for both arms, so the only difference
         # between them is whether the plan is allowed to replace the action.
-        slots = tracker.update(obs.frame_rgb, action)
+        slots = tracker.update(obs.frame_rgb, action,
+                               boxes=sprite_boxes(env._env.get_ram()))
         state_bag["slots"] = slots
-        state_bag["verdicts"] = memory.update(obs.frame_rgb, slots, i, 0, False)
+        state_bag["scroll_dx"] = tracker.scroll_dx
+        state_bag["verdicts"] = memory.update(
+            obs.frame_rgb, slots, i, int(d.get("score", 0) or 0), died)
 
     def override(i, obs, pressed):
         if planner is None:
             return None
-        top = [s for s in state_bag["slots"] if s.ctrl_prob > CTRL_PROB]
-        if not top:
+        hero = pick_hero(state_bag["slots"])
+        if hero is None:
             return None       # hero not visible: the policy keeps the wheel
-        dangers = [(s.cx, s.cy, s.vx, s.vy) for s in state_bag["slots"]
-                   if s is not top[0] and state_bag["verdicts"].get(s.slot_id) == "danger"]
-        plan = planner.plan(obs.frame_rgb, top[0], dangers)
+        dangers = [(s.cx, s.cy, s.vx, s.vy, memory.risk_of(s.slot_id))
+                   for s in state_bag["slots"] if s is not hero]
+        plan = planner.step(obs.frame_rgb, hero, dangers,
+                            scroll_dx=state_bag["scroll_dx"], repeat=repeat)
         state_bag["plans"] += 1
         return plan.pressed, "planner"
 
@@ -91,6 +121,9 @@ def main() -> int:
     ap.add_argument("--frames", type=int, default=3000)
     ap.add_argument("--repeat", type=int, default=4)
     ap.add_argument("--temperature", type=float, default=0.9)
+    ap.add_argument("--knowledge",
+                    default="runs/knowledge/danger_SuperMarioBros-Nes-v0.npz",
+                    help="object memory built by build_danger.py")
     args = ap.parse_args()
 
     arms = {"bc": None, "bc+planner": args.ghost}
@@ -100,7 +133,8 @@ def main() -> int:
         for seed in range(args.runs):
             np.random.seed(seed)      # both arms sample the same way
             row = run(args.checkpoint, ghost, args.game, args.state,
-                      args.frames, seed, args.temperature, args.repeat)
+                      args.frames, seed, args.temperature, args.repeat,
+                      args.knowledge)
             row["arm"] = name
             rows.append(row)
             print(json.dumps({k: v for k, v in row.items()

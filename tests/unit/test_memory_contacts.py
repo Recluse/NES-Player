@@ -100,3 +100,100 @@ def test_begin_episode_keeps_what_was_learned():
     n = len(mem.clusters)
     mem.begin_episode()
     assert len(mem.clusters) == n
+
+
+def test_what_was_learned_survives_a_restart(tmp_path):
+    """The file docstring has always claimed the memory outlives episodes, and
+    inside one process it does — but nothing wrote it down, so every session
+    relearned the same Goombas from the same deaths."""
+    import numpy as np
+
+    from nes_player.perception.memory import ObjectCluster, ObjectMemory
+
+    m = ObjectMemory()
+    m.clusters = [ObjectCluster(0, np.full((16, 16), 7.0, np.float32),
+                                seen=90, contacts=12, score_gain=0.0, deaths=4)]
+    m._protos = np.stack([c.proto for c in m.clusters])
+    m.save(tmp_path / "mem.npz")
+
+    back = ObjectMemory.load(tmp_path / "mem.npz")
+    c = back.clusters[0]
+    assert (c.seen, c.contacts, c.deaths) == (90, 12, 4)
+    assert c.verdict == "danger"
+
+
+def test_an_empty_memory_round_trips(tmp_path):
+    from nes_player.perception.memory import ObjectMemory
+
+    ObjectMemory().save(tmp_path / "mem.npz")
+    assert ObjectMemory.load(tmp_path / "mem.npz").clusters == []
+
+
+def test_asking_about_an_object_does_not_teach_the_memory():
+    """A policy checking "is that dangerous" must not count as a sighting."""
+    import numpy as np
+
+    from nes_player.perception.memory import ObjectCluster, ObjectMemory
+
+    m = ObjectMemory()
+    m.clusters = [ObjectCluster(0, np.zeros((16, 16), np.float32),
+                                seen=5, contacts=4, deaths=3)]
+    m._protos = np.stack([c.proto for c in m.clusters])
+    frame = np.zeros((32, 32, 3), np.uint8)
+    assert m.verdict_of(frame, (0, 0, 8, 8)) == "danger"
+    assert m.clusters[0].seen == 5 and len(m.clusters) == 1
+
+
+def test_an_unseen_object_is_unknown_rather_than_the_nearest_thing():
+    import numpy as np
+
+    from nes_player.perception.memory import ObjectCluster, ObjectMemory
+
+    m = ObjectMemory()
+    m.clusters = [ObjectCluster(0, np.zeros((16, 16), np.float32),
+                                seen=5, contacts=4, deaths=3)]
+    m._protos = np.stack([c.proto for c in m.clusters])
+    bright = np.full((32, 32, 3), 255, np.uint8)
+    assert m.verdict_of(bright, (0, 0, 8, 8)) == "unknown"
+
+
+def test_nothing_learned_yet_means_unknown():
+    import numpy as np
+
+    from nes_player.perception.memory import ObjectMemory
+
+    assert ObjectMemory().verdict_of(np.zeros((8, 8, 3), np.uint8),
+                                     (0, 0, 4, 4)) == "unknown"
+
+
+def _cluster(contacts: int, deaths: int):
+    import numpy as np
+
+    from nes_player.perception.memory import ObjectCluster
+
+    return ObjectCluster(0, np.zeros((16, 16), np.float32),
+                         seen=contacts * 10, contacts=contacts, deaths=deaths)
+
+
+def test_something_touched_constantly_and_rarely_fatal_is_not_an_enemy():
+    """Measured on a real archive: 307 contacts, 5 deaths. Calling that danger
+    put the flag on in 98% of frames, which tells a policy nothing."""
+    assert _cluster(307, 5).verdict == "unknown"
+
+
+def test_something_that_kills_a_third_of_the_time_is():
+    assert _cluster(29, 8).verdict == "danger"
+
+
+def test_one_death_after_one_contact_is_a_coincidence():
+    assert _cluster(1, 1).verdict == "unknown"
+
+
+def test_two_deaths_out_of_two_contacts_is_not():
+    assert _cluster(2, 2).verdict == "danger"
+
+
+def test_paying_out_still_reads_as_rewarding():
+    c = _cluster(3, 0)
+    c.score_gain = 80
+    assert c.verdict == "reward"

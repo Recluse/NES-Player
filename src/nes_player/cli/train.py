@@ -68,10 +68,22 @@ def cmd_train_ego(args: argparse.Namespace) -> None:
     """Ego world model: where the hero will be, given the buttons. Used by --ghost."""
     from nes_player.world_model.ego import train_ego
 
-    meta = train_ego(args.episode, args.out, epochs=args.epochs, seed=args.seed)
+    meta = train_ego(args.episode, args.out, epochs=args.epochs, seed=args.seed,
+                     branches=args.branches)
     last = meta["history"][-1]
     print(" ".join(f"{k}={v:.4f}" if isinstance(v, float) else f"{k}={v}"
                    for k, v in last.items()))
+
+
+def cmd_collect_branches(args: argparse.Namespace) -> None:
+    """Play, and at intervals replay the same moment with each candidate action."""
+    import json
+
+    from nes_player.world_model.counterfactual import collect
+
+    print(json.dumps(collect(args.out, checkpoint=args.checkpoint,
+                             game=args.game, state=args.state,
+                             frames=args.frames, seed=args.seed), indent=2))
 
 
 def cmd_improve(args: argparse.Namespace) -> None:

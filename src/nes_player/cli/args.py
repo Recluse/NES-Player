@@ -11,6 +11,7 @@ from nes_player.cli.data import cmd_dataset_build, cmd_tas_replay
 from nes_player.cli.explore import cmd_explore
 from nes_player.cli.play import cmd_play
 from nes_player.cli.train import (
+    cmd_collect_branches,
     cmd_improve,
     cmd_train_av,
     cmd_train_bc,
@@ -153,7 +154,20 @@ def build_parser() -> argparse.ArgumentParser:
     eg.add_argument("--out", required=True)
     eg.add_argument("--epochs", type=int, default=4)
     eg.add_argument("--seed", type=int, default=0)
+    eg.add_argument("--branches", default=None,
+                    help="counterfactual branch file(s) from collect-branches")
     eg.set_defaults(func=cmd_train_ego)
+
+    cf = sub.add_parser("collect-branches",
+                        help="replay the same moments with each candidate "
+                             "action, so the model can see what a button does")
+    cf.add_argument("--out", required=True)
+    cf.add_argument("--checkpoint", default="runs/hero_pre_1")
+    cf.add_argument("--game", default="SuperMarioBros-Nes-v0")
+    cf.add_argument("--state", default="default")
+    cf.add_argument("--frames", type=int, default=6000)
+    cf.add_argument("--seed", type=int, default=0)
+    cf.set_defaults(func=cmd_collect_branches)
 
     av = sub.add_parser("train-av", help="contrastive sound↔frame (source localisation)")
     av.add_argument("--episode", required=True)
