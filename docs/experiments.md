@@ -4069,3 +4069,132 @@ of the four-draw advantage at 55% of the branch frames (263k against 487k a
 run). Not free — the compounding is real — but the compute-progress trade is
 now a measured curve with three points (1, 2, 4 draws), and it is the only
 lever in the whole programme that moved anything without learning.
+
+## The adaptive budget, calibrated offline: the trigger is not the one specified (2026-08-28)
+
+The next programme opens where the last one closed: allocate the planner's
+own rollouts sequentially. The reviewer's scheme — two paired rollouts for
+everyone, then third and fourth only where the expected regret of stopping
+is high, threshold frozen on five levels and tested on the sixth — went
+through the stored draw matrices before touching the emulator, and the
+matrices rewrote its middle.
+
+The specified statistic fails. Expected stopping regret under a Gaussian
+with a *globally* calibrated sigma is anti-informative: the top quarter of
+points it calls riskiest carry 19–36% of the real 2→4 saving — worse than
+escalating at random. The noise is strongly heteroscedastic and one sigma
+per level washes out exactly the signal the trigger needs. The winner-death
+component is empty too (lift 0.000), because deaths are already priced into
+the penalised returns it reads.
+
+Two of the reviewer's other components carry everything. Winner instability
+— the two draws disagreeing about the argmax — marks ~43% of decisions that
+hold 70–75% of the saving. The point's own draw disagreement carries the
+rest: ranking stable points by expected regret under a *per-point* sigma
+(fifteen pairwise d0−d1 disagreements at the point, shrunk toward the
+train-levels global with weight six) puts 46–58% of the saving into the top
+quarter of escalations on every held-out level, where the global-sigma
+version managed a fifth of that.
+
+The frozen test uses the independent reference: on the 16-draw matrix of
+1-1 the procedure sees only draws 0–3, the reference is the mean of draws
+4–15, and tau comes from the five other levels:
+
+    uniform-2       cost 12     regret 5.01 px
+    adaptive        cost 16.5   regret 3.91      ← 94% of the 2→4 saving
+    random at 16.5  cost 16.5   regret 4.58      (the convex-hull line)
+    full-4          cost 24     regret 3.85
+
+The adaptive point sits far below the line between the fixed budgets, with
+every constant frozen on other levels. `scripts/experiments/adaptive.py` is
+the stand; `oracle_mpc.py --draws 2 --adaptive 26.709` is the same rule
+inside the planner, escalating all six candidates together so nothing is
+ever pruned. The online run on 32 paired seeds decides whether the offline
+94% survives compounding.
+
+## The adaptive budget online: below the line, not above it (2026-08-28)
+
+32 paired seeds, `--draws 2 --adaptive 26.709`, every constant frozen before
+the run. The trigger behaved exactly as calibrated — 37.7% of decisions
+escalated against the offline 37.2%, 344k branch frames a run against the
+predicted ~335k. The progress did not follow:
+
+    oracle 2 draws    +3966 [3124, 4765]   263k frames   16/32 clears
+    adaptive          +3463 [2787, 4165]   344k          12/32
+    control line @344k +4192                              (to beat)
+    oracle 4 draws    +4590 [3827, 5307]   487k          20/32
+
+The pre-declared criterion — the adaptive point above the straight line
+between the fixed budgets — fails decisively: the line sits above even the
+upper edge of the confidence interval. Paired seed-by-seed against the
+stored oracle-2 run (bc rows byte-identical, so the pairing is exact):
+adaptive − oracle-2 = −503 [−1478, +512], 11 wins to 21 losses, at 31% more
+compute.
+
+Two honest readings, both recorded. First, the offline→online gap claims
+its fourth victim: 94% of the per-decision saving against an independent
+reference did not survive the closed loop, joining the gate (68%→24%), the
+k-NN chooser, and the input-order inversions. Per-decision px measured 144
+frames ahead is still not the quantity the trajectory compounds. Second,
+the criterion itself is near-unresolvable at this sample size: the line
+exceeds the oracle-2 point by only 226 px while the paired CI spans ~2000,
+so only a large win could ever have passed — but the observed direction is
+negative regardless, and a rule that cannot show its win inside the noise
+of 32 seeds is not a rule this stand can certify.
+
+What survives: the stand (`adaptive.py`), the trigger diagnosis (global
+sigma anti-informative, winner instability + per-point sigma carry the
+signal), and the unchanged conclusion of the compute curve — at these
+budgets the only certified allocation remains the uniform one. The
+adaptive arm's implementation stays in `oracle_mpc.py` behind `--adaptive`
+for whoever brings either more seeds or a per-decision CRN harness that
+can pair the arms draw for draw.
+
+## Common random numbers: the 2→4 step itself is inside the noise (2026-08-28)
+
+The adaptive arm's negative came with a caveat — the criterion might be
+unresolvable at 32 seeds. That is now measured rather than suspected. Every
+continuation draw is seeded by (run seed, world x of the decision,
+candidate, draw index) with the global stream swapped out and restored, so
+arms sharing a seed play byte-identical games until a genuine policy
+difference: the bc rows of all three arm sets are byte-identical, an
+escalated decision sees exactly the draws the 4-draw oracle would see at
+that state, and one seed of thirty-two stayed identical between adaptive
+and oracle-2 for the whole 3000 frames.
+
+All three arms rerun on the shared noise, 32 paired seeds:
+
+    oracle-2   median 3124   +3827.5 [3044, 4592]   264k   15/32 clears
+    adaptive   median 3126   +3625.2 [2810, 4457]   340k   14/32
+    oracle-4   median 7106   +4081.8 [3274, 4885]   475k   17/32
+
+    adaptive − oracle-2   −202  [−1438, +1068]   14 wins / 17 losses
+    oracle-4 − oracle-2   +254  [ −919, +1441]   19 wins / 13 losses
+    adaptive − oracle-4   −457  [−1542,  +608]   13 wins / 19 losses
+
+The headline is the middle row. **Even always-escalating against
+never-escalating — the whole 2→4 draws step — is statistically
+unresolvable per-trajectory at 32 paired seeds under common random
+numbers.** The published curve's +624 between the fixed budgets sits well
+inside this band; the medians differ dramatically (3124 against 7106)
+because the distribution is bimodal around clearing 1-1, but the means do
+not. A criterion asking the adaptive point to clear an interpolation line
+between two statistically indistinguishable endpoints was unwinnable and
+unlosable from the start; that it was pre-registered anyway is the mistake
+this entry records.
+
+What stands after the noise floor is drawn honestly:
+
+  * per-decision, against an independent 12-draw reference, four draws
+    beat two by 1.16 px and the frozen trigger keeps 94% of that at 69%
+    of the cost — measured on thousands of points, real;
+  * per-trajectory, none of it is certifiable at n=32 — only effects the
+    size of the planner itself (+3800 over bc) clear the floor;
+  * uniform thinning keeps its title by default, not by victory: the
+    adaptive rule costs 29% more and shows no gain twice.
+
+The reusable artifact is the harness: `--crn` pins every draw to the
+decision's state, which is what makes "identical until a genuine
+difference" a property rather than a hope. Anyone returning to draw
+allocation should measure per-decision on the stored matrices and treat
+online runs at this scale as a smoke test, not a verdict.

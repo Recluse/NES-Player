@@ -29,6 +29,7 @@ rather than as its first press, so the comparison is between whole plans.
 import argparse
 import json
 import sys
+import zlib
 from collections import Counter
 from pathlib import Path
 
@@ -129,7 +130,9 @@ def run(checkpoint: str, game: str, state: str | None, frames: int, seed: int,
         draws: int = 1, video: str | None = None,
         fixed: str = "", rescue: bool = False,
         corrupt: float = 0.0, knn_memory: str = "", gate: bool = False,
-        gate_fp: float = 0.0, gate_fn: float = 0.0) -> dict:
+        gate_fp: float = 0.0, gate_fn: float = 0.0,
+        adaptive: float | None = None, adaptive_g2: float = 0.0,
+        crn: bool = False) -> dict:
     from nes_player.emulator.controller import BUTTONS
     from nes_player.emulator.stable_retro import StableRetroAdapter
     from nes_player.perception.motion import pick_hero
@@ -139,6 +142,33 @@ def run(checkpoint: str, game: str, state: str | None, frames: int, seed: int,
     from nes_player.policy.go_explore import _begin
     from nes_player.policy.robustify import progress_of
     from nes_player.world_model.ego import GhostPredictor
+
+    trig = None
+    if adaptive is not None:
+        from adaptive import trigger as trig
+        from analyse_draws import DEATH_MARGIN
+
+    def keyed_draw(x0, name, di, fn):
+        """Common random numbers for one continuation draw.
+
+        Without this every draw consumes the shared stream, so two arms
+        diverge in pure noise the moment one of them spends a different
+        number of draws — even at decisions where both pick the same
+        candidate. Keyed by (run seed, world x of the decision, candidate,
+        draw index), identical states get identical continuations: arms
+        stay frame-identical until a genuine policy difference, and an
+        escalated decision sees exactly the draws the 4-draw oracle would.
+        The swap also keeps the on-trajectory stream untouched by draws.
+        """
+        if not crn:
+            return fn()
+        st = np.random.get_state()
+        np.random.seed(zlib.crc32(
+            f"{seed}:{int(x0)}:{name}:{di}".encode()) & 0xFFFFFFFF)
+        try:
+            return fn()
+        finally:
+            np.random.set_state(st)
 
     np.random.seed(seed)
     env = StableRetroAdapter(game, include_debug=True, state=state)
@@ -208,6 +238,7 @@ def run(checkpoint: str, game: str, state: str | None, frames: int, seed: int,
     defer = 0
     pressed: frozenset = frozenset()
     branch_frames = 0
+    escalated = decisions = 0
 
     for i in range(frames):
         hero = None
@@ -244,6 +275,7 @@ def run(checkpoint: str, game: str, state: str | None, frames: int, seed: int,
             env.load_state(here)
 
             scored = []
+            pend = []
             if knn is not None:
                 # Episodic memory instead of a network: the oracle's own past
                 # decisions on this level, keyed by world x. Legitimate for
@@ -321,26 +353,70 @@ def run(checkpoint: str, game: str, state: str | None, frames: int, seed: int,
                     # one that actually follows while making the number mean
                     # something. `draws` = 1 is the single-future version.
                     mid = env.save_state()
-                    reached, dead_n = [], 0
-                    for _ in range(draws):
+                    outs = []
+                    for di in range(draws):
                         env.load_state(mid)
                         policy._stack = list(stack)
-                        gone, extra = _continue(env, policy, o, l0, tail,
-                                                repeat, tail_temp)
+                        gone, extra = keyed_draw(
+                            x0, name, di,
+                            lambda o=o, l0=l0: _continue(env, policy, o, l0,
+                                                         tail, repeat,
+                                                         tail_temp))
                         branch_frames += extra
-                        if gone:
-                            dead_n += 1
-                        else:
-                            reached.append(mario_x(env) - x0)
+                        outs.append((gone, 0.0 if gone
+                                     else mario_x(env) - x0))
                     # The continuation consumed the policy's frame
                     # stack; the next candidate must start from the
                     # same history this one did.
                     policy._stack = list(stack)
+                    if adaptive is not None:
+                        # Scored below, once every candidate has its draws
+                        # in and the trigger has spoken.
+                        pend.append((name, plan, mid, o, outs))
+                        continue
+                    dead_n = sum(g for g, _ in outs)
                     died = dead_n * 2 > draws
-                    val = DEATH if died else float(np.mean(reached))
+                    val = DEATH if died else float(np.mean(
+                        [x for g, x in outs if not g]))
                 else:
                     val = DEATH if died else mario_x(env) - x0
                 scored.append((val, name, plan))
+            if pend:
+                # The adaptive budget: every candidate has `draws` paired
+                # continuations; only where the frozen trigger — winner
+                # instability first, then expected stopping regret under a
+                # per-point sigma — says the early ranking is unreliable are
+                # `draws` more paid for, for all candidates alike, so nothing
+                # is ever pruned. Deaths enter the trigger through the same
+                # penalised floor the offline calibration used.
+                decisions += 1
+                live = [x for *_, os_ in pend for g, x in os_ if not g]
+                floor = (min(live) if live else 0.0) - DEATH_MARGIN
+                mat = np.array([[floor if g else x for g, x in os_]
+                                for *_, os_ in pend])
+                if len(pend) > 1 and \
+                        float(trig(mat[None], adaptive_g2)[0]) > adaptive:
+                    escalated += 1
+                    for _name, _plan, mid, o2, outs in pend:
+                        for di in range(draws):
+                            env.load_state(mid)
+                            policy._stack = list(stack)
+                            gone, extra = keyed_draw(
+                                x0, _name, draws + di,
+                                lambda o2=o2, l0=l0: _continue(
+                                    env, policy, o2, l0, tail, repeat,
+                                    tail_temp))
+                            branch_frames += extra
+                            outs.append((gone, 0.0 if gone
+                                         else mario_x(env) - x0))
+                        policy._stack = list(stack)
+                for name, plan, _mid, _o2, outs in pend:
+                    dead_n = sum(g for g, _ in outs)
+                    died = dead_n * 2 > len(outs)
+                    val = DEATH if died else float(np.mean(
+                        [x for g, x in outs if not g]))
+                    scored.append((val, name, plan))
+                pend = []
             env.load_state(here)
             # The policy keeps the wheel unless a plan is clearly better. With
             # a perfect model this changes nothing — the oracle already picks
@@ -495,7 +571,9 @@ def run(checkpoint: str, game: str, state: str | None, frames: int, seed: int,
         view.close()
     env.close()
     return {"seed": seed, "best_x": best_x, "deaths": deaths,
-            "branch_frames": branch_frames, "chosen": dict(chosen)}
+            "branch_frames": branch_frames, "chosen": dict(chosen),
+            **({"escalated": escalated, "decisions": decisions}
+               if adaptive is not None else {})}
 
 
 def main() -> int:
@@ -534,6 +612,21 @@ def main() -> int:
                     help="how many futures to average the tail over, "
                          "so the value is an expectation rather than "
                          "one realised continuation")
+    ap.add_argument("--crn", action="store_true",
+                    help="common random numbers for the continuation draws, "
+                         "keyed by (seed, world x, candidate, draw index): "
+                         "arms sharing a seed stay frame-identical until a "
+                         "genuine policy difference, so their paired "
+                         "difference is causal and not draw noise")
+    ap.add_argument("--adaptive", type=float, default=None,
+                    help="escalate from --draws to twice that many where the "
+                         "frozen trigger — winner instability first, then "
+                         "expected stopping regret under a per-point sigma — "
+                         "exceeds this tau; 26.709 is the tau frozen on the "
+                         "five non-1-1 battery levels at target fraction 0.5")
+    ap.add_argument("--adaptive-g2", type=float, default=1255.02,
+                    help="global single-draw pairwise variance the per-point "
+                         "sigma is shrunk toward, from the same five levels")
     ap.add_argument("--tail-temp", type=float, default=0.9,
                     help="temperature of the continuation the value is\n                         measured under; at 0 the score reproduces")
     ap.add_argument("--defer", type=float, default=0.0,
@@ -599,6 +692,10 @@ def main() -> int:
                      + (f" heavy={args.heavy:g}" if noise and args.heavy else ""))
         if tail:
             name += f" tail={tail}@{args.tail_from or horizon}"
+        if args.adaptive is not None and horizon:
+            name += f" adaptive={args.adaptive:g}"
+        if args.crn and horizon:
+            name += " crn"
         if use_probe:
             name = f"probe h={horizon}"
         if args.gate and horizon:
@@ -622,7 +719,9 @@ def main() -> int:
                       args.defer, args.tail_temp, args.draws, args.video,
                       args.fixed, args.rescue, args.corrupt, args.knn_memory,
                       args.gate,
-                      args.gate_fp, args.gate_fn)
+                      args.gate_fp, args.gate_fn,
+                      None if horizon is None else args.adaptive,
+                      args.adaptive_g2, args.crn)
             rows.append(row)
             print(json.dumps({"arm": name, **row}), flush=True)
         arms[name] = rows
