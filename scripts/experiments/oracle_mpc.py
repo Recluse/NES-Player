@@ -127,7 +127,9 @@ def run(checkpoint: str, game: str, state: str | None, frames: int, seed: int,
         tail: int = 0, tail_from: int = 0, ram_hero: bool = False,
         defer_below: float = 0.0, tail_temp: float = 0.9,
         draws: int = 1, video: str | None = None,
-        fixed: str = "", rescue: bool = False) -> dict:
+        fixed: str = "", rescue: bool = False,
+        corrupt: float = 0.0, knn_memory: str = "", gate: bool = False,
+        gate_fp: float = 0.0, gate_fn: float = 0.0) -> dict:
     from nes_player.emulator.controller import BUTTONS
     from nes_player.emulator.stable_retro import StableRetroAdapter
     from nes_player.perception.motion import pick_hero
@@ -146,6 +148,19 @@ def run(checkpoint: str, game: str, state: str | None, frames: int, seed: int,
         obs = env.step_buttons([frozenset()])
 
     ghost = GhostPredictor(ghost_path) if ghost_path else None
+    knn = None
+    if knn_memory:
+        from analyse_draws import DEATH_MARGIN
+        zk = np.load(knn_memory)
+        rk = zk["returns"].astype(np.float64)[:, 0]
+        dk = zk["died"][:, 0]
+        for pi in range(len(rk)):
+            live = rk[pi][~dk[pi]]
+            floor = (live.min() if live.size else 0.0) - DEATH_MARGIN
+            rk[pi][dk[pi]] = floor
+        keys = (zk["ram"][:, 0x6D].astype(int) * 256
+                + zk["ram"][:, 0x86].astype(int))
+        knn = (keys, rk.mean(2).astype(np.float32))
     probe = None
     if probe_path:
         from probe_duel import ProbePlanner
@@ -229,7 +244,24 @@ def run(checkpoint: str, game: str, state: str | None, frames: int, seed: int,
             env.load_state(here)
 
             scored = []
-            if fixed and not rescue:
+            if knn is not None:
+                # Episodic memory instead of a network: the oracle's own past
+                # decisions on this level, keyed by world x. Legitimate for
+                # replaying a level already studied, and keyed by RAM, so this
+                # arm prices the ceiling of place-keyed memory, not a
+                # deliverable. Far from any memory, the policy keeps the wheel.
+                mx = mario_x(env)
+                d = np.abs(knn[0] - mx)
+                near = np.argsort(d)[:5]
+                near = near[d[near] <= 32]
+                if len(near):
+                    val = knn[1][near].mean(0)
+                    scored = [(float(val[k]), name, plan)
+                              for k, (name, plan) in enumerate(options)]
+                else:
+                    scored = [(1.0 if name == "bc" else 0.0, name, plan)
+                              for name, plan in options]
+            elif fixed and not rescue:
                 # The control nobody ran: how much of a learned scorer's gain
                 # is just a standing habit? "always jump now" costs 16.7 px of
                 # regret against the policy's 28.1 without looking at anything.
@@ -255,7 +287,7 @@ def run(checkpoint: str, game: str, state: str | None, frames: int, seed: int,
             # plan gained more than a pixel, so the "habit" control was an
             # oracle wearing a habit's name.
             skip = probe is not None or (fixed and not rescue)
-            for name, plan in (() if skip else options):
+            for name, plan in (() if skip or knn is not None else options):
                 if ghost is not None:
                     scored.append((learned_dx(ghost, obs.frame_rgb, hero, plan),
                                    name, plan))
@@ -354,6 +386,27 @@ def run(checkpoint: str, game: str, state: str | None, frames: int, seed: int,
                 if keep[0] > DEATH / 2:
                     scored = [(1.0 if n == fixed else 0.0, n, pl)
                               for _, n, pl in scored]
+            if gate:
+                # A binary gate's two errors do not cost the same, so they get
+                # separate rates: `fp` jumps when the console says defer, `fn`
+                # defers when it says jump. One number cannot show that.
+                only = [t for t in scored if t[1] in ("bc", "jump now")]
+                if len(only) == 2:
+                    pick = max(only, key=lambda t: t[0])
+                    other = min(only, key=lambda t: t[0])
+                    rate = gate_fp if pick[1] == "bc" else gate_fn
+                    keep = other if np.random.random() < rate else pick
+                    scored = [(1.0 if t is keep else 0.0, t[1], t[2])
+                              for t in scored]
+            if corrupt and np.random.random() < corrupt:
+                # A perfect scorer that is wrong this often. Before asking a
+                # student to imitate an argmax, it is worth knowing how good
+                # an imitator has to be before imitating helps at all.
+                wrong = [t for t in scored if t[1] != max(scored,
+                                                          key=lambda q: q[0])[1]]
+                if wrong:
+                    scored = [(1.0, *wrong[np.random.randint(len(wrong))][1:])] \
+                        + [(0.0, n, pl) for _, n, pl in scored]
             best = max(scored, key=lambda t: t[0])
             bc_score = next(s for s, n, _ in scored if n == "bc")
             score, name, plan = (best if best[0] > bc_score + margin
@@ -459,6 +512,17 @@ def main() -> int:
     ap.add_argument("--commit", type=int, default=16)
     ap.add_argument("--temperature", type=float, default=0.9)
     ap.add_argument("--horizons", type=int, nargs="+", default=[48, 96, 144])
+    ap.add_argument("--knn-memory", default="",
+                    help="steer by the oracle's stored decisions on this "
+                         "level, keyed by world x — the episodic-memory arm")
+    ap.add_argument("--gate", action="store_true",
+                    help="restrict the arm to {bc, jump now}; with no\n                         corruption this is the gate's ceiling")
+    ap.add_argument("--gate-fp", type=float, default=0.0,
+                    help="binary gate over {bc, jump now}: jump this\n                         often when the console says defer")
+    ap.add_argument("--gate-fn", type=float, default=0.0,
+                    help="...and defer this often when it says jump")
+    ap.add_argument("--corrupt", type=float, default=0.0,
+                    help="take a wrong candidate this often, to price\n                         how accurate an imitator has to be")
     ap.add_argument("--rescue", action="store_true",
                     help="with --fixed: keep the habit unless the console\n                         says it is fatal, then take the best "
                          "survivor")
@@ -520,6 +584,8 @@ def main() -> int:
         for h in args.horizons for nz in args.noise for tl in args.tail])
     if args.probe:
         plans += [(h, None, 0.0, 0.0, args.probe, 0) for h in args.horizons]
+    if args.knn_memory:
+        plans += [(h, None, 0.0, 0.0, None, 0) for h in args.horizons]
     if args.ghost:
         plans += [(h, args.ghost, m, 0.0, None, 0)
                   for h in args.horizons for m in args.margin]
@@ -535,6 +601,12 @@ def main() -> int:
             name += f" tail={tail}@{args.tail_from or horizon}"
         if use_probe:
             name = f"probe h={horizon}"
+        if args.gate and horizon:
+            name += f" gate fp={args.gate_fp:g} fn={args.gate_fn:g}"
+        if args.knn_memory and horizon:
+            name = "knn memory"
+        if args.corrupt and horizon:
+            name += f" corrupt={args.corrupt:g}"
         if args.fixed and horizon:
             # The scoring is short-circuited, so whatever this arm was called,
             # what it does is take the same template every time.
@@ -548,7 +620,9 @@ def main() -> int:
                       use_probe, args.bc_live, tail,
                       args.tail_from or (horizon or 0), args.ram_hero,
                       args.defer, args.tail_temp, args.draws, args.video,
-                      args.fixed, args.rescue)
+                      args.fixed, args.rescue, args.corrupt, args.knn_memory,
+                      args.gate,
+                      args.gate_fp, args.gate_fn)
             rows.append(row)
             print(json.dumps({"arm": name, **row}), flush=True)
         arms[name] = rows

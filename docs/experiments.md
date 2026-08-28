@@ -3210,3 +3210,862 @@ The rescue arm — keep the habit unless the console says this plan is fatal —
 lands on 483, identical to the habit it protects. A death veto on top of a
 constant buys nothing, which is the same answer `doomed.py` gave from the
 other direction: the plans that kill are not the ones a veto can see.
+
+## Sixteen futures, and what they say (2026-08-23)
+
+500 decision points, sixteen continuations per candidate, saved once. Nested
+N built from the same rollouts, so N is not confounded with a fresh sample.
+Two disjoint panels of N; agreement, the spread of their paired differences,
+and the regret of one panel's choice under the sixteen-draw mean:
+
+      N   top-1   top-set   sd of paired diff   regret vs 16   entropy
+      1   62.6%    63.3%          55.4 px           5.7 px       0.00
+      2   62.8%    76.3%          36.2 px           3.8 px       0.20
+      4   64.0%    76.5%          27.9 px           2.3 px       0.30
+      8   69.6%    77.2%          21.3 px           1.1 px       0.34
+
+**There is no saturation.** Regret falls monotonically, 5.7 to 1.1, and the
+spread of paired differences falls as 1/sqrt(N) (55.4, 36.2, 27.9, 21.3
+against the predicted 55.4, 39.2, 27.7, 19.6). The earlier claim that four
+draws are enough came from an online tie between four and eight on 32 seeds,
+which is noise, not a plateau. Withdrawn.
+
+The number that explains the failed training:
+
+    spread across candidates, the signal      14.9 px
+    sd of paired differences at N=4, the noise 27.9 px
+
+At four draws the measurement error on a *difference* is twice the difference
+itself. The "correctly defined" training set was collected at exactly N=4, so
+the probe that learned nothing from it was learning a label with twice as
+much noise as signal.
+
+Common random numbers — one seeded stream per draw, shared across candidates —
+shrink that noise for free:
+
+           CRN      independent
+    N=2   36.2 px      44.4 px
+    N=4   27.7 px      32.6 px
+    N=8   19.7 px      25.3 px
+
+An 18-22% reduction in the standard deviation of a paired difference, worth
+roughly a factor 1.5 in draws.
+
+Selection rules, each fitted on one panel of eight and scored on the other,
+because scoring them against the sixteen-draw mean is circular — the mean
+wins by construction:
+
+    mean              4.7 px
+    median            5.3 px
+    lower quartile    5.8 px
+    CVaR worst 25%    6.2 px
+    mean - 1 sd       5.9 px
+
+No risk-sensitive rule beats the mean. There is no case for learning a
+quantile; the hypothesis is tested and dead.
+
+The greedy T=0 continuation, the target that produced a probe worth +449:
+
+    regret against the honest sixteen   5.2 px
+    same best candidate                 65.6%
+    picks bc 47%, the honest oracle picks bc 43%
+
+Its choice is about as bad as a single draw. So the bias does not make the
+choice better, and "the bias is accidentally useful" fails in that form. What
+survives is the other half: T=0 is perfectly reproducible while an averaged
+target at N=4 is not, and a biased-but-clean label may simply be learnable
+where an unbiased-but-noisy one is not.
+
+## The pre-registered chooser failed (2026-08-23)
+
+`docs/preregistration.md` fixed the architecture, the target, the loss, the
+number of draws, the single development comparison, the confirmatory block
+4000-4031 and the criterion, before the training data finished collecting.
+
+Development, 438 held-out points from the 2400-point matrix:
+
+    soft target, weighted     regret 10.6 px   <- winner
+    soft target, unweighted   regret 12.5 px
+    hard target, weighted     regret 11.0 px
+    hard target, unweighted   regret 11.0 px
+    always "jump now"         regret 11.1 px
+
+    student minus the constant: +0.51 px, bootstrap [-2.50, +3.41]
+
+Both halves of the target earned their place — soft beats hard, weighting
+beats not weighting, and soft *without* weighting is the worst of the four,
+which says a smeared label needs the confidence weight to be usable. But the
+advantage over a constant was indistinguishable from zero, and the stop rule
+asks only whether the student is worse, so the confirmatory run went ahead on
+a margin that was recorded in advance as thin.
+
+Confirmatory, seeds 4000-4031, never used before:
+
+    bc                median 1316   mean 1225   clears 0/32   deaths 77
+    always jump now   median  604   mean  604   clears 0/32   deaths  0
+    student           median  643   mean  794   clears 0/32   deaths 42
+
+    student minus bc              -432 px [-626, -237]  p = 0.0005   fail
+    student minus always jump now +190 px [ +94, +302]  p = 0.0001   PASS
+
+**FAILED**: the student is beaten by the policy, significantly, and beats only
+the constant. The direction is reported as failed and is not re-analysed.
+
+What it chose is the clue worth keeping: `wait` 34%, `bc` 26%, `jump later`
+14%, `back off` 14%, `jump now` 10%, `run` 3%. The teacher it was distilled
+from picks `bc` 46% of the time and `wait` 5%. The student did not learn the
+teacher's policy — it learned to stand still, which on this training signal is
+the safest way to be wrong.
+
+That is consistent with everything measured: at the sample sizes available the
+label's noise on a *difference* is nearly twice the difference itself, so the
+part of the teacher a student can actually recover is the part that survives
+that noise, and "waiting is rarely catastrophic" survives it.
+
+## Correction: the label was never mostly noise (2026-08-23)
+
+Two sections above say that at four draws "the measurement error on a
+difference is twice the difference itself", and the failed chooser was
+explained by it. That comparison put two different quantities side by side and
+is withdrawn.
+
+`13.3 px` was the average within-point standard deviation of the six candidate
+values. `24.2 px` was the spread between *two* panels' estimates of a pairwise
+difference, which is sqrt(2) times one panel's error. Neither is the signal a
+learner has to predict, which is the standard deviation of the true pairwise
+difference across points and pairs.
+
+Measured properly on the 2400-point matrix — one panel's estimate against the
+sixteen-draw mean:
+
+    signal: sd of a true pairwise difference    33.4 px
+
+    N = 1   error 33.0 px   noise/signal 0.99
+    N = 2   error 22.0 px   noise/signal 0.66
+    N = 4   error 15.0 px   noise/signal 0.45
+    N = 8   error  8.5 px   noise/signal 0.25
+
+At four draws the label carries roughly twice as much signal as noise, not
+half. At sixteen — what the failed student was trained on — the error is
+smaller still.
+
+So label noise does not explain the failure, and "collect four times as many
+draws" is not the fix. What remains is that the student agrees with its
+teacher on only 52.5% of held-out points drawn from the teacher's own
+distribution, while landing in the top-set 79% of the time. It is a weak
+imitator where the label is good, not a good imitator of a bad label.
+
+## How accurate an imitator has to be (2026-08-23)
+
+Two days of distilling an argmax never asked what accuracy buys. A perfect
+scorer, forced to take a uniformly random wrong candidate a fixed fraction of
+the time, 32 paired seeds, four-draw tail:
+
+    error   median   clears   advantage over bc
+     0%      7117    20/32          +4590
+    20%      1909     4/32          +1666
+    50%      1012     0/32           +181  [+1, +360]
+
+Half the advantage requires an error rate below **15.7%**; a quarter requires
+below 30.5%. Half of all decisions wrong leaves +181 of +4590 — a perfect
+value function, used badly, is worth almost nothing.
+
+The student agrees with its teacher on 52.5% of held-out points: an error rate
+of 47.5%, and 41.8% with the console's own memory as input. Both are far past
+the point where imitation stops paying. It did worse still — beaten by the
+policy — because its errors are not uniform: they concentrate on `wait`.
+
+This closes the direction by arithmetic rather than by any detail of training.
+Distilling the choice over six templates cannot work unless accuracy reaches
+roughly 85%, and nothing measured here comes near: pixels 52.5%, sprite lists
+52.5%, console RAM 58.2%.
+
+What the same measurements suggest instead: two templates carry 87% of the
+full candidate set's value and three carry 97%. A chooser over two candidates
+starts at 50% from a coin rather than 17%, and the accuracy needed to profit
+is a different problem from the six-way one. That is a change of the question,
+which is what a closed direction is for.
+
+## Not covariate shift: the student is a wait-attractor (2026-08-23)
+
+The failed student picks `wait` 34% of the time; its teacher, measured on the
+teacher's own states, picks it 5%. Two causes look identical from outside — the
+teacher would also wait on the states the student reaches, or it would not.
+1200 decisions collected with the student driving, each labelled by the same
+sixteen-draw teacher:
+
+    candidate     teacher here   student   teacher on bc states
+    bc                  48.2%     30.2%           45.8%
+    run                  9.4%      3.2%            9.0%
+    jump now             9.1%      7.3%           12.5%
+    jump later          13.0%     13.7%           12.1%
+    wait                 7.6%     37.0%            5.9%
+    back off            12.7%      8.7%           14.7%
+
+**The teacher's policy barely moves.** On the student's own states it still
+says `bc` 48% and `wait` 8%, against 46% and 6% on the policy's states. The
+right answer did not change; the student is wrong.
+
+Agreement falls from 52.5% in distribution to **32.3%** on its own states, so
+there is a distribution effect — but it is the student generalising worse off
+its training distribution, not the target moving. DAgger addresses the second
+and this is the first.
+
+The confusion is a single attractor. From every teacher row, a third to a half
+of decisions go to `wait`:
+
+                        bc    run  jump now  jump later  wait  back off
+    teacher bc         46%     2%       4%          7%   33%        7%
+    teacher run        12%     5%      14%          9%   50%       10%
+    teacher jump now   14%     3%      20%         22%   39%        2%
+    teacher jump later 15%     9%       1%         26%   38%       10%
+    teacher back off   16%     1%      12%         23%   38%       11%
+
+And here is why the training signal never stopped it:
+
+    oracle regret of the student's choice   7.7 px  (always bc: 8.1 px)
+    regret on the decisions it got wrong   11.4 px
+    spurious waits: 50.2% of all errors, costing 2.1 px each
+
+A spurious `wait` costs two pixels inside a 144-frame horizon. It is the
+cheapest possible error to make, so a loss built on that horizon barely
+penalises it — and a student minimising that loss drifts to it from every
+state. In the game the same behaviour costs 432 px against the policy, because
+the horizon prices one wait and the run pays for all of them.
+
+That is a property of the target, not of the student: a value measured over
+144 frames cannot see what standing still repeatedly does to a run.
+
+## A longer horizon does not price inaction (2026-08-23)
+
+If waiting is cheap because the label only looks 144 frames ahead, looking
+further should make it expensive. 200 points, four draws, the penalty for
+taking `wait` instead of the best candidate, at four horizons:
+
+    horizon   best - wait   best - bc   spread   wait/spread   wait is best
+        96        23.3 px      17.9 px  14.4 px         1.62          10.5%
+       192        35.4 px      38.4 px  24.3 px         1.46          13.5%
+       288        68.5 px      78.5 px  53.3 px         1.29          12.5%
+       480       137.2 px     153.7 px 105.1 px         1.31          12.0%
+
+The absolute penalty grows sixfold, and so does everything else. Relative to
+the spread the loss is actually fitting, waiting gets *less* distinctive, not
+more: 1.62 down to 1.31. Lengthening the tail will not fix the wait attractor.
+The policy recovers the lost ground; what a longer window adds is mostly
+divergence between all the candidates, not a bill for standing still.
+
+## Where the student waits (2026-08-23)
+
+The average penalty for waiting is 23.3 px. The student's own spurious waits
+cost 2.1 px. It is not waiting at random — it is waiting exactly where waiting
+is nearly free. Splitting its 1200 decisions by the hero's speed:
+
+    spurious waits among the slowest third of states   83.3%
+    spurious waits among the fastest third              7.6%
+
+    regret of a spurious wait, slow states   2.0 px  (n=330)
+    regret of a spurious wait, fast states   3.3 px  (n= 30)
+
+The rule it learned is "if Mario is not moving, wait". Per decision that is
+almost correct — a stalled Mario loses little by stalling one more window. Over
+a run it is fatal, because the states where he is not moving are exactly the
+ones that need an action to leave, and choosing to wait there is choosing to
+stay.
+
+Hero velocity is one of the two scalars in the student's input vector, and the
+image half is a 48x48 crop plus a downscaled band. Given a weak image signal
+and one strong scalar, the network found the degenerate rule that scalar
+supports. That is worth recording against the earlier claim that perception is
+closed: it is closed for the *value* system, but a chooser built on this input
+has a shortcut available, and it took it.
+
+## DAgger converges, and the attractor moves (2026-08-24)
+
+The earlier round used a target that was half noise. With the sixteen-draw
+teacher and the learner's own 1200 states added to training, on held-out
+learner-induced states:
+
+    old student, on its own states      agreement 32.3%
+    DAgger student, on those states     agreement 47.4%
+    DAgger student, on its *own* states agreement 45.2%
+
+It holds up when the distribution moves again, so this converges rather than
+displacing the problem — the effect DAgger exists for, and one the noisy-target
+round could not have shown. Withdrawing the earlier "DAgger made it worse" as a
+statement about DAgger: it was a statement about that target.
+
+But the collapse did not go away, it changed target:
+
+    candidate    teacher here   old student   DAgger student
+    bc                 48.6%         30.2%            62.9%
+    wait                6.5%         37.0%             2.9%
+
+`wait` fell from 37% to 2.9% and `bc` rose from 30% to 63% against a teacher
+that says 49%. The confusion shows it: where the teacher says `bc` the student
+agrees 79% of the time, and from every other row it sends 43-51% to `bc`
+anyway.
+
+    regret 8.0 px overall, 14.7 px where wrong; always bc is 8.5 px
+
+So the student collapses onto whichever action is safest under the loss —
+first the cheapest error, now the plurality class. This is majority-class
+collapse, and it is what cross-entropy does when the signal is weak relative
+to the marginal.
+
+The consolation is that this failure mode is benign: a model that defers to
+the policy plays roughly like the policy, where the previous one played 432 px
+worse. It also sharpens the next design, because the only question left is the
+narrow one — when to override the default — which is exactly a binary gate.
+
+## The binary gate: a lower ceiling and a much flatter curve (2026-08-25)
+
+Restricting the arm to {bc, jump now} and scoring both through the console,
+32 paired seeds, four-draw tail:
+
+    bc                          median  787   clears  0/32   deaths 70
+    gate, perfect               median 1672   clears  2/32   deaths 75   +1110
+    gate, 20% spurious jumps    median 1655   clears  0/32   deaths 88    +689
+    gate, 20% missed jumps      median 1479   clears  1/32   deaths 82    +860
+    gate, 20% of both           median 1552   clears  0/32   deaths 87    +675
+    full oracle, six candidates median 7117   clears 20/32   deaths 20   +4590
+
+**The offline subset analysis overstated this badly.** On the matrix,
+{bc, jump now} recovered 68% of the full candidate set's per-decision value.
+In the game a *perfect* gate recovers 1110 of 4590 — 24%. Per-decision regret
+does not transfer, which is now the third time the same lesson has appeared.
+
+The two errors are not symmetric, and in the useful direction:
+
+    20% spurious jumps  -421 px [-1011, +97]   keeps 62% of the gate's gain
+    20% missed jumps    -250 px [ -831, +347]  keeps 78%
+    20% of both         -435 px [ -997, +62]   keeps 61%
+
+Jumping when the console says defer costs nearly twice what deferring when it
+says jump does. Defaulting to `bc` under uncertainty is therefore the right
+design, and it is now measured rather than assumed.
+
+The real argument for the gate is not its ceiling but the shape of its curve:
+
+    six candidates: +4590 -> +1666 at 20% error   keeps 36%
+    binary gate:    +1110 ->  +689 at 20% error   keeps 62%
+
+A learner that is wrong a fifth of the time destroys two thirds of what a
+six-way chooser could win and only a third of what a gate could. Against the
+gate's ceiling, the accuracy a student already reaches is worth something; the
+question is whether 62% of +1110 survives the gap between a corruption model
+and a real classifier, which the six-way experiment says is not a small gap.
+
+Also worth noting: the gate has *more* deaths than the policy (75 against 70,
+and 88 with spurious jumps). Removing `wait` and `back off` removes the ways
+of not dying, so a gate buys progress with risk.
+
+## The gate, and a metric that had to be fixed first (2026-08-25)
+
+A gate over {bc, jump now}: target `delta = Q(jump now) - Q(bc)`, label
+`P(delta > 0)` by bootstrap over the sixteen draws, loss weighted by
+`|E delta|`, 3600 points from the teacher's and the learner's states.
+
+The first table said the weighting hurt — plain AUC 0.548 with it against
+0.668 without. That comparison was rigged by construction: plain AUC counts
+every decision alike, which is exactly the objective the unweighted model
+minimises and exactly what the weighted model is built to ignore. Scoring each
+pair by how much is at stake gives the fair table:
+
+    input        weighting    AUC    AUC weighted by stake
+    strip        yes         0.548          0.587
+    strip        no          0.668          0.525
+    strip, no speed  no      0.675          0.534
+    console RAM  no          0.740          0.661
+    console RAM  yes         0.609          0.670
+
+Each model wins on its own objective, so "the weighting hurts" is withdrawn.
+What survives the change of metric is the input:
+
+**The console's own state carries substantially more of this signal than the
+pixels do** — 0.670 against 0.587 on the stake-weighted measure, 0.740 against
+0.668 on the plain one. That is the clearest evidence yet that perception is
+not closed for a controller of this shape, against the earlier claim that it
+was closed on the strength of the value experiments.
+
+**Removing hero velocity changes nothing** — 0.668 to 0.675 plain, 0.525 to
+0.534 weighted. The shortcut that produced the six-way student's `wait`
+attractor is not what carries the binary gate, so that hypothesis does not
+generalise past the task that produced it.
+
+None of this is yet useful. The privileged gate's operating points:
+
+    threshold  jumps   false positives  false negatives
+       0.5     15.8%        10.3%            65.4%
+       0.6      6.1%         3.3%            84.4%
+       0.7      2.3%         0.8%            92.7%
+
+Jumping is right in 22.6% of decisions; at the only threshold with a tolerable
+false-positive rate it finds a third of them. A gate this conservative is
+close to being the policy with extra steps.
+
+## Neither data nor epochs: the models memorise (2026-08-25)
+
+Training AUC separates "not enough data" from "not enough information", and
+answers a third question as well. All three collections merged, 3597 training
+points against the earlier 2807:
+
+    input        epochs   train AUC   test AUC   test weighted by stake
+    console RAM      40       0.858      0.730            0.533
+    console RAM     150       0.919      0.734            0.568
+    pixels          150       0.974      0.674            0.524
+
+Four times the training and a quarter more data move the training fit and
+leave the test where it was — 0.730 to 0.734. The pixel model fits its
+training states almost perfectly, at 0.974, and generalises worst of the
+three.
+
+So the limit is neither information (the inputs clearly carry the label on
+states the model has seen), nor capacity (it fits them), nor, in this range,
+data volume. It is transfer. Each decision point is close to unique in the
+representation the network is given, so it memorises instead of generalising.
+
+That is an argument about features rather than about scale: "there is a pit
+thirty pixels ahead" is one fact across many states, and a raw crop makes
+every instance of it look different. The console's own state does better —
+0.730 against 0.674 — because a few of its bytes are that kind of fact
+already.
+
+(803 test points, so the standard error on an AUC is about 0.02: the 0.06
+between privileged and pixels is real, the 0.004 between 40 and 150 epochs is
+not.)
+
+## F1 fires, and the split was never a split (2026-08-25)
+
+Two instruments, no new features. Four rotated folds, both inputs, every AUC
+reported separately on the points where the tracker agrees with the console
+about where Mario is and on the points where it does not:
+
+    input        AUC   stake   train   hero ok   hero lost    kNN   kNN RP
+    pixels     0.562   0.670   0.725     0.560       0.518  0.707    0.665
+    console    0.608   0.700   0.661     0.575       0.610  0.746    0.734
+
+    console minus pixels, all points  +0.046  (+0.070, +0.080, -0.002, +0.037)
+    console minus pixels, hero ok     +0.014  (+0.062, +0.025, -0.049, +0.019)
+    console minus pixels, hero lost   +0.092  (+0.005, +0.196, +0.045, +0.121)
+    population: hero ok 73%, hero lost 27%
+
+**The advantage of console memory lives in the quarter of frames where the
+tracker has lost Mario.** Where it has him — the only regime a deliverable
+operates in — the two inputs are within noise, and one fold is negative. The
+earlier claim that "the console's own state carries substantially more of this
+signal than the pixels do", and the conclusion drawn from it that perception is
+not closed for a controller of this shape, are withdrawn: that was a mixture of
+two populations reported as one number.
+
+Worse, and more useful. A training-free k-NN readout on the same features and
+the same split scores 0.707 where the trained network scores 0.562, and a
+random projection of the same width scores 0.665. So nearest-neighbour
+structure is mostly generic — and that pointed at the reason:
+
+    distance in world x from a held-out point to the nearest training point
+      exactly 0 px   74.6%
+      within  2 px   95.6%
+      within  4 px   99.3%
+      within  8 px  100.0%
+
+**Every run walks through the same level.** Splitting by run does not separate
+the states: a held-out point almost always has a near-twin in training, at the
+same place in 1-1, and copying its label works. Memorising the level is a
+viable strategy that survives a by-run split, which is exactly the strategy the
+train/test gap said the network was using.
+
+So every test AUC in this project's gate and chooser experiments is optimistic,
+including the ones used to reject designs. A split that measures transfer has
+to hold out a region of the level by world x, or another level entirely. That
+is the next change, and it comes before any feature work.
+
+## Forty-five percent of the training set was a tie taught as a refusal (2026-08-26)
+
+300 states, each labelled twice by an independent sixteen-draw matrix from the
+*same* save state, so the label's own Monte Carlo variance is measurable
+rather than assumed.
+
+The first thing it showed was not about variance. In **40%** of decisions,
+jumping and deferring produce **byte-identical** futures — the same returns in
+all sixteen draws, in both repeats. 88% of those are airborne states, against
+32% of the rest: the button does nothing because Mario is already in the air.
+
+In `draw_matrix_all.npz`, the set the gate trained on, that fraction is
+**45.0%**. And the gate's label is `P(delta > 0)` by bootstrap, which on an
+exact tie is **0** — so nearly half the training points said *certainly do not
+jump* about a decision that has no consequence either way. That is a
+mechanical push towards exactly the majority-`bc` collapse the DAgger student
+showed, and it is a bug in the target rather than a property of the problem.
+
+With the ties dropped, 180 states:
+
+    Monte Carlo sd of the label      9.1 px
+    spread between candidates       19.5 px
+    sd of delta across all states   50.6 px
+
+    representation   close pairs   hidden (excess)   distant pairs   hidden/spread
+    strip                51.2 px          50.3 px         50.1 px            2.58
+    oam                  51.2 px          50.3 px         50.2 px            2.58
+    console RAM          44.1 px          43.1 px         53.4 px            2.21
+
+Knowing two states look alike constrains their answers barely at all: the
+closest half-percent of pairs differ about as much as arbitrary pairs, and the
+variation hidden by the representation is 2.2 to 2.6 times the spread a
+chooser has to resolve. Console RAM is the only one that constrains anything
+(44.1 against 53.4 for distant pairs).
+
+**The caveat is large and structural.** With 180 points in a thirteen-thousand
+dimensional space, the "closest 0.5% of pairs" are not close in any absolute
+sense — the threshold lands at 17.1 standardised units. This bounds the
+question rather than answering it: it says these representations do not
+collapse states usefully at the sample size available, not that no
+representation could. Answering it properly needs either many more points or a
+representation low-dimensional enough for near-duplicates to exist, which is
+the argument for the surface profile stated as a measurement instead of a
+hope.
+
+## Eighty thousand labels, and the answer is no (2026-08-26)
+
+Every offline number in this project came from a few thousand decisions,
+because a label cost 9360 emulator frames. Two candidates and four draws cost
+848, and storing the 48x48x6 input instead of the frame costs 14 kB instead of
+161, so eight parallel shards produced **80000 labelled decisions** in an
+afternoon — eighteen times the whole previous corpus. The question that buys
+is direct: is the crop a bad representation, or an under-fed one?
+
+Two splits, because they ask different things. By run is new playthroughs of a
+level already seen. By world x, in quantile blocks with a 320 px buffer purged
+around the test region, is ground the model has not seen.
+
+    split            2500 points      largest        n
+    by run          0.537 ± 0.041   0.568 ± 0.005   35000
+    by world x      0.498 ± 0.051   0.421 ± 0.007   29854
+
+**On known ground, fourteen times the data buys +0.031 of AUC.** The variance
+across seeds collapses from ±0.041 to ±0.005: the model becomes stable, and
+stably mediocre. Reaching a useful 0.85 this way is not a matter of more
+shards.
+
+**On unseen ground it goes below chance and stays there.** 0.421 with a spread
+of 0.007 across three seeds is not "failed to learn" — that would be 0.50 with
+a wide spread. It is a rule that transfers with the wrong sign: what the model
+finds is tied to the geography it was trained on, and in a different stretch
+of level the same appearance calls for the opposite action. More data makes it
+more confidently wrong.
+
+A third measurement explains part of every earlier gate number. With ties
+labelled as they were — probability zero, "certainly do not jump" — the same
+model on the same split scores **0.630 ± 0.001** against **0.568 ± 0.005** with
+ties at 0.5. A tie is almost always an airborne state, so the network was
+being paid 0.062 of AUC for detecting flight, which is easy and says nothing
+about the decision. Every gate AUC reported before 2026-08-26 carries that
+component.
+
+So the answer to "why not just use the screen" is measured rather than
+argued: the screen is what we feed, and with eighteen times the labels the
+model learns the place rather than the decision. That is the case for a
+representation in which two stretches of level that call for the same action
+look the same — which is what the surface profile is for, and it now has a
+competitor with an honestly measured zero.
+
+## Correction: that was one block, and the spread was across seeds (2026-08-26)
+
+The section above reports 0.421 ± 0.007 on ground held out by world x and reads
+it as a rule transferring with the wrong sign. Four audits say otherwise, and
+the headline is withdrawn.
+
+**The block was degenerate.** Fold 3's test range is `x = [593, 601]` — nine
+pixels of level holding 10113 points, because runs pile up where they get
+stuck. That is one location, not a region, and ±0.007 was the spread across
+model initialisations on it, not across geography.
+
+All eight blocks, same training size, one seed each:
+
+    block   test    pool  trained    AUC   share +
+        0   9984   54006    15000  0.745     0.219
+        1  10000   38101    15000  0.380     0.201
+        2   9839   15641    15000  0.475     0.471
+        3  10113   29854    15000  0.449     0.504
+        4   8961   28841    15000  0.509     0.207
+        5  11103   35215    15000  0.523     0.262
+        6   9999   30437    15000  0.586     0.254
+        7  10001   65456    15000  0.388     0.130
+
+    macro-average 0.507 ± 0.111, range 0.380 to 0.745, 4 of 8 above chance
+
+**On unseen ground the model is at chance on average**, with block-to-block
+variation an order of magnitude larger than the seed-to-seed variation that
+was mistaken for it. It transfers well to the level's opening (0.745) and
+inverts on two other stretches. "Systematically wrong" is not supported;
+"unreliable, and the unreliability is geographic" is.
+
+**The purge is audited, not assumed.** Across all eight blocks: zero training
+points whose 120 px input window overlaps the test range, and zero whose
+candidate branch or 96-frame continuation can reach it at 2.5 px per frame.
+The 320 px buffer exceeds the 280 px of actual reach.
+
+**Fourteen times the data was not fourteen times the diversity.**
+
+    2500 points → 892 distinct world x, 2.8 revisits each
+    80000       → 2123 distinct,       37.7 revisits each
+
+Thirty-two times the points bought 2.4 times the places. What the extra data
+buys is repeated observation of ground already seen, which is why it collapses
+the seed spread and adds almost no transferable signal.
+
+**A single bit beats the network.** `airborne`, one boolean from console
+memory, scores AUC 0.583 on its own. The trained CNN on 35000 points scores
+0.568. Among ground states alone the same bit scores exactly 0.500, as it
+must. So the earlier claim that ties were worth 0.062 of AUC as a flight
+detector is narrowed: differences of AUC do not decompose additively, but the
+single-feature baseline is now measured and our model does not clear it.
+
+Withdrawn from the section above: "raw pixels tested at scale and rejected",
+"more data makes it more confidently wrong", and the additive attribution of
+0.062. What survives: repeated traversals of one level do not buy transfer,
+and the current pixel model does not beat a one-bit baseline.
+
+## The cheap label is fine; the target has its own ceiling (2026-08-26)
+
+Eighty thousand decisions were collected at four draws rather than sixteen,
+because that is eleven times cheaper. On the six-candidate task four draws
+agreed with sixteen on 69.1% of top-1 picks, so the binary target needed its
+own audit before anything rested on it. All of it offline, from the 300 states
+that carry two independent sixteen-draw labels each, with panels of four cut
+from those sixteen. Exact ties are dropped — 121 of 300 — because they would
+count as perfect agreement and flatter every number.
+
+    sign of delta agrees, 4 draws against another 4 on the same state   0.709
+    sign of delta agrees, 4 draws against an independent 16             0.704
+    sign of delta agrees, 16 draws against an independent 16            0.754
+
+    as a ranking of the independent sixteen-draw value
+      4-draw label    AUC 0.839
+      16-draw label   AUC 0.865
+
+    sd of a 4-draw delta, two panels on one state    18.8 px
+    sd of delta across states                        51.0 px
+
+**Four draws did not trade quality for quantity.** Against an independent
+sixteen it reproduces the sign 0.704 of the time where sixteen manages 0.754,
+and it ranks the true value at 0.839 against 0.865. The eleven-fold saving
+cost about three points of AUC.
+
+**But sixteen draws do not agree with themselves either**, and that is the
+more useful number. A label's sign reproduces 75% of the time, because the
+decisions are mostly close:
+
+    |delta| below  5 px in 38% of live decisions
+    |delta| below 10 px in 47%
+    |delta| below 20 px in 56%
+
+Nearly half of all real decisions are near-ties where the sign is close to
+arbitrary. So a sixteen-draw label reproduces another one at about **0.865 of AUC**.
+That is the label's test-retest reliability, not a ceiling: a model estimating
+the latent expectation could in principle rank a single noisy panel better
+than another noisy panel does. It is the reference the numbers below are read
+against, not a bound on them.
+
+Which puts the day's results in their place:
+
+    reference: a sixteen-draw label predicting another  0.865
+    a single airborne bit                              0.583
+    the trained network, 35000 points, ties fixed      0.568
+
+There is real headroom between 0.57 and 0.87, and the difference between 0.839
+and 0.865 has not had a paired bootstrap over the 179 states it rests on. The
+practical conclusion is narrow and safe: four draws are good enough for bulk
+collection, and the model is failing well short of the label's own
+reliability without clearing a one-bit baseline.
+
+## The binary gate's premise does not hold across levels (2026-08-26)
+
+Before building a representation for a {bc, jump now} gate, the premise was
+checked where it had never been: on other levels. Five development levels,
+eight paired seeds each, three arms — the policy, an oracle restricted to
+{bc, jump now}, and the full six-candidate oracle. Levels 7-1 and 8-1 are held
+back and not opened.
+
+    level      BC   oracle-2 vs BC        oracle-6 vs BC        share
+    2-1     16496   +856 [ +646, +1068]   +928 [ +855, +1019]     92%
+    3-1     32336   +400 [ +305,  +497]   +377 [ +260,  +511]    106%
+    4-1     48876   +400 [ -161,  +885]  +1991 [+1063, +3374]     20%
+    5-1     64612   +166 [ -209,  +577]  +1146 [ +748, +1574]     14%
+    6-1     80337   +637 [ +122, +1221]  +1206 [ +696, +1682]     53%
+
+    share of the six-candidate gain taken by two candidates: 57% ± 37%
+    (on 1-1 it was 24%)
+
+**Jumping is not a stable second candidate.** The fraction of the planner's
+advantage that {bc, jump now} recovers ranges from 14% to 106% across five
+levels, and on two of them the gate's own gain has an interval crossing zero.
+A cross-level binary gate on this pair is not justified by the data, whatever
+representation it is given.
+
+**And the planner's advantage is itself a 1-1 number.** The six-candidate
+oracle gains +377 to +1991 on these levels against +4590 on 1-1 — four to
+twelve times less. Every ratio quoted in this project against "the ceiling"
+was quoted against the most favourable level in the game.
+
+What is stable is the shape of the oracle's choice: it defers to the policy
+43-63% of the time on every level, and no single template takes more than 15%
+of the rest. So the decision the planner is making is not "jump or not" — it
+is a genuinely six-way choice, and the same on every level tested.
+
+## The tile map was not found by matching, and is not being guessed (2026-08-26)
+
+The privileged geometry input needs an exact structured description of the
+ground, and the natural source is the console's own tile map. Where it lives
+was searched for the same way Mario's coordinates were — by matching every
+candidate window in RAM against what the pixels show — rather than taken from
+memory or a wiki.
+
+41 camera-aligned frames (only those where the scroll sits on a tile boundary,
+so a column of pixels maps to exactly one column of the map), 12 rows by 15
+columns, every offset from $400 to $760 read as two screens of 13x16 stored
+column-major:
+
+    baseline, predict empty everywhere    plain 0.822, balanced 0.500
+    best window found, $63a               balanced 0.623
+
+Plain agreement is useless here because 82% of cells are empty and predicting
+nothing scores 0.822 — higher than any window scored. On balanced accuracy the
+best candidate reaches 0.623, which is above chance but nowhere near a decoded
+map.
+
+So the search failed, and the honest reading is that the pixel mask it was
+matched against is not clean enough for this: it flags clouds, bushes, enemies
+and text as "solid", none of which the map stores that way. Fixing that means
+either a better solidity ground truth or a different matching signal.
+
+Recorded rather than resolved, and the privileged geometry input will not be
+built on a guessed address. The alternative for the battery is geometry
+derived from the pixel mask itself, which is not privileged and therefore not
+an upper bound — a limitation to state rather than paper over.
+
+## A physics reference finds the map, and turns out to be the better artefact (2026-08-26)
+
+The pixel-based search failed because the reference was wrong. Physics gives a
+clean one: Mario's body cannot overlap a solid tile, so every tile his box
+covers is empty — thousands of certain labels a run — and when he is standing,
+the tile under his feet is solid. Tiles with no evidence stay unknown and are
+not scored.
+
+Against that reference, sweeping every window in $400-$520, row-major against
+column-major, seven row offsets and all 32 ring phases:
+
+    level 1-1   balanced 0.991
+    level 3-1   balanced 0.997
+    baseline, predict empty everywhere    0.500
+
+**A window in RAM does decode the geometry**, at 99% balanced accuracy on two
+levels independently, and the family of equally-scoring solutions is periodic
+in 32 bytes — so the map is row-major with 32 bytes to a row, two screens
+wide, in the $400-$500 region.
+
+What is *not* pinned is the exact address: base and ring phase are degenerate
+against each other (shifting the base one byte is shifting the phase one
+column), and the best pair differs between the two levels in a way one global
+rule has not yet explained. So the address stays unquoted.
+
+It does not need to be. **The contact map is itself the structured exact
+geometry the battery needs** — true solidity in world tile coordinates,
+derived from what the console let Mario do rather than from an address taken
+on faith. It is privileged, it is exact where it has evidence, and it says so
+where it does not. The detour produced a better artefact than the thing it was
+chasing.
+
+## The battery answers: nothing beats a bit and a velocity (2026-08-28)
+
+Seven inputs, one head, BC-centred advantage regression, leave-one-level-out
+over six levels, three seeds, ~14800 stratified decision points with full
+save-states. Macro over held-out levels:
+
+    input                     regret  weighted   top1   captured
+    airborne + velocity        17.9     67.1    0.161   0.221 +/- 0.012
+    pixels (strip)             17.8     67.0    0.166   0.224 +/- 0.007
+    geometry profile           18.1     62.9    0.210   0.216 +/- 0.005
+    geo + history              18.4     63.0    0.224   0.205 +/- 0.006
+    geo + hist + objects       18.6     65.2    0.219   0.195 +/- 0.010
+    ...+ BC probabilities      18.5     64.2    0.228   0.198 +/- 0.005
+    everything + pixels        18.7     65.0    0.187   0.187 +/- 0.008
+
+**Every input captures the same ~20% of the oracle's per-decision gain, and
+it is the same 20% the two-scalar baseline captures.** The exact contact-map
+geometry, the sprite positions, the action history and the policy's own
+probabilities add top-1 agreement (0.16 to 0.23) but no captured value —
+they help pick among near-ties, not among the decisions that matter. On
+level 5-1 every input goes negative.
+
+Perception was not the bottleneck for value estimation, and now the
+richest privileged description of the *present* is not the bottleneck for
+choice either. What separates the oracle from every model in this battery is
+that the oracle looks at the future. The information that decides the choice
+is not in the current state as we can describe it — which is the epistemic
+POMDP reading: the value of a candidate depends on how the stochastic
+continuation unrolls, and no static description of now predicts that
+beyond ~20%.
+
+The honest reading of the whole programme so far: distillation of this
+oracle into a reactive chooser has a low information-theoretic ceiling, and
+the working direction is the one the research synthesis put last month —
+use the learner to allocate the planner's compute, not to replace the
+planner's look at the future.
+
+## The prior fails its offline gate: thinning beats pruning (2026-08-28)
+
+Four procedures simulated from the stored per-draw returns, macro over six
+held-out levels, three seeds:
+
+    procedure    rollouts   regret
+    full               24    0.00 px      (by construction)
+    uniform-2          12    2.84 px
+    prior-3            12    5.22 px
+    prior-soft         15    3.65 px
+
+    top-3 recall of the true best         0.723
+    pruned candidate wins substantially   9.5% of decisions
+
+At matched compute, **uniformly halving the draws beats letting the prior
+prune candidates** — 2.84 px against 5.22 — and the soft allocation loses to
+plain thinning while paying more. The prior keeps the truly best candidate in
+its top three only 72% of the time, and in one decision out of ten the
+candidate it discards wins by more than sixteen pixels. Rollouts are cheap to
+thin because the noise averages; candidates are expensive to prune because a
+dropped best is unrecoverable.
+
+So the pre-registered offline gate for D1 fails and the online run does not
+happen — which is the gate doing its job. The learner has now been priced in
+all four roles this programme defined for it: value estimator (~zero over a
+constant online), chooser (below a one-bit baseline), DAgger student (below
+the majority class), and compute allocator (below uniform thinning). All four
+failures are consistent with the battery's finding: the information that
+decides is not a function of the present state under any description tried.
+
+## The last two arms: memory loses, thinning holds (2026-08-28)
+
+**Episodic memory loses to the policy it was meant to improve.** Steering by
+the oracle's own stored decisions — five nearest within 32 px of world x,
+3600 points of memory on 1-1, RAM-keyed, zero rollouts at runtime:
+
+    bc            median 787   clears  0/32   deaths 70      +0
+    knn memory    median 609   clears  0/32   deaths 45   -209 [-354, -60]
+
+The offline story (k-NN at 0.707 beating every net) does not survive contact
+with the closed loop, for the reason that killed every student: the memory's
+choice perturbs the trajectory, the perturbed trajectory leaves the memory's
+coverage, and where the memory is silent or stale its committed 16-frame
+templates are worse than the policy's own reflexes. Fewer deaths, less
+progress — the cautious signature again.
+
+**Halving the draws holds up online.** The oracle at two draws instead of
+four, same seeds:
+
+    oracle 2 draws   median 5116   clears 16/32   deaths 34   +3966 [+3124, +4765]
+    oracle 4 draws   median 7117   clears 20/32   deaths 20   +4590 (recorded)
+
+Offline the thinning cost 2.84 px per decision; online it keeps roughly 86%
+of the four-draw advantage at 55% of the branch frames (263k against 487k a
+run). Not free — the compounding is real — but the compute-progress trade is
+now a measured curve with three points (1, 2, 4 draws), and it is the only
+lever in the whole programme that moved anything without learning.
