@@ -132,7 +132,8 @@ def run(checkpoint: str, game: str, state: str | None, frames: int, seed: int,
         corrupt: float = 0.0, knn_memory: str = "", gate: bool = False,
         gate_fp: float = 0.0, gate_fn: float = 0.0,
         adaptive: float | None = None, adaptive_g2: float = 0.0,
-        crn: bool = False) -> dict:
+        crn: bool = False, two_step: bool = False,
+        death_price: float = 0.0) -> dict:
     from nes_player.emulator.controller import BUTTONS
     from nes_player.emulator.stable_retro import StableRetroAdapter
     from nes_player.perception.motion import pick_hero
@@ -201,6 +202,14 @@ def run(checkpoint: str, game: str, state: str | None, frames: int, seed: int,
     tracker = (SpriteTracker() if ((ghost or probe) and not ram_hero) or video
                else None)
     cands = templates(horizon) if horizon else []
+    if two_step and horizon:
+        # Two-step search: every ordered pair of the five behaviours, each at
+        # half the horizon. The one thing a single template cannot express is
+        # a composition — run up, then jump — and the big pits want exactly
+        # that. The policy's own plan stays in as the 26th candidate.
+        halves = templates(horizon // 2)
+        cands = [(f"{n1}+{n2}", p1 + p2)
+                 for n1, p1 in halves for n2, p2 in halves]
     best_x, deaths, lives = 0, 0, (obs.debug or {}).get("lives")
     chosen: Counter = Counter()
     held: list = []
@@ -363,8 +372,7 @@ def run(checkpoint: str, game: str, state: str | None, frames: int, seed: int,
                                                          tail, repeat,
                                                          tail_temp))
                         branch_frames += extra
-                        outs.append((gone, 0.0 if gone
-                                     else mario_x(env) - x0))
+                        outs.append((gone, mario_x(env) - x0))
                     # The continuation consumed the policy's frame
                     # stack; the next candidate must start from the
                     # same history this one did.
@@ -374,10 +382,21 @@ def run(checkpoint: str, game: str, state: str | None, frames: int, seed: int,
                         # in and the trigger has spoken.
                         pend.append((name, plan, mid, o, outs))
                         continue
-                    dead_n = sum(g for g, _ in outs)
-                    died = dead_n * 2 > draws
-                    val = DEATH if died else float(np.mean(
-                        [x for g, x in outs if not g]))
+                    if death_price:
+                        # Death as a price, not a veto. The majority rule
+                        # makes a death in the minority of draws free —
+                        # the dead draw simply leaves the mean — which is
+                        # exactly the slack the two-step arm exposed. Here
+                        # every draw counts: a dead one contributes the x
+                        # it reached minus the price, so the value is
+                        # E[progress] - price * P(death).
+                        val = float(np.mean(
+                            [x - death_price * g for g, x in outs]))
+                    else:
+                        dead_n = sum(g for g, _ in outs)
+                        died = dead_n * 2 > draws
+                        val = DEATH if died else float(np.mean(
+                            [x for g, x in outs if not g]))
                 else:
                     val = DEATH if died else mario_x(env) - x0
                 scored.append((val, name, plan))
@@ -612,6 +631,15 @@ def main() -> int:
                     help="how many futures to average the tail over, "
                          "so the value is an expectation rather than "
                          "one realised continuation")
+    ap.add_argument("--death-price", type=float, default=0.0,
+                    help="px subtracted from a draw that dies, instead of "
+                         "the majority-death veto; prices P(death) into the "
+                         "value where the veto makes minority deaths free")
+    ap.add_argument("--two-step", action="store_true",
+                    help="search ordered pairs of the five behaviours at half "
+                         "the horizon each (25 pairs + the policy's own "
+                         "plan), so compositions like run-up-then-jump "
+                         "become expressible; use with --horizons 96")
     ap.add_argument("--crn", action="store_true",
                     help="common random numbers for the continuation draws, "
                          "keyed by (seed, world x, candidate, draw index): "
@@ -696,6 +724,10 @@ def main() -> int:
             name += f" adaptive={args.adaptive:g}"
         if args.crn and horizon:
             name += " crn"
+        if args.two_step and horizon:
+            name += " two-step"
+        if args.death_price and horizon:
+            name += f" dp={args.death_price:g}"
         if use_probe:
             name = f"probe h={horizon}"
         if args.gate and horizon:
@@ -721,7 +753,8 @@ def main() -> int:
                       args.gate,
                       args.gate_fp, args.gate_fn,
                       None if horizon is None else args.adaptive,
-                      args.adaptive_g2, args.crn)
+                      args.adaptive_g2, args.crn, args.two_step,
+                      args.death_price)
             rows.append(row)
             print(json.dumps({"arm": name, **row}), flush=True)
         arms[name] = rows

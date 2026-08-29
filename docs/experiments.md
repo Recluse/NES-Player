@@ -4198,3 +4198,112 @@ decision's state, which is what makes "identical until a genuine
 difference" a property rather than a hope. Anyone returning to draw
 allocation should measure per-decision on the stored matrices and treat
 online runs at this scale as a smoke test, not a verdict.
+
+## A longer tail buys nothing (2026-08-28)
+
+The cheapest item on the improve-the-oracle list: value the same 48-frame
+plans under a 144-frame continuation instead of 96, on the CRN harness, 32
+paired seeds against the stored tail-96 run:
+
+    tail-96    +3827.5 [3044, 4592]   264k frames   15/32 clears   32 deaths
+    tail-144   +3662.1 [2841, 4530]   367k          14/32          30
+
+    tail-144 − tail-96   −165  [−1323, +958]   15 wins / 16 losses / 1 tie
+
+The hypothesis was that pits and enemies beyond the 96-frame horizon are
+invisible to the value and a longer look would remove late deaths. Deaths
+barely moved (30 against 32) and progress did not follow at all, at +39%
+frames. By the standing rule — behavioural changes without measurable gain
+are rolled back — the tail stays at 96. Same caveat as everything at this
+scale: the CI spans ±1100, so this certifies "no large effect", not "no
+effect"; but a change that costs 39% more compute carries the burden of
+proof, and it showed nothing.
+
+## Two-step search: no progress, half the deaths (2026-08-28)
+
+Ordered pairs of the five behaviours at 48 frames each — 25 compositions
+plus the policy's own 96-frame plan — against the same six-candidate
+oracle, both at two draws on the CRN harness, 32 paired seeds:
+
+    o2, 6 candidates    +3827.5 [3044, 4592]    264k    15/32   32 deaths
+    two-step, 26        +3675.9 [2957, 4414]   1388k    13/32   14
+    (o4, 6 candidates   +4081.8 [3251, 4889]    475k    17/32   28)
+
+    two-step − o2   −152  [−1295, +1004]   16 wins / 16 losses
+
+On progress the verdict is the usual one: dead even at 5.3× the compute,
+so by the no-gain rule the six-candidate set keeps the wheel. The
+compositions are genuinely used — the policy's plan takes only 40% of
+decisions, and `jump later+jump now`, `back off+jump now` lead the rest —
+they just do not buy pixels.
+
+What they do buy is the first sub-planner-sized effect this online
+harness has ever resolved: **deaths halve, 1.00 → 0.44 per run, paired
+−0.56 [−1.03, −0.09]** — the interval excludes zero, fifteen seeds
+improve against eight that worsen. Deaths are a far lower-variance
+outcome than best_x, which is why the same 32 seeds that cannot see a
+150-pixel effect can see this one. The reading: 96-frame compositions
+let the planner refuse doomed commitments that a 48-frame template
+cannot express its way out of, and the safety does not convert into
+progress because the value being maximised is progress px — survival is
+only rewarded through its contribution to x. A planner whose objective
+priced death explicitly would presumably trade some of this safety back
+for speed; that is a design question, not a measurement, and it is left
+here as one.
+
+## Four draws do not rescue the compositions (2026-08-29)
+
+The overnight control for the optimizer's curse: the same 26-candidate
+two-step search, four draws instead of two, so its values are as clean as
+the best fixed-budget oracle's. CRN, 32 paired seeds:
+
+    o2                +3827.5    264k    15/32   32 deaths
+    o4                +4081.8    475k    17/32   28
+    two-step, 2 draws +3675.9   1388k    13/32   14
+    two-step, 4 draws +3466.7   2296k    12/32   18
+
+    ts4 − ts2   −209  [−1301, +884]    15/17
+    ts4 − o4    −615  [−1833, +611]    16/16
+
+Cleaner evaluation moved nothing: the two-step arm sits where it sat,
+now at 8.7× the six-candidate cost. The curse is refuted as the
+explanation — the compositions genuinely do not buy progress on this
+level. The safety effect survives at four draws (deaths −0.44
+[−0.84, −0.03] against o2), confirming it was never an artefact of
+noisy values.
+
+That closes the improve-the-oracle list as far as flags reach: a longer
+tail buys nothing, compositions buy safety the progress objective cannot
+spend, and self-tail is ~54× — out of reach of this machine. The
+six-candidate, uniform-draws oracle remains the reference planner, now
+having defended its title against every cheap challenger.
+
+## The death price changes nothing, and the matrices say why (2026-08-29)
+
+The structural follow-up to the two-step safety finding: price death into
+the value instead of vetoing it. `--death-price P` makes every draw count
+— a dead one contributes the x it reached minus P — so the value becomes
+E[progress] − P·P(death), where the majority-veto rule made a death in
+the minority of draws free.
+
+Two prices, 400 and 1000 px, CRN, 32 paired seeds each:
+
+    dp400  − o2 veto    0.0   [0, 0]   0 wins / 0 losses / 32 ties
+    dp1000 − o2 veto    0.0   [0, 0]   0 / 0 / 32
+
+Byte-identical, all sixty-four runs. Not one of ~11,400 decisions changed
+its argmax. The stored matrices explain it: across 14,809 decision points
+on six levels there is **not a single candidate that dies in a minority
+of its draws** — if a plan leads to death, both draws die; if it does
+not, neither does. On this candidate set death is a deterministic
+property of the plan, P(death) is 0 or 1, and the veto and the price are
+the same rule wearing different clothes. The freebie the price was meant
+to close does not exist here.
+
+Which sharpens the two-step finding into its real shape: the halved
+deaths did not come from better death accounting — the six-candidate
+oracle's accounting was already exact — they came from a richer plan
+space in which an escape exists that the six templates cannot express.
+The lever is the candidate set, not the objective. A cheap corollary
+experiment would be the six templates plus a handful of hand-built
+escape compositions rather than all 25 pairs; left on the list.
