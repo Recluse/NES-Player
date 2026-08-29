@@ -133,7 +133,7 @@ def run(checkpoint: str, game: str, state: str | None, frames: int, seed: int,
         gate_fp: float = 0.0, gate_fn: float = 0.0,
         adaptive: float | None = None, adaptive_g2: float = 0.0,
         crn: bool = False, two_step: bool = False,
-        death_price: float = 0.0) -> dict:
+        death_price: float = 0.0, escapes: bool = False) -> dict:
     from nes_player.emulator.controller import BUTTONS
     from nes_player.emulator.stable_retro import StableRetroAdapter
     from nes_player.perception.motion import pick_hero
@@ -210,6 +210,15 @@ def run(checkpoint: str, game: str, state: str | None, frames: int, seed: int,
         halves = templates(horizon // 2)
         cands = [(f"{n1}+{n2}", p1 + p2)
                  for n1, p1 in halves for n2, p2 in halves]
+    elif escapes and horizon:
+        # The cheap corollary of the two-step result: its safety came from
+        # compositions the six templates cannot express, and three pairs
+        # carried most of its choices. Add just those to the plain set, so
+        # the escape hatch exists at a fraction of the 26-candidate cost.
+        t = dict(templates(horizon // 2))
+        cands += [(f"{a}+{b}", t[a] + t[b]) for a, b in
+                  (("jump later", "jump now"), ("back off", "jump now"),
+                   ("jump later", "jump later"))]
     best_x, deaths, lives = 0, 0, (obs.debug or {}).get("lives")
     chosen: Counter = Counter()
     held: list = []
@@ -631,6 +640,10 @@ def main() -> int:
                     help="how many futures to average the tail over, "
                          "so the value is an expectation rather than "
                          "one realised continuation")
+    ap.add_argument("--escapes", action="store_true",
+                    help="add the three rescue compositions the two-step "
+                         "search actually used to the plain template set; "
+                         "use with --horizons 96")
     ap.add_argument("--death-price", type=float, default=0.0,
                     help="px subtracted from a draw that dies, instead of "
                          "the majority-death veto; prices P(death) into the "
@@ -728,6 +741,8 @@ def main() -> int:
             name += " two-step"
         if args.death_price and horizon:
             name += f" dp={args.death_price:g}"
+        if args.escapes and horizon:
+            name += " escapes"
         if use_probe:
             name = f"probe h={horizon}"
         if args.gate and horizon:
@@ -754,7 +769,7 @@ def main() -> int:
                       args.gate_fp, args.gate_fn,
                       None if horizon is None else args.adaptive,
                       args.adaptive_g2, args.crn, args.two_step,
-                      args.death_price)
+                      args.death_price, args.escapes)
             rows.append(row)
             print(json.dumps({"arm": name, **row}), flush=True)
         arms[name] = rows

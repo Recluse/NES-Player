@@ -4307,3 +4307,75 @@ space in which an escape exists that the six templates cannot express.
 The lever is the candidate set, not the objective. A cheap corollary
 experiment would be the six templates plus a handful of hand-built
 escape compositions rather than all 25 pairs; left on the list.
+
+## The escapes work — against the right baseline (2026-08-29)
+
+Three hand-picked compositions — the pairs the 26-candidate search
+actually used — added to the plain template set at 96 frames, with the
+control nobody had run: the plain six templates at 96 frames. CRN, 32
+paired seeds:
+
+    o2, h=48, 6 cand      +3827.5    264k   15/32   32 deaths
+    h=96, 6 cand          +1978.1    304k    7/32   63
+    h=96, 6+3 escapes     +3540.7    474k   13/32   28
+    (two-step, 26 cand    +3675.9   1388k   13/32   14)
+
+    escapes − h96 plain   +1563  [+529, +2564]   27 wins / 5 losses
+    escapes − o2 h48       −287  [−1276, +723]   15 / 17
+    h96 plain − o2 h48    −1849  [−2937, −698]    5 / 26
+    escapes − two-step     −135  [−1231, +945]   15 / 17
+
+Three findings, two of them clearing the noise floor with room to spare.
+
+**Monolithic 96-frame templates are toxic.** The control collapses:
+half the progress, double the deaths of the same behaviours at 48
+frames. An open-loop "run" held for 96 frames is a commitment nothing
+can rescue; the 48-frame horizon was never an arbitrary choice, it was
+load-bearing.
+
+**Compositions repair almost all of it.** Adding just three rescue
+pairs buys +1563 paired pixels (CI well clear of zero) and halves the
+deaths against the monolithic-96 control (−1.09 [−1.69, −0.50]). And
+they carry the whole composition value: against the full 25-pair search
+the three hand-picked pairs are dead even at a third of the cost.
+
+**The champion stands.** Against the 48-frame six-candidate oracle the
+escapes are noise (−287) at 1.8× the cost. So the two-step story ends
+re-attributed once more: its safety was never something a richer space
+adds to a healthy planner — it is what compositionality gives back
+after long open-loop plans take it away. At this game's tempo, six
+short templates replanned every 16 frames already sit at the local
+optimum, and every structural variation tried today lands at or below
+it for more compute.
+
+## The planner transfers online: five levels, five positives (2026-08-29)
+
+The online economics had only ever been measured on 1-1. The same
+oracle-2 (six candidates, 48-frame horizon, 96-frame tail, two draws,
+CRN) against the same policy on every other dry land level, 32 paired
+seeds each:
+
+    level    bc median -> oracle     paired gain            w/l    deaths o/bc
+    2-1        16436   ->  17416     +800  [ +666,  +923]   31/1     65/68
+    3-1        32401   ->  32669     +509  [ +339,  +710]   31/1     86/63
+    4-1        49188   ->  50292    +2483  [+1662, +3391]   31/1     59/62
+    5-1        64516   ->  65757    +1495  [+1067, +2042]   32/0     76/87
+    6-1        80340   ->  81269    +1314  [+1018, +1605]   28/4     81/69
+
+Every confidence interval clears zero; 153 of 160 paired seeds go to the
+planner. No level-specific tuning of any kind — the templates, horizon,
+commit, margin and draw count are exactly the 1-1 champion's.
+
+The magnitude varies fourfold (+509 on 3-1 to +2483 on 4-1) and so does
+the character: on 3-1 and 6-1 the planner buys progress with extra
+deaths (86 vs 63, 81 vs 69 — aggression through the night bridges and
+cannon fields), on 5-1 it wins while dying less (76 vs 87). The same
+value function expresses as caution or courage depending on what the
+level prices.
+
+This closes the transfer question the programme left open: **the
+planner's advantage is not a 1-1 artefact.** Exact dynamics plus six
+generic behaviours is a general lever on this game, online, at every
+level tried. What remains untested is other games — the pipeline
+(integration states, contact maps, the CRN harness) is built for it,
+but SMB's x-scroll physics is doing unquantified work in the templates.
