@@ -63,6 +63,58 @@ def mario_x(env) -> int:
     return int(ram[0x6D]) * 256 + int(ram[0x86])
 
 
+def game_pos(env, game: str) -> int:
+    """Forward position for the value, from the game's own counters.
+
+    Mario publishes a 16-bit world x. Contra-style integrations publish a
+    big-endian 16-bit camera scroll and a level counter; the level folds in
+    at the same stride progress_of uses, so the value stays monotone across
+    a level boundary inside a branch.
+    """
+    ram = env._env.get_ram()
+    if game.startswith("SuperMario"):
+        return mario_x(env)
+    if game.startswith("SuperC"):
+        # found empirically: lo wraps at 0x6B, hi ticks at 0x6C, monotone
+        # through two wraps under a scripted run to x=704
+        return int(ram[108]) * 256 + int(ram[107])
+    return int(ram[48]) * 4000 + int(ram[100]) * 256 + int(ram[101])
+
+
+def game_progress(d: dict, progress_of) -> int:
+    """The run metric: SMB's folded progress, or the integration's own."""
+    if "xscroll" in d:
+        return int(d.get("level", 0)) * 4000 + int(d["xscroll"])
+    return progress_of(d)
+
+
+def begin_any(env, game: str):
+    """Past the title screen, for games without SMB's countdown clock.
+
+    SMB's _begin detects the running game by its timer ticking down; games
+    without a `time` variable get the blunt version — pulse START until the
+    lives counter reads positive, then hand over.
+    """
+    from nes_player.policy.go_explore import _begin
+
+    if game.startswith("SuperMario"):
+        return _begin(env)
+    obs = env.reset(seed=0)
+    for i in range(2000):
+        d = obs.debug or {}
+        if i > 120 and int(d.get("lives", 0) or 0) > 0:
+            break
+        pulse = i % 60 in (0, 1)
+        obs = env.step_buttons([frozenset({"START"}) if pulse
+                                else frozenset()])
+    # No more START once the game has accepted it — the same button is
+    # pause during play. The level intro (AREA screen, spawn animation)
+    # runs itself out in well under six hundred frames.
+    for _ in range(600):
+        obs = env.step_buttons([frozenset()])
+    return obs
+
+
 def learned_dx(ghost, frame_rgb, hero, plan) -> float:
     """The same question asked of the ego model instead of the console.
 
@@ -172,9 +224,14 @@ def run(checkpoint: str, game: str, state: str | None, frames: int, seed: int,
             np.random.set_state(st)
 
     np.random.seed(seed)
-    env = StableRetroAdapter(game, include_debug=True, state=state)
+    # Games with a repo integration (ROM, RAM map) load from it; everything
+    # else — including SMB — comes from stable-retro's own registry.
+    integ_root = Path(__file__).resolve().parents[2] / "integrations"
+    integ = str(integ_root) if (integ_root / game).exists() else None
+    env = StableRetroAdapter(game, include_debug=True, state=state,
+                             integration_dir=integ)
     policy = BCPolicy(checkpoint)
-    obs = _begin(env)
+    obs = begin_any(env, game)
     for _ in range(IDLE_STEP * seed % IDLE_MAX):
         obs = env.step_buttons([frozenset()])
 
@@ -274,7 +331,7 @@ def run(checkpoint: str, game: str, state: str | None, frames: int, seed: int,
         if (horizon and not held and defer <= 0
                 and (not needs_hero or hero is not None)):
             here = env.save_state()
-            x0, l0 = mario_x(env), (obs.debug or {}).get("lives")
+            x0, l0 = game_pos(env, game), (obs.debug or {}).get("lives")
             stack = list(policy._stack)
 
             # The policy's own plan, played out in the branch so that what is
@@ -381,7 +438,7 @@ def run(checkpoint: str, game: str, state: str | None, frames: int, seed: int,
                                                          tail, repeat,
                                                          tail_temp))
                         branch_frames += extra
-                        outs.append((gone, mario_x(env) - x0))
+                        outs.append((gone, game_pos(env, game) - x0))
                     # The continuation consumed the policy's frame
                     # stack; the next candidate must start from the
                     # same history this one did.
@@ -407,7 +464,7 @@ def run(checkpoint: str, game: str, state: str | None, frames: int, seed: int,
                         val = DEATH if died else float(np.mean(
                             [x for g, x in outs if not g]))
                 else:
-                    val = DEATH if died else mario_x(env) - x0
+                    val = DEATH if died else game_pos(env, game) - x0
                 scored.append((val, name, plan))
             if pend:
                 # The adaptive budget: every candidate has `draws` paired
@@ -436,7 +493,7 @@ def run(checkpoint: str, game: str, state: str | None, frames: int, seed: int,
                                     tail_temp))
                             branch_frames += extra
                             outs.append((gone, 0.0 if gone
-                                         else mario_x(env) - x0))
+                                         else game_pos(env, game) - x0))
                         policy._stack = list(stack)
                 for name, plan, _mid, _o2, outs in pend:
                     dead_n = sum(g for g, _ in outs)
@@ -594,7 +651,9 @@ def run(checkpoint: str, game: str, state: str | None, frames: int, seed: int,
         # was enough; now 26 of 32 runs do, and their counter resets to zero on
         # the next level, so the metric was quietly capping every good run at
         # about 3120 and hiding whatever happened afterwards.
-        best_x = max(best_x, progress_of(d))
+        best_x = max(best_x, progress_of(d)
+                     if game.startswith("SuperMario")
+                     else game_pos(env, game))
     if view is not None:
         view.close()
     env.close()
@@ -712,6 +771,9 @@ def main() -> int:
                          "learned ego model, to price the model against the "
                          "objective")
     args = ap.parse_args()
+    if args.state in ("none", ""):
+        # power-on boot, for integrations that ship no default savestate
+        args.state = None
 
     plans = [(None, None, 0.0, 0.0, None, 0)] + ([] if args.no_oracle else [
         (h, None, 0.0, nz, None, tl)

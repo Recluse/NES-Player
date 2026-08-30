@@ -4379,3 +4379,64 @@ generic behaviours is a general lever on this game, online, at every
 level tried. What remains untested is other games — the pipeline
 (integration states, contact maps, the CRN harness) is built for it,
 but SMB's x-scroll physics is doing unquantified work in the templates.
+
+## A second game: the planner carries a policy that cannot walk (2026-08-29)
+
+Contra (J), the first non-Mario game the oracle has ever run on. The
+adaptation cost is worth recording because of how small it was: a
+game-generic position (Contra's integration publishes a 16-bit camera
+scroll and a level counter), a game-generic boot (no SMB countdown clock
+— pulse START until the lives counter goes live, then six hundred
+buttonless frames for the AREA intro, because START during play is
+pause), and **not one change to the templates**: B+RIGHT that means "run"
+in Mario means "advance firing" in Contra, A+B+RIGHT jumps in both.
+
+32 paired seeds, oracle-2 CRN against the game's own BC policy:
+
+    bc (bc_contra_attn)   median 0      max 0      0 deaths
+    oracle-2              median 2367   max 2537   32 deaths   262k frames
+
+    oracle − bc   +2270  [+2099, +2381]   31 wins / 0 losses / 1 tie
+
+The policy is not weak here — it is inert: zero camera progress on every
+seed, standing at the spawn shooting at nothing. And the tail the oracle
+values plans under is that same inert policy, which makes the number
+sharper than it looks: the value differences that drive +2270 come
+almost entirely from what the 48-frame template prefix itself reaches.
+Six generic behaviours plus exact dynamics walk nine screens into the
+jungle on the first try, one death per run, through a game the learned
+half of the system cannot take a single step in.
+
+The pipeline claim is now tested end to end: integration in, planner
+out, template set untouched. What the x-scroll physics of SMB was
+suspected of doing in the templates turns out to be nothing Contra's
+physics does not also accept.
+
+## Third and fourth game, and a camera found by scanning (2026-08-29)
+
+Contra (U) is the sibling ROM — same RAM map, same result: the policy
+inert on every seed, the oracle at +2134 [+1916, +2304], 31/0/1.
+
+Super C is the more interesting one, because stable-retro's registry
+ships hundreds of NES ROMs whose RAM maps list only lives and score — no
+position, nothing to value progress by. The camera was found empirically
+in minutes: boot, hold advance, snapshot RAM, keep the bytes that are
+flat while idle and monotone while running; the low byte wraps at 0x6B
+and 0x6C ticks exactly at each wrap, verified through two wraps. With
+that one address pair and the Contra checkpoint as a fixed weak tail:
+
+    Super C   bc median 224 (max 864)   oracle median 1360 (max 2368)
+              +1210  [+1046, +1380]   31/0/1
+
+Four games now, one planner, one template set, zero per-game tuning
+beyond a position address and a boot sequence:
+
+    SMB 1-1     +3828      Contra (J)  +2270
+    SMB 2-1..6-1 +509..+2483   Contra (U)  +2134
+                             Super C     +1210
+
+Every interval clears zero; across the ten environments the planner
+wins 371 of 384 paired seeds. The RAM-scan method makes essentially the
+whole stable-retro side-scroller library reachable at a few minutes per
+game — no trained policy required, since Contra established the oracle
+works over an inert tail.
