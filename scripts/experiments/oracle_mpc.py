@@ -58,6 +58,33 @@ def templates(h: int):
     ]
 
 
+FIRE_DIAG = frozenset({"UP", "RIGHT", "B"})
+
+
+def game_templates(h: int, game: str):
+    """The shared five, plus what a game's own weapons demand.
+
+    Contra's wall boss is killed by firing up-right — a button chord no
+    Mario behaviour ever needed. The first game-specific template of the
+    project, recorded as such: the six-for-everything claim now reads
+    six-plus-what-the-weapon-needs.
+    """
+    cands = templates(h)
+    if game.startswith("Contra") or game.startswith("SuperC"):
+        # The wall fight needs three things Mario never did: the diagonal
+        # itself, going prone under the bullet stream, and firing the
+        # diagonal from a jump. Survival is already priced by the death
+        # floor; these give the search moves that survive.
+        prone = frozenset({"DOWN", "B"})
+        jump_diag = frozenset({"A", "B", "UP", "RIGHT"})
+        cands += [
+            ("fire up-right", [FIRE_DIAG] * h),
+            ("prone fire", [prone] * h),
+            ("jump fire", [jump_diag] * 10 + [FIRE_DIAG] * (h - 10)),
+        ]
+    return cands
+
+
 def mario_x(env) -> int:
     ram = env._env.get_ram()
     return int(ram[0x6D]) * 256 + int(ram[0x86])
@@ -78,7 +105,26 @@ def game_pos(env, game: str) -> int:
         # found empirically: lo wraps at 0x6B, hi ticks at 0x6C, monotone
         # through two wraps under a scripted run to x=704
         return int(ram[108]) * 256 + int(ram[107])
-    return int(ram[48]) * 4000 + int(ram[100]) * 256 + int(ram[101])
+    xs = int(ram[100]) * 256 + int(ram[101])
+    lvl = int(ram[48])
+    pos = lvl * 4000 + xs
+    if game.startswith("Contra"):
+        # The wall boss stops the camera, and killing it takes ~2250 frames
+        # of sustained fire — far beyond any rollout window. Damage is the
+        # only progress left, and it lives in four object-slot bytes that
+        # are flat without fire and fall monotonically under hits (sum
+        # 66 -> 0, then the level counter takes over). Object slots hold
+        # enemies elsewhere in the level, so the term only switches on
+        # where the camera has hit the wall; at that moment hp is still
+        # full and the bonus is zero, so the value stays continuous.
+        WALL_HP0, PX_PER_HIT = 66, 40
+        if lvl > 0:
+            pos += PX_PER_HIT * WALL_HP0
+        elif xs >= 3070:
+            hp = (int(ram[1333]) + int(ram[1334])
+                  + int(ram[1335]) + int(ram[1410]))
+            pos += PX_PER_HIT * max(0, WALL_HP0 - hp)
+    return pos
 
 
 def game_progress(d: dict, progress_of) -> int:
@@ -185,7 +231,8 @@ def run(checkpoint: str, game: str, state: str | None, frames: int, seed: int,
         gate_fp: float = 0.0, gate_fn: float = 0.0,
         adaptive: float | None = None, adaptive_g2: float = 0.0,
         crn: bool = False, two_step: bool = False,
-        death_price: float = 0.0, escapes: bool = False) -> dict:
+        death_price: float = 0.0, escapes: bool = False,
+        save_final: str = "", load_state: str = "") -> dict:
     from nes_player.emulator.controller import BUTTONS
     from nes_player.emulator.stable_retro import StableRetroAdapter
     from nes_player.perception.motion import pick_hero
@@ -232,6 +279,16 @@ def run(checkpoint: str, game: str, state: str | None, frames: int, seed: int,
                              integration_dir=integ)
     policy = BCPolicy(checkpoint)
     obs = begin_any(env, game)
+    if load_state:
+        # A lab tool: start where a previous run ended (e.g. at a boss
+        # wall), with a couple of lives granted so the probe is about the
+        # boss and not about arriving there on the last life.
+        env.load_state(Path(load_state).read_bytes())
+        try:
+            env._env.data.set_value("lives", 2)
+        except Exception:
+            pass
+        obs = env.step_buttons([frozenset()])
     for _ in range(IDLE_STEP * seed % IDLE_MAX):
         obs = env.step_buttons([frozenset()])
 
@@ -258,7 +315,7 @@ def run(checkpoint: str, game: str, state: str | None, frames: int, seed: int,
     # even when the arm itself has no use for one.
     tracker = (SpriteTracker() if ((ghost or probe) and not ram_hero) or video
                else None)
-    cands = templates(horizon) if horizon else []
+    cands = game_templates(horizon, game) if horizon else []
     if two_step and horizon:
         # Two-step search: every ordered pair of the five behaviours, each at
         # half the horizon. The one thing a single template cannot express is
@@ -657,6 +714,8 @@ def run(checkpoint: str, game: str, state: str | None, frames: int, seed: int,
                      else game_pos(env, game))
     if view is not None:
         view.close()
+    if save_final:
+        Path(save_final).write_bytes(env.save_state())
     env.close()
     return {"seed": seed, "best_x": best_x, "deaths": deaths,
             "branch_frames": branch_frames, "chosen": dict(chosen),
@@ -700,6 +759,14 @@ def main() -> int:
                     help="how many futures to average the tail over, "
                          "so the value is an expectation rather than "
                          "one realised continuation")
+    ap.add_argument("--load-state", default="",
+                    help="start from this saved emulator state instead of "
+                         "the game's own beginning — a lab tool for boss "
+                         "work; grants two lives")
+    ap.add_argument("--save-final", default="",
+                    help="write the emulator state at the last frame to this "
+                         "file, so a later probe can start where the run "
+                         "ended — e.g. at a boss wall")
     ap.add_argument("--escapes", action="store_true",
                     help="add the three rescue compositions the two-step "
                          "search actually used to the plain template set; "
@@ -832,7 +899,8 @@ def main() -> int:
                       args.gate_fp, args.gate_fn,
                       None if horizon is None else args.adaptive,
                       args.adaptive_g2, args.crn, args.two_step,
-                      args.death_price, args.escapes)
+                      args.death_price, args.escapes, args.save_final,
+                      args.load_state)
             rows.append(row)
             print(json.dumps({"arm": name, **row}), flush=True)
         arms[name] = rows

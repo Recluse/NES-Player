@@ -1,5 +1,12 @@
 # Architecture
 
+> **Dated honesty note.** This document describes the perception-to-policy
+> stack, which is real and works as specified — but the strongest player in
+> the repository today is not this stack. It is the oracle planner in
+> `scripts/experiments/oracle_mpc.py`, which uses the emulator itself as the
+> world model and is openly privileged. Why the stack did not take over, with
+> numbers, is the subject of [experiments.md](experiments.md).
+
 ## Layers
 
 ```

@@ -1,12 +1,68 @@
 # NES Player
 
-An agent that learns to play NES games the way a person does: it sees the screen
-and hears the sound, and nothing else. The emulator's memory is closed to the
-policy — it is read only by the training loop and by evaluation, as ground truth
-for checking whether what the agent read off the screen was correct.
+Two things live in this repository, and honesty requires introducing them
+separately.
 
-The point is not to finish one game. The point is that skills carry over to
-games the agent has never seen.
+The first is a perception stack for playing NES games the way a person does:
+seeing the screen, hearing the sound, and nothing else. The emulator's memory
+is closed to the policy — it is read only by training and evaluation, as
+ground truth for checking what the agent read off the screen.
+
+The second is a measurement journal — and the journal's verdict, as of now, is
+that the strongest player in the repository is not that stack. It is a planner
+that openly cheats: it uses the emulator itself as a world model. That verdict
+was reached by paired experiments, survived every attempt to overturn it, and
+is the most interesting thing here.
+
+## What plays today
+
+`scripts/experiments/oracle_mpc.py`: at each decision the planner saves the
+console state, plays out a handful of 48-frame button templates plus the
+policy's own plan, continues each with the reactive policy for 96 frames,
+averages 2–4 such futures, commits 16 frames of the winner, and repeats.
+Progress comes from the game's own position counter; a plan that dies is not
+compared on distance.
+
+The same planner, the same six templates, no per-game tuning beyond a position
+address and a boot sequence:
+
+| environment | paired gain over the policy | seeds |
+|---|---|---|
+| SMB 1-1 | +3828 (and 20/32 full clears at 4 draws) | 32 |
+| SMB 2-1 … 6-1 | +509 … +2483, every CI clear of zero | 32 each |
+| Contra (J) | +2270 | 32 |
+| Contra (U) | +2134 | 32 |
+| Super C | +1210 | 32 |
+
+371 of 384 paired seeds go to the planner. Read the caveats before the
+numbers impress you: the planner is privileged by construction — it looks at
+futures instead of predicting them; on Contra the learned policy is inert
+(median 0 on every seed), so the gain there is carried almost entirely by the
+template prefixes; and the games-in-minutes recipe (find the camera by
+scanning RAM for bytes flat at idle and monotone under advance) works exactly
+while a game keeps one continuous scroll counter — Ninja Gaiden's
+scene-segmented levels and Kung Fu mark where it stops.
+
+## What learning could not take over
+
+The obvious next step — distil the planner into a network and stop paying for
+rollouts — was tried to the end and failed with measured causes. A learner was
+priced in five roles (value estimator, action chooser, binary gate, DAgger
+student, compute allocator) and lost all five; a battery of seven input
+representations, from two scalars to the full privileged state, captured the
+same ~20% of the planner's per-decision gain; the practically useful remainder
+was reachable only by simulating the future. Two structural findings survived
+every control: monolithic 96-frame plans are toxic (half the progress, double
+the deaths) and a few hand-written compositions buy most of it back; and at 32
+paired seeds the online noise floor certifies only planner-sized effects —
+finer economics is measured offline, on stored rollout matrices, under common
+random numbers. The full chronology, retractions included, is
+[docs/experiments.md](docs/experiments.md).
+
+## The perception stack
+
+The original point stands as a goal: skills that carry over to games the agent
+has never seen, from pixels and sound alone.
 
 ![The live dashboard: Super Mario Bros. with the attention overlay, action
 probabilities, tracked objects and the numbers the agent read off the
@@ -40,7 +96,7 @@ with no labels and no memory access. The game's own HUD in the same frame reads
 - **Builds a world model** around the object it controls and plans 16 steps
   ahead over behaviour templates.
 
-## Measured results
+## Perception stack results
 
 | | |
 |---|---|
