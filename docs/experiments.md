@@ -4440,3 +4440,18 @@ wins 371 of 384 paired seeds. The RAM-scan method makes essentially the
 whole stable-retro side-scroller library reachable at a few minutes per
 game — no trained policy required, since Contra established the oracle
 works over an inert tail.
+
+## The scan method meets its boundary (2026-08-30)
+
+The RAM-scan that found Super C's camera in minutes is now a tool
+(`find_camera.py`: bytes flat at idle, monotone under advance, high byte
+verified at the wraps) — and its boundary is now measured too. Ninja
+Gaiden has no global monotone camera word: its levels are cut into
+scenes and the camera resets at each boundary, so every high-byte
+candidate jumps back mid-run. Kung Fu, probed the same way in its
+left-scrolling variant, shows no stable camera pair at all under a
+1,800-frame advance. The method opens games with one continuous scroll
+counter — the Contra family proved that — and stops where progress
+needs composing from scene counters, which is per-game archaeology
+again. Recorded so the next sweep across the library starts with the
+right expectations.

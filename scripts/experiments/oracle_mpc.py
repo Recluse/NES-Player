@@ -304,7 +304,8 @@ def run(checkpoint: str, game: str, state: str | None, frames: int, seed: int,
         # beside the console's answer. It scores nothing here — this arm does
         # not use it — but the video is the one place the two can be compared.
         if Path("runs/ego_smb4").exists():
-            ghost_view = ghost or GhostPredictor("runs/ego_smb4")
+            ghost_view = ((ghost or GhostPredictor("runs/ego_smb4"))
+                          if game.startswith("SuperMario") else ghost)
         ears = AudioEventDetector(env.sample_rate)
         if Path("runs/av_smb").exists():
             from nes_player.perception.av_align import SoundLocator
