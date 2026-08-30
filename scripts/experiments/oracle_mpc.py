@@ -38,6 +38,7 @@ import numpy as np
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
 IDLE_STEP, IDLE_MAX = 37, 1800
+WEAPON_MAIN = 400   # px the planner credits for holding spread; CLI-settable
 DEATH = -1e9        # a plan that dies is not compared on distance
 
 
@@ -75,12 +76,22 @@ def game_templates(h: int, game: str):
         # itself, going prone under the bullet stream, and firing the
         # diagonal from a jump. Survival is already priced by the death
         # floor; these give the search moves that survive.
+        # B must be TAPPED: held down it fires exactly one bullet, which
+        # made the first version of these templates decorative — the
+        # point-blank diagonal script that strips the wall taps 2-on
+        # 2-off, and so do these now.
+        def taps(active, rest, n):
+            return [active if k % 4 < 2 else rest for k in range(n)]
+
+        diag_rest = frozenset({"UP", "RIGHT"})
         prone = frozenset({"DOWN", "B"})
+        prone_rest = frozenset({"DOWN"})
         jump_diag = frozenset({"A", "B", "UP", "RIGHT"})
         cands += [
-            ("fire up-right", [FIRE_DIAG] * h),
-            ("prone fire", [prone] * h),
-            ("jump fire", [jump_diag] * 10 + [FIRE_DIAG] * (h - 10)),
+            ("fire up-right", taps(FIRE_DIAG, diag_rest, h)),
+            ("prone fire", taps(prone, prone_rest, h)),
+            ("jump fire", [jump_diag] * 10
+             + taps(FIRE_DIAG, diag_rest, h - 10)),
         ]
     return cands
 
@@ -105,18 +116,27 @@ def game_pos(env, game: str) -> int:
         # found empirically: lo wraps at 0x6B, hi ticks at 0x6C, monotone
         # through two wraps under a scripted run to x=704
         return int(ram[108]) * 256 + int(ram[107])
-    xs = int(ram[100]) * 256 + int(ram[101])
-    lvl = int(ram[48])
-    pos = lvl * 4000 + xs
+    return int(ram[48]) * 4000 + int(ram[100]) * 256 + int(ram[101])
+
+
+def game_value(env, game: str) -> int:
+    """What the planner maximises: position, plus what position cannot see.
+
+    Contra's wall boss stops the camera, and killing it takes ~2250 frames
+    of sustained fire — far beyond any rollout window. Damage is the only
+    progress left; it lives in four object-slot bytes that are flat
+    without fire and fall monotonically under hits (sum 66 -> 0). The term
+    switches on only where the camera has hit the wall, and at that moment
+    hp is still full, so the value stays continuous.
+
+    This is the PLANNER'S objective, not the run metric: mixing the bonus
+    into best_x once produced a run that read as a level clear while the
+    wall still stood. The metric stays pure position.
+    """
+    pos = game_pos(env, game)
     if game.startswith("Contra"):
-        # The wall boss stops the camera, and killing it takes ~2250 frames
-        # of sustained fire — far beyond any rollout window. Damage is the
-        # only progress left, and it lives in four object-slot bytes that
-        # are flat without fire and fall monotonically under hits (sum
-        # 66 -> 0, then the level counter takes over). Object slots hold
-        # enemies elsewhere in the level, so the term only switches on
-        # where the camera has hit the wall; at that moment hp is still
-        # full and the bonus is zero, so the value stays continuous.
+        ram = env._env.get_ram()
+        xs, lvl = pos % 4000, pos // 4000
         WALL_HP0, PX_PER_HIT = 66, 40
         if lvl > 0:
             pos += PX_PER_HIT * WALL_HP0
@@ -124,6 +144,17 @@ def game_pos(env, game: str) -> int:
             hp = (int(ram[1333]) + int(ram[1334])
                   + int(ram[1335]) + int(ram[1410]))
             pos += PX_PER_HIT * max(0, WALL_HP0 - hp)
+        # The owner's capsule idea: a weapon upgrade is worth diverting
+        # for. 0xAA verified behaviourally by poke-and-look — 0 is the
+        # rifle, 3 fans out as spread, others are mid-tier. Spread is
+        # what kills the wall; death resets the byte to zero, so the
+        # planner also prices keeping the gun alive.
+        if WEAPON_MAIN:
+            # low nibble is the gun (3 = spread), high bits are flags
+            # (0x10 showed up on every real pickup as rapid/red variant)
+            tier = int(ram[170]) & 0x0F
+            pos += (WEAPON_MAIN if tier == 3
+                    else WEAPON_MAIN // 2 if ram[170] else 0)
     return pos
 
 
@@ -372,6 +403,8 @@ def run(checkpoint: str, game: str, state: str | None, frames: int, seed: int,
     pressed: frozenset = frozenset()
     branch_frames = 0
     escalated = decisions = 0
+    credits_used, stuck, deep_in_level = 0, 0, False
+    wmax, hits_max = 0, 0
 
     for i in range(frames):
         hero = None
@@ -389,7 +422,7 @@ def run(checkpoint: str, game: str, state: str | None, frames: int, seed: int,
         if (horizon and not held and defer <= 0
                 and (not needs_hero or hero is not None)):
             here = env.save_state()
-            x0, l0 = game_pos(env, game), (obs.debug or {}).get("lives")
+            x0, l0 = game_value(env, game), (obs.debug or {}).get("lives")
             stack = list(policy._stack)
 
             # The policy's own plan, played out in the branch so that what is
@@ -496,7 +529,7 @@ def run(checkpoint: str, game: str, state: str | None, frames: int, seed: int,
                                                          tail, repeat,
                                                          tail_temp))
                         branch_frames += extra
-                        outs.append((gone, game_pos(env, game) - x0))
+                        outs.append((gone, game_value(env, game) - x0))
                     # The continuation consumed the policy's frame
                     # stack; the next candidate must start from the
                     # same history this one did.
@@ -519,10 +552,22 @@ def run(checkpoint: str, game: str, state: str | None, frames: int, seed: int,
                     else:
                         dead_n = sum(g for g, _ in outs)
                         died = dead_n * 2 > draws
-                        val = DEATH if died else float(np.mean(
-                            [x for g, x in outs if not g]))
+                        if died:
+                            # Die usefully: the floor keeps every live
+                            # plan above every dead one, but among the
+                            # dead the damage dealt before dying decides.
+                            # Without this a doomed state is an all-DEATH
+                            # tie, argmax falls to the policy's plan, and
+                            # at Contra's wall the inert policy stands in
+                            # the bullet stream doing nothing — the loop
+                            # that capped every honest run at 28 hits.
+                            val = DEATH + float(np.mean(
+                                [x for _, x in outs]))
+                        else:
+                            val = float(np.mean(
+                                [x for g, x in outs if not g]))
                 else:
-                    val = DEATH if died else game_pos(env, game) - x0
+                    val = DEATH if died else game_value(env, game) - x0
                 scored.append((val, name, plan))
             if pend:
                 # The adaptive budget: every candidate has `draws` paired
@@ -551,7 +596,7 @@ def run(checkpoint: str, game: str, state: str | None, frames: int, seed: int,
                                     tail_temp))
                             branch_frames += extra
                             outs.append((gone, 0.0 if gone
-                                         else game_pos(env, game) - x0))
+                                         else game_value(env, game) - x0))
                         policy._stack = list(stack)
                 for name, plan, _mid, _o2, outs in pend:
                     dead_n = sum(g for g, _ in outs)
@@ -712,6 +757,40 @@ def run(checkpoint: str, game: str, state: str | None, frames: int, seed: int,
         best_x = max(best_x, progress_of(d)
                      if game.startswith("SuperMario")
                      else game_pos(env, game))
+        # Contra-family: after the last life the game sits on the continue
+        # screen with the camera back at zero. A human presses START; so
+        # does the runner, and the credit is counted. The level restarts
+        # from its beginning — continues buy attempts, not position.
+        if game.startswith("Contra"):
+            ram_ = env._env.get_ram()
+            wmax = max(wmax, int(ram_[170]))
+            if game_pos(env, game) % 4000 >= 3070:
+                hp_ = (int(ram_[1333]) + int(ram_[1334])
+                       + int(ram_[1335]) + int(ram_[1410]))
+                hits_max = max(hits_max, 66 - min(hp_, 66))
+        if game.startswith("Contra") or game.startswith("SuperC"):
+            xs_now = game_pos(env, game) % 4000
+            if xs_now > 1000:
+                deep_in_level = True
+            if deep_in_level and xs_now == 0:
+                stuck += 1
+            else:
+                stuck = 0
+            if stuck > 120:
+                for k2 in range(600):
+                    pulse = k2 % 60 in (0, 1)
+                    obs = env.step_buttons(
+                        [frozenset({"START"}) if pulse else frozenset()])
+                    if int((obs.debug or {}).get("lives", 0) or 0) > 0:
+                        break
+                for _ in range(600):
+                    obs = env.step_buttons([frozenset()])
+                lives = (obs.debug or {}).get("lives")
+                credits_used += 1
+                deep_in_level = False
+                stuck = 0
+                held = []
+                defer = 0
     if view is not None:
         view.close()
     if save_final:
@@ -719,6 +798,9 @@ def run(checkpoint: str, game: str, state: str | None, frames: int, seed: int,
     env.close()
     return {"seed": seed, "best_x": best_x, "deaths": deaths,
             "branch_frames": branch_frames, "chosen": dict(chosen),
+            **({"credits": credits_used} if credits_used else {}),
+            **({"wmax": wmax, "wall_hits": hits_max}
+               if game.startswith("Contra") else {}),
             **({"escalated": escalated, "decisions": decisions}
                if adaptive is not None else {})}
 
@@ -767,6 +849,9 @@ def main() -> int:
                     help="write the emulator state at the last frame to this "
                          "file, so a later probe can start where the run "
                          "ended — e.g. at a boss wall")
+    ap.add_argument("--weapon-px", type=int, default=400,
+                    help="px the Contra value credits for holding spread "
+                         "(half for mid-tier); 0 turns the term off")
     ap.add_argument("--escapes", action="store_true",
                     help="add the three rescue compositions the two-step "
                          "search actually used to the plain template set; "
@@ -839,6 +924,8 @@ def main() -> int:
                          "learned ego model, to price the model against the "
                          "objective")
     args = ap.parse_args()
+    global WEAPON_MAIN
+    WEAPON_MAIN = args.weapon_px
     if args.state in ("none", ""):
         # power-on boot, for integrations that ship no default savestate
         args.state = None

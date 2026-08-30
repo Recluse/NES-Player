@@ -19,6 +19,10 @@
     "xscroll": {
       "address": 100,
       "type": ">u2"
+    },
+    "weapon": {
+      "address": 170,
+      "type": "|u1"
     }
   }
 }

@@ -4455,3 +4455,123 @@ counter — the Contra family proved that — and stops where progress
 needs composing from scene counters, which is per-game archaeology
 again. Recorded so the next sweep across the library starts with the
 right expectations.
+
+## The wall falls: doomed states, a damage term, and honest continues (2026-08-30)
+
+Contra's level-1 boss stopped the planner cold, and the diagnosis was
+worth the fight. The camera halts at the wall, so progress goes flat; the
+kill needs ~2,250 frames of sustained diagonal fire (measured by script
+with granted lives); and — the real finding — the wall zone is full of
+**doomed states**: at a hand-evaluated decision every one of eight
+candidates died inside its own 48-frame prefix. When every value is the
+death floor, argmax falls through to the policy's plan by tie, the inert
+policy stands in the bullet stream, and the next doomed state arrives.
+The bullet was already in flight before the decision was made — the
+mistake lives beyond the tail's horizon.
+
+Three additions, each earned by a measurement:
+
+  * **a damage term in the value** — four object-slot bytes found by
+    diff-scan (flat without fire, monotone under hits, sum 66→0),
+    worth 40 px per hit and switched on only where the camera has hit
+    the wall, so the value stays continuous;
+  * **the project's first game-specific templates**, recorded as such:
+    fire up-right, prone under the stream, a jumping diagonal — the
+    six-for-everything claim now reads six-plus-what-the-weapon-needs;
+  * **honest continues**: after the last life the runner presses START
+    on the continue screen the way a player would, the level restarts
+    from its beginning, and the credits are counted in the row.
+
+The result: level 1 cleared end to end — best_x 4192 (the camera 192 px
+into level 2), four continues, eight deaths, the combat templates chosen
+104 times where they matter. The CRN harness made the recorded video
+byte-identical to the test run. `--save-final`/`--load-state` (the boss
+lab: resume where a run ended, with lives granted) stay in the runner.
+
+## Retraction: the wall did not fall — my own bonus lied to me (2026-08-30)
+
+The previous entry claimed level 1 cleared at best_x 4192. The owner
+watched the video and saw the truth in one sentence: the run never got
+past the wall. 4192 is not level·4000+192 — it is 3072 + 40·28: the
+damage bonus I had added to the planner's value was flowing into the
+run metric too, and 28 hits of wall damage dressed themselves up as a
+level transition. The video's final minute shows the wall approach,
+deaths 8, wall standing.
+
+The instrument bug is fixed the only correct way — by separating the
+two quantities. `game_value()` is what the planner maximises (position
+plus the wall-damage term); `game_pos()` is pure position and is all
+the run metric and the CRN keys ever see. The honest state of the boss
+fight: 28 of 66 hits across four credits and eight deaths. The doomed-
+states diagnosis, the templates, the continues and the damage term all
+stand; the victory does not, yet.
+
+The lesson is an old one from this project's own list — a plausible
+number is not a measurement — with a new twist: the misleading number
+was not the game's, it was mine, added the same afternoon. Any term
+added to an objective must be kept out of the metric by construction,
+not by discipline.
+
+## The wall, part two: a weapon byte, two dead hypotheses, and the real bottleneck (2026-08-30)
+
+The capsule idea came from the owner, and the weapon byte is now real:
+0xAA verified by poke-and-look (0 fires thin white, 3 fans out as
+spread, real pickups read 16/19 — flag bits over a low-nibble tier, so
+the value masks with 0x0F). A weapon term went into `game_value`
+(spread +400 px, mid-tier half), and pickups turn out to happen
+naturally — wmax 16 even in arms without the term.
+
+Then the measurements killed two hypotheses in a row. Every honest run
+that reaches the wall takes off exactly **28 hits** — a plateau, not
+noise. Hypothesis one, the all-DEATH tie loop (doomed states hand the
+wheel to the inert policy), was fixed on principle — dead candidates
+now rank by damage dealt before dying ("die usefully", the floor still
+keeps every live plan above every dead one) — and the plateau did not
+move: 28, 28, 0, 0 on the same seeds. Hypothesis two, "the core needs
+a straight shot from the ledge", died in a nine-variant position lab:
+2-4 hits per 500 frames from any ledge. The video frames showed why —
+the core sits behind an armour cross at mid-height, ground fire hits
+plate, and the immortal script's kill rate was riding on respawn
+invincibility, falling from the top through the sensor line.
+
+What the data actually says: 28 hits is the budget of ONE arrival with
+about one life, and credits two through four mostly never make it back
+to the wall (their rows read hits 0). The wall dies when each credit
+arrives at all and arrives with three lives — three good arrivals
+exceed 66. The bottleneck is journey survival, and the repository
+already owns the right tool for that: the Go-Explore robustification
+loop, checkpoints along the route, return and reinforce. That is the
+designed next block, not an evening flag.
+
+Tree reuse between replans (the MCTS borrow) was examined and shelved
+honestly: the search is flat, and carrying constant-template values
+across replans is an unguaranteed heuristic that owes the offline
+stand a verdict before it touches the online planner.
+
+## The wall, part three: a held button, and every piece solved separately (2026-08-30)
+
+The owner's muscle memory ("fire the diagonal point-blank") found in one
+sentence what three of my hypotheses had missed — and the root cause
+under it was a held button. In Contra, B held down fires exactly one
+bullet; every fire template held B, so "fire up-right" had been a
+decoration emitting one shot per 48 frames, while every lab script that
+worked had been tapping. With the templates switched to 2-on/2-off
+taps, the planner from the wall state does what the owner described:
+walks to contact and strips the wall — **66 hits of 66, zero deaths,
+one credit**, best_x 4000 on the now-pure position metric (the level
+byte itself).
+
+From a cold start the picture is a staircase of solved and unsolved:
+seeds 5-7 reach the wall, take exactly 28 hits again and die out;
+seeds 3, 4, 8 never pass x≈2820 — the cliff staircase before the base,
+snipers above, every candidate at the death floor while climbing. The
+journey costs 6-8 deaths per run, so what arrives at the wall has no
+lives left to spend on the fight the planner has already proven it can
+win from a healthy state.
+
+Every component now has a measured verdict: the route to 3072 —
+passable; the wall kill from a good arrival — solved; the composition —
+blocked on journey survival, concentrated at one place. That is the
+Go-Explore robustification loop's exact job description (checkpoint
+before the cliff, find a surviving climb, reinforce), and it is the
+designed next block rather than tonight's flag.
