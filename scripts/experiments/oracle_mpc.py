@@ -40,13 +40,72 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
 IDLE_STEP, IDLE_MAX = 37, 1800
 WEAPON_MAIN = 400   # px the planner credits for holding spread; CLI-settable
-def scene_hash(frame):
-    """A coarse fingerprint of the picture; see frontier.py for the
-    calibration (6x5 cells, two bits: one room of Contra's base is about
-    twenty scenes, the next room shares two of them)."""
+def scene_cell(frame, prev):
+    """The frontier's cell: what the picture looks like, and where the
+    moving thing is in it. The scene alone is too sparse to steer with —
+    one room of Contra's base is three or four scenes over 1800 frames,
+    so the novelty term is silent almost everywhere. The body's coarse
+    position gives the same key a gradient inside a room."""
+    from frontier import body_cell
     from frontier import scene_hash as _h
 
-    return _h(frame)
+    return (_h(frame), body_cell(frame, prev) if prev is not None else (0, 0))
+
+
+PRIOR: dict = {}   # A4: what a person knows from the manual before playing
+
+
+def prior_templates(h: int) -> list:
+    """Extra candidates named in the game's manual, in buttons.
+
+    A manual is a legitimate input — a person reads one before playing —
+    and it supplies the one thing neither the causal scan nor the search
+    can: what the game wants done. "The exit opens when the sensor is
+    destroyed" is not discoverable by walking around.
+    """
+    out = []
+    for t in PRIOR.get("templates", ()):
+        n = t.get("frames", h)
+        if "hold" in t:
+            plan = [frozenset(t["hold"])] * n
+        else:
+            act, rest = frozenset(t["tap"]), frozenset(t.get("rest", ()))
+            plan = [act if k % 4 < 2 else rest for k in range(n)]
+        out.append((t["name"], (plan * (h // max(1, n) + 1))[:h]))
+    return out
+
+
+def body_y(frame, prev) -> float:
+    """How high up the screen the moving thing is, 0 (top) to 1 (bottom).
+
+    From the picture, like the frontier's cell: what moved between two
+    frames is mostly the player. Used only after the prior's targets are
+    gone, when "up" is the way on and no counter says so.
+    """
+    if prev is None:
+        return 1.0
+    d = np.abs(frame[..., :3].mean(-1) - prev[..., :3].mean(-1))
+    if d.max() < 8:
+        return 1.0
+    ys, _ = np.nonzero(d > d.max() * 0.5)
+    return float(np.median(ys)) / frame.shape[0] if len(ys) else 1.0
+
+
+def prior_value(ram) -> int:
+    """What the manual says is worth destroying, priced by the A5 tables.
+
+    The types come from the manual's description of the thing; their hit
+    points come from the scan, so the number is measured and only the
+    naming is human.
+    """
+    types = PRIOR.get("target_types")
+    if not types:
+        return 0
+    tab = PRIOR.get("tables") or {"type_base": 0x530, "hp_base": 0x580,
+                                  "slots": 16}
+    live = sum(int(ram[tab["hp_base"] + i]) for i in range(tab["slots"])
+               if int(ram[tab["type_base"] + i]) in types)
+    return -int(PRIOR.get("target_px", 40)) * live
 
 
 SCAN_POS: dict = {}  # game -> position bytes from controllability.py, opt-in
@@ -287,6 +346,18 @@ def game_pos(env, game: str) -> int:
     return int(ram[48]) * 4000 + int(ram[100]) * 256 + int(ram[101])
 
 
+def prior_exit_value(frame, prev, ram) -> int:
+    """Once the manual's targets are destroyed, reward moving into the
+    opening. A room whose exit is upward gives the planner nothing to
+    climb towards otherwise: position saturates at the far wall, and the
+    frames showed the soldier standing there for 1500 frames with the
+    door open beside him."""
+    px = int(PRIOR.get("exit_up_px", 0))
+    if not px or prior_value(ram) != 0:
+        return 0
+    return int(px * (1.0 - body_y(frame, prev)))
+
+
 def game_value(env, game: str) -> int:
     """What the planner maximises: position, plus what position cannot see.
 
@@ -302,6 +373,10 @@ def game_value(env, game: str) -> int:
     wall still stood. The metric stays pure position.
     """
     pos = game_pos(env, game)
+    if PRIOR:
+        # priced against the same slots every candidate sees this decision,
+        # so it is a difference within a decision, never a run metric
+        pos += prior_value(env._env.get_ram())
     if game.startswith("Contra"):
         ram = env._env.get_ram()
         xs, lvl = pos % 4000, pos // 4000
@@ -396,7 +471,8 @@ def learned_dx(ghost, frame_rgb, hero, plan) -> float:
 
 
 def _continue(env, policy, obs, l0, tail: int, repeat: int,
-              temperature: float, scenes: set | None = None):
+              temperature: float, scenes: set | None = None,
+              sink: dict | None = None):
     """Keep playing under a fixed continuation, and say whether it ends badly.
 
     The continuation has to be one policy and always the same one, or the value
@@ -411,10 +487,14 @@ def _continue(env, policy, obs, l0, tail: int, repeat: int,
         if k % repeat == 0:
             pressed, _ = policy.act(obs.frame_rgb, temperature)
             pressed = pressed - {"START", "SELECT"}
+        prev_frame = obs.frame_rgb if (scenes is not None
+                                       or sink is not None) else None
         obs = env.step_buttons([pressed])
         used += 1
+        if sink is not None:
+            sink["prev"], sink["last"] = prev_frame, obs.frame_rgb
         if scenes is not None and k % 8 == 0:
-            scenes.add(scene_hash(obs.frame_rgb))
+            scenes.add(scene_cell(obs.frame_rgb, prev_frame))
         now = (obs.debug or {}).get("lives")
         if l0 is not None and now is not None and now < l0:
             died = True
@@ -427,7 +507,7 @@ _W: dict = {}
 
 def _worker_init(game: str, checkpoint: str, integ: str | None,
                  scan_pos=None, wall_clip: bool = True,
-                 weapon_main: int = 400):
+                 weapon_main: int = 400, prior: dict | None = None):
     """One emulator and one policy per worker process, loaded once.
 
     A spawned worker re-imports this module, so anything main set after
@@ -441,6 +521,8 @@ def _worker_init(game: str, checkpoint: str, integ: str | None,
     if scan_pos is not None:
         SCAN_POS[game] = scan_pos
     WALL_CLIP, WEAPON_MAIN = wall_clip, weapon_main
+    if prior:
+        PRIOR.update(prior)
 
     from nes_player.emulator.stable_retro import StableRetroAdapter
     from nes_player.policy.bc import BCPolicy
@@ -466,11 +548,13 @@ def _eval_job(job: dict) -> dict:
     died, used, o = False, 0, None
     seen = job.get("seen") or frozenset()
     visited: set = set() if job.get("novelty") else None
+    prev = None
     for k in range(job["span"]):
+        prev = o.frame_rgb if (visited is not None and o is not None) else None
         o = env.step_buttons([job["plan"][k]])
         used += 1
         if visited is not None and k % 8 == 0:
-            visited.add(scene_hash(o.frame_rgb))
+            visited.add(scene_cell(o.frame_rgb, prev))
         now = (o.debug or {}).get("lives")
         if l0 is not None and now is not None and now < l0:
             died = True
@@ -492,10 +576,15 @@ def _eval_job(job: dict) -> dict:
                 f"{job['seed']}:{int(x0)}:{job['name']}:{di}".encode())
                 & 0xFFFFFFFF)
         draw_seen: set | None = set() if visited is not None else None
+        sink: dict = {}
         gone, extra = _continue(env, policy, o, l0, job["tail"],
-                                job["repeat"], job["tail_temp"], draw_seen)
+                                job["repeat"], job["tail_temp"], draw_seen,
+                                sink)
         used += extra
         gain = game_value(env, game) - x0
+        if PRIOR.get("exit_up_px"):
+            gain += prior_exit_value(sink.get("last"), sink.get("prev"),
+                                     env._env.get_ram())
         if visited is not None:
             # Novelty as an objective term, for stages where position
             # saturates: a plan is worth what it reaches, and in a room
@@ -596,7 +685,7 @@ def run(checkpoint: str, game: str, state: str | None, frames: int, seed: int,
         pool = mp.get_context("spawn").Pool(
             workers, initializer=_worker_init,
             initargs=(game, checkpoint, integ, SCAN_POS.get(game),
-                      WALL_CLIP, WEAPON_MAIN))
+                      WALL_CLIP, WEAPON_MAIN, dict(PRIOR)))
     policy = BCPolicy(checkpoint)
     obs = begin_any(env, game)
     # the boot/title screens may have spun an 8-bit scroll byte: the run's
@@ -651,6 +740,8 @@ def run(checkpoint: str, game: str, state: str | None, frames: int, seed: int,
         return base + [(f"{n1}+{n2}", p1 + p2)
                        for n1, p1 in halves for n2, p2 in halves]
     cands = make_cands(horizon) if horizon else []
+    if PRIOR and horizon:
+        cands = cands + prior_templates(horizon)
     if two_step and horizon:
         # Two-step search: every ordered pair of the five behaviours, each at
         # half the horizon. The one thing a single template cannot express is
@@ -1237,6 +1328,11 @@ def main() -> int:
                     help="Contra: damage term without the max(0, 72 - HP) "
                          "clip, so turrets sharing the cannons' type do not "
                          "mute it at arrival")
+    ap.add_argument("--prior", default="",
+                    help="A4: a manual's knowledge as a file — extra "
+                         "templates in buttons, and the object types the "
+                         "manual says to destroy, priced by the scan's "
+                         "own hit-point table")
     ap.add_argument("--novelty", type=float, default=0.0,
                     help="px a plan earns per scene it reaches that this "
                          "run has not seen; for stages where position "
@@ -1375,6 +1471,10 @@ def main() -> int:
                          "objective")
     args = ap.parse_args()
     global WEAPON_MAIN, WALL_CLIP
+    if args.prior:
+        PRIOR.update(json.loads(Path(args.prior).read_text()))
+        print("prior:", len(PRIOR.get("templates", ())), "templates,",
+              "targets", PRIOR.get("target_types"))
     WEAPON_MAIN = args.weapon_px
     WALL_CLIP = not args.wall_unclipped
     if args.pos_scan_file:
@@ -1426,6 +1526,8 @@ def main() -> int:
             name += " wall-unclipped"
         if args.novelty and horizon:
             name += f" novelty={args.novelty:g}"
+        if args.prior and horizon:
+            name += " prior"
         if args.pos_from_scan and horizon:
             name += " scanpos"
         if args.two_step and horizon:

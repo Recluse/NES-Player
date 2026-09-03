@@ -1,0 +1,46 @@
+{
+  "game": "ContraJ-Nes-v0",
+  "source": "the game's own manual and thirty-year-old muscle memory, written down before the runs that use it",
+  "notes": [
+    "The wall at the end of the jungle is destroyed by its cannons and the sensor between them; point-blank diagonal fire is what reaches them.",
+    "A base stage does not scroll. Its exit opens when the room's sensor is destroyed, and the way on is upward through the door.",
+    "Flying capsules carry weapons; shooting one and walking into what it drops is worth a detour.",
+    "Once a room's sensor is destroyed the way on is upward through the door, so a cleared room rewards moving up the screen."
+  ],
+  "templates": [
+    {
+      "name": "advance up",
+      "hold": [
+        "UP"
+      ],
+      "frames": 48
+    },
+    {
+      "name": "fire up",
+      "tap": [
+        "B",
+        "UP"
+      ],
+      "rest": [
+        "UP"
+      ],
+      "frames": 48
+    },
+    {
+      "name": "fire standing",
+      "tap": [
+        "B"
+      ],
+      "rest": [],
+      "frames": 48
+    }
+  ],
+  "target_types": [
+    20,
+    17,
+    16,
+    4
+  ],
+  "target_px": 40,
+  "exit_up_px": 300
+}

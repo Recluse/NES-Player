@@ -5030,3 +5030,96 @@ hand is the frontier's own scene hash. That, not a scalar address, is
 what an objective for a non-scrolling stage has to be built from; and the
 saturation test above is a cheap detector for when a game needs it (the
 scan's position hits its maximum early and stays).
+
+**Novelty measured, and it buys nothing here (2026-09-03).** Eight paired
+seeds from a base state, 1800 frames, against the plain arm:
+
+| arm | cells found per run | deaths per run | decisions differing from plain |
+|---|---|---|---|
+| plain | — | 0.50 | — |
+| novelty 200, scene only | 1–4 | 0.50 | 7 / 8 |
+| novelty 200, scene + body | 13–25 | 0.50 | 8 / 8 |
+
+The denser key does what it was supposed to: 13–25 cells per run where the
+scene alone found one to four, so the term is no longer silent, and it
+changes every decision. The outcome does not move at all — the deaths are
+the *same sequence* (0, 1, 2, 0, 0, 0, 1, 0) under all three arms, and no
+run leaves the room. Novelty stays off by default (`--novelty 0`).
+
+The reason is visible in the earlier scripted probe and is not about
+exploration: the base's door opens when the room's sensor is destroyed —
+object type 20 with 8 hit points, about eight taps — and no objective
+built out of *where you are* can express "shoot that thing". Position
+saturates, novelty rewards wandering, and the room's exit is gated on a
+target. That is the case for A4: the one thing a manual supplies, which
+neither a scan nor a search does, is what to aim at.
+
+## A4: the manual as a prior, measured in the base (2026-09-03)
+
+A manual is a legitimate input — a person reads one before playing — and
+it supplies the one thing neither the causal scan nor the search can:
+what the game wants done. `--prior` takes a file naming extra candidates
+in buttons ("hold UP to advance", "tap B standing") and the object types
+worth destroying. Only the naming is human: the hit points of those types
+come from the A5 scan, and the term is priced against the same slots
+every candidate sees in a decision, so it is a difference inside a
+decision and never a run metric.
+
+Eight paired seeds from a base state, 1800 frames, against the plain arm:
+
+| arm | deaths per run | position | level advanced |
+|---|---|---|---|
+| plain | 0.50 (0,1,2,0,0,0,1,0) | 4000 flat | 0 / 8 |
+| prior | **0.25** (0,1,1,0,0,0,0,0) | 4002 | 0 / 8 |
+
+The planner does use what the manual gave it — 42 choices of "advance up"
+and 23 of "fire standing" across the eight runs — and it halves the
+deaths, never doing worse on any seed. It still does not open the room in
+1800 frames. Two deaths against four is not certifiable at this sample
+size, and the honest summary is: the prior is used, it looks safer, and
+the base is still not solved.
+
+**Watching it, rather than guessing again.** One prior run in the base
+was recorded and the frames looked at. The prior works: within the first
+few hundred frames the sensor is shot, the red panel goes dark and the
+exit is open. Then the soldier walks to the bottom-right corner of the
+room and stays there for the remaining 1500 frames.
+
+That is not a failure of exploration or of the manual — it is the
+saturation found earlier, acting exactly as specified. Once the targets
+are destroyed the prior's term is satisfied and contributes nothing more,
+and the only remaining gradient is the within-room x, whose maximum is
+the right-hand wall. The planner is standing where its objective told it
+to stand. The exit is upward, and nothing in the value knows that.
+
+So the base needs a vertical term, and the general form is not "press UP"
+but "the body moved into the opening" — which the frontier's own body
+cell already measures from the picture. That is the next thing to build
+and measure.
+
+**The exit term, measured (2026-09-03).** Rewarding "the body moved up
+the screen" once the prior's targets are destroyed, on the same eight
+seeds:
+
+| arm | deaths per run | level advanced |
+|---|---|---|
+| plain | 0.50 | 0 / 8 |
+| prior | 0.25 | 0 / 8 |
+| prior + exit term | 0.25 | 0 / 8 |
+
+It changes the planner's behaviour completely — the policy's own plan
+falls from most decisions to a minority, and the composed run+jump pairs
+dominate — and it buys nothing over the prior alone. Deaths are the same
+seed for seed, and no run reaches the next room.
+
+The three arms together say something worth writing down. In the base,
+every objective tried moves the *decisions* and none moves the *outcome*:
+position saturates, novelty rewards wandering, the manual's targets are
+destroyed and then stop mattering, and rewarding "up" makes the planner
+climb without arriving. A stage whose progress is a discrete transition
+cannot be steered by any of the continuous quantities available inside a
+144-frame window, because within that window the transition is not
+reachable and everything else is noise. What the base needs is not a
+better term but a longer or hierarchical horizon — the same class of
+problem as the wall, which was only solved once damage gave the window
+something to count. Left open, with the evidence in one place.
