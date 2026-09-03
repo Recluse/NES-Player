@@ -61,6 +61,9 @@ Datasets are not published: they are hundreds of gigabytes, and
 
 ## Quick start
 
+Requires [uv](https://github.com/astral-sh/uv) (Astral's Python package and
+project manager).
+
 ```bash
 uv sync                      # environment
 uv run pytest -q             # tests; the integration ones need imported ROMs

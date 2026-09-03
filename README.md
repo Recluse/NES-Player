@@ -136,7 +136,10 @@ when surrounded it backs away](docs/images/beat-em-up.jpg)
 
 macOS on Apple Silicon and Linux x86_64 work out of the box; Windows goes
 through WSL2, since stable-retro ships no native Windows build. A GPU is
-optional — CUDA, Metal or CPU, selected automatically.
+optional — CUDA, Metal or CPU, selected automatically. Everything runs
+through [uv](https://github.com/astral-sh/uv), Astral's Python package and
+project manager — install it first (`curl -LsSf https://astral.sh/uv/install.sh | sh`
+on macOS and Linux, or see its README), then:
 
 ```bash
 uv sync
