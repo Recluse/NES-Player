@@ -4575,3 +4575,326 @@ blocked on journey survival, concentrated at one place. That is the
 Go-Explore robustification loop's exact job description (checkpoint
 before the cliff, find a surviving climb, reinforce), and it is the
 designed next block rather than tonight's flag.
+
+## A0: the console answers the buttons, causally (2026-09-02)
+
+The button probe of the morning was circular — it found "forward" through
+the game's position counter, the very per-game variable a universal agent
+should be discovering. `controllability.py` uses nothing per-game: from
+one save-state it runs a synchronous no-op branch and, beside it, one
+branch per chord and mode (press-edge, hold, tap) for 32 frames, and
+measures only what differs from doing nothing — screen pixels at the best
+horizontal alignment within ±8 px (a nudged residual velocity scrolls the
+camera a pixel and would otherwise own every brick edge), RAM bytes, and
+whether a life was lost. Two confounds had to be removed by construction:
+scrolling chords are excluded from the body vote, and the snapshot waits
+ninety frames for momentum to die.
+
+What it reads off SMB and Contra with no RAM map:
+
+  * **controllability**: Contra's title screen and spawn animation answer
+    to nothing; SMB after a death answers to nothing; play states do;
+  * **the body**: ~143 px at Mario's spot; 500–770 px at Contra's soldier;
+  * **position bytes**: 0x86 (SMB player x) among the bidirectional
+    responders; Contra's 0x65/0x68 camera bytes as right-only (the camera
+    never backs up) and 253 as the player's screen x;
+  * **fire and its semantics**: SMB — zero projectile pixels under any B
+    chord; Contra — B+UP/tap 31–33 px of new sprite off the body, B/tap 9,
+    B+DOWN/tap 9–119, and **zero under hold or press** — the held-B bug of
+    two days ago, read straight off the console.
+
+The audio channel is left out for now: the savestate does not carry the
+APU phase, so every branch differs from no-op in sound regardless of
+input. Next: templates assembled from this scan alone, then compared
+paired against the hand-written sets.
+
+## A1 on A0, and the first game with no hand-written address (2026-09-03)
+
+`scan_templates()` builds the candidate set from `control_<game>.json`
+alone: forward is the RIGHT chord that pushes the scan's own position
+bytes furthest (ties to the chord that also fires), fire is the B chord
+with the most projectile pixels off the body with the scan's own tap/hold
+mode, jump is forward plus A by convention. It reproduces the hand sets —
+SMB 5 of 5, Contra 7 of 8 — with no per-game input. Rush'n Attack, a game
+nothing in the repo had touched, scans as a tap-fire knife game with
+RIGHT/hold forward and zero pixels under held B.
+
+**The camera.** The remaining per-game variable was the position, and
+Rush'n Attack refused the method of the 29th: byte 20 is an 8-bit scroll
+that wraps every 256 px and *no byte anywhere* ticks at the wrap — there
+is no 16-bit camera to find. Two changes to `find_camera.py`:
+
+  * candidates are ranked by agreement with the picture's own horizontal
+    shift (best alignment of 4-frame-apart playfields within ±12 px,
+    correlated with the byte's unwrapped increments). Without it walking
+    animation counters win: they are flat while idle and monotone under
+    advance, exactly the old signature. Byte 20 scores 0.57 against 0.19
+    for the runner-up; on Contra the same ranking returns 100/101, the
+    RAM-map camera, at 1.0;
+  * a lo-only record is written when no high byte exists, and the planner
+    unwraps it symmetrically (a drop past 128 is a wrap forward, a rise
+    past 128 a wrap back), so restoring a savestate across the boundary
+    unwinds the count. Each worker is anchored from the decision's x0.
+
+**The run that was not.** The first closed-loop run — position and
+templates from the scans, a Contra-trained tail — printed +555 px over
+the policy. The frames disagreed: all eight candidates carried the same
+score, and that score drifted negative. Spawned workers re-import the
+module, so `SCAN_POS`, set in main after argument parsing, was empty in
+every worker, and they scored Rush'n Attack with Contra's position
+formula. The planner was blind, took the policy's plan 106 times in 113
+decisions, and the "gain" was an offset the second arm inherited from the
+first arm's title screen (the unwrap counter persisted across runs). Both
+are fixed by construction: the scan position is an initializer argument,
+the counter is dropped after boot. `POS_DEBUG=1` prints the main and
+worker positions at every decision, which is how the fix was checked.
+
+The bc arm's per-seed results reproduce exactly across processes
+(563, 546, 592, 587, 601, 618 for seeds 0–5) and rise almost monotonically
+with the seed index up to seed 24, then reset. It is deterministic and
+shared with the paired arm at the same seed, so the comparison stands, but
+the regularity is unexplained and noted.
+
+**Result, 32 paired seeds, 1800 frames, nothing hand-written:**
+
+| arm | best_x median | IQM | mean | deaths / run |
+|---|---|---|---|---|
+| bc (Contra-trained tail, inert-ish) | 684 | 686 | 690 | 4.06 |
+| oracle 48/96, 2 draws, scan templates + scan position | 848 | 840 | 834 | 3.09 |
+
+Paired difference +145 px (median +112), bootstrap 95% CI [+124, +166],
+32 of 32 seeds to the planner, 0.97 fewer deaths per run. 3,616 decisions:
+the policy's own plan 68%, wait 22%, forward 4%, the rest under 2% each —
+the same shape as SMB and Contra, where the planner's value is in the
+handful of decisions where waiting or a different button avoids a death.
+The absolute numbers are small because the whole 1800-frame budget is
+~850 px of a game that scrolls at 0.3 px/frame; this is not a level
+clear, it is the planner working in a game whose position, buttons and
+fire semantics it discovered itself.
+
+The price of this game, per the reviewer's metric: zero manually
+specified variables; calibration — one A0 scan (~4 min), one camera scan
+(~2 min); human minutes — none inside the loop, several hours outside it
+fixing the two tool bugs the game exposed (the 8-bit scroll, the blind
+worker). Both fixes are general; the next game pays only the scans.
+
+## C2, the reroot, measured on paper before any stand (2026-09-03)
+
+The reviewer's C2: after executing 16 frames, find the actual savestate
+among the computed descendants, make it the root, keep its continuations,
+compute only the missing branches. In this planner the search is not
+needed — the executed 16 frames *are* the chosen candidate's first 16
+frames (commit = 16, prefix = 48), so the exact state match is guaranteed
+every decision, and the question is only what the match buys.
+
+  * The chosen candidate's remaining prefix (frames 16–48) and its tail
+    draws are the only exactly reusable work. Every other candidate
+    diverges at frame 0 of the new root. Reusing them as a "continue"
+    candidate costs zero frames and saves one candidate's worth:
+    48 + draws·96 = 240 of ~1,850 frames per decision on Rush'n Attack
+    (8 candidates, 2 draws), 13%; ~17% on SMB with 6.
+  * But the reused tail ends 16 frames earlier than a fresh one would —
+    the continue candidate looks 128 frames ahead where the others look
+    144. That is a behavioural change to one candidate, and by the noise
+    floor of the 29th a 13% budget shift is not resolvable online at 32
+    seeds; there is no offline stand for it either, because the stored
+    draw matrices hold values, not trajectories, and reuse changes the
+    window the value is taken over.
+  * The bc plan is built by rolling the policy 48 frames in the main
+    process and then re-simulated as a prefix by a worker; shipping the
+    frame-48 state would save 48 frames on 68% of decisions, ~2.5%.
+
+Ceiling: 13–17% of branch frames, all of it in the tails' shifted
+window, none of it exact. Parallelism already cut the seconds; the
+work itself has no large exact-reuse component in a fixed-template MPC
+with commitment. C2 is closed as "measured, below the floor" and not
+implemented; the reroot idea belongs to a tree search with progressive
+expansion, which this planner is not. On to B1'.
+
+## B1': failure-triggered rollback meets the cliff, and loses to a composition (2026-09-03)
+
+Implemented as `--rollback N`: a ring of the last N savestates on the
+game's clock (every 16 frames); when every candidate is doomed, rewind one
+step, re-plan with the horizon grown by the frames rewound so the death
+stays in view, and commit the survivor; give up on this life after N
+steps. Discarded frames count against the budget. Three versions were
+measured on Contra's cliff (`cliff.state`, x≈2820, 900 frames, 8 seeds,
+two lives), against the plain planner and two-step:
+
+| arm | passes the cliff (reaches 3072) | deaths / 8 runs | branch frames / run |
+|---|---|---|---|
+| plain 48/96 ×2 | 1 / 8 | 12 | ~107k |
+| rollback 4, survivor committed whole, plain templates | 0 / 8 | 11 | ~107k |
+| rollback 4, compositions at the rescue re-plan only | 0 / 8 | 11 | ~280k |
+| rollback 4, danger window: compositions on until the game clock passes the doom's lookahead, normal commits | **5 / 8** | 9 | 230–420k |
+| two-step everywhere (26 candidates) | **8 / 8** | 7 | 306–347k |
+
+What the rollback does, every seed: fires (attempts 4–7 per run in the
+first two versions), finds a survivor two to four steps back, and the
+survivor is a stall — the committed prefix ends, the doom is back, the
+depth escalates to the cap and fails. The trap is not "a decision made
+earlier than 144 frames": from 64 frames back with a 208-frame lookahead
+no *single* template passes, and from those same states two-step passes
+at once. The cliff is a staircase of ledges under turret fire, and the
+passing runs string jumps at timings the six templates do not offer
+(two-step's choices there: run+jump now 7%, run+jump later 7%, run+run
+6%, jump later+run 5%, jump now+run 4%, jump now+jump now 3% — a finer
+jump-timing grid, no single dominant pair).
+
+Verdict: rollback is closed. The danger-window version works only because
+it turns compositions on, and two-step turned on everywhere beats it 8/8
+to 5/8 at the same cost on this stretch. The general lesson is the one
+from SMB's escapes in reverse: the planner's remaining failures on the
+journey are *capability* failures of the candidate set, not lookahead
+failures, and the cheap fix is the right compositions, not a rewind.
+Next: an escapes set for Contra distilled from two-step's choices (five
+run/jump pairs, 13 candidates instead of 26), measured on the cliff and
+then over the whole level.
+
+**Escapes on the cliff (same stand, 8 seeds):** 7 of 8 reach 3072, 8
+deaths against the policy's 13, ~172k branch frames per run — 1.6× the
+plain set and half of two-step, which passes 8 of 8 at ~330k. The
+full-level campaign (32 paired seeds, 4500 frames, escapes vs plain) is
+running; the question is how many seeds arrive at the wall at all.
+
+## The journey, whole: escapes over the full level (2026-09-03)
+
+32 paired seeds, 4500 frames, from power-on, CRN; the plain set (8
+candidates) against the plain set plus the five Contra escapes (13).
+
+| arm | reach the wall (3072) | best_x median | IQM | mean | deaths / run | wall hits at arrival | branch frames / run |
+|---|---|---|---|---|---|---|---|
+| plain | 5 / 32 | 2728 | 2699 | 2705 | 1.94 | 31.2 | 586k |
+| escapes | **22 / 32** | **3072** | 3041 | 2915 | 1.97 | 31.6 | 912k |
+
+Paired best_x +209 px (median +250), bootstrap 95% CI [+99, +312]; 23
+wins, 3 ties, 6 losses; deaths identical. Seeds reaching the wall: both
+3, escapes only 19, plain only 2. Where the plain arm stops is four
+places, not one — 2367 (×3), 2480–2495 (×9), 2720–2750 (×7), 2821–2826
+(×8) — and the escapes pass all four, so the "cliff" was the last of a
+family of jump-timing bottlenecks, not a single spot. Cost 1.56×.
+
+The wall is now the budget's problem: arrivals land around frame 3500
+and the 1000 frames left buy ~31 of the 66 hits. The next run is the same
+escapes arm at 7000 frames, and the metric for a clear is the pure
+position crossing 4000 (the level counter folds in at that stride),
+which the damage term cannot reach by construction.
+
+## Correction: the wall "hits" in the campaign tables were not hits (2026-09-03)
+
+The full-level tables above report "wall hits at arrival ~31". That
+number is `66 − (sum of the four slot bytes)`, and 66 was the sum in the
+one savestate the wall work started from. A real arrival state saved
+from the escapes campaign (`arrival1.state`, x=3071) has the same four
+bytes at 17, 4, 16, 1 — sum 38 — before a shot is fired, and eight lab
+seeds from it report exactly 28 "hits" each because 66 − 38 = 28. The
+7000-frame run reports the same 28/28/44/28 on its first seeds as the
+4500-frame run did: the extra budget bought nothing because nothing was
+being bought. The baseline is not a property of the wall; the four bytes
+are object-slot fields whose meaning depends on what occupies the slots.
+
+What stands: reaching 3072 is pure camera position and is unaffected.
+What is withdrawn: every hit count in the tables of this day, and the
+sentence "the wall is now the budget's problem". What has never been
+observed, in any run, is the wall dying — the level counter has never
+advanced, and the Aug 30 recording shows the cannons intact to the game
+over. The metric is now the *drop* of the slot sum from its value at
+arrival (`wall_drop`, with `wall_slots_at_arrival` beside it) and is
+labelled a slot-byte drop, not damage; the planner's damage term is
+untouched (a shared offset within a decision) but its validity on real
+arrivals is unverified and is the next thing to establish — by the level
+counter or not at all.
+
+**What the slot bytes are (same day, scripted).** From `contra_wall.state`
+with two lives granted, walking to the wall and tapping UP+RIGHT+B: byte
+1410 (0x582) falls 30 → 14 by exactly one per tap, one tap every four
+frames, then drops to zero when the run dies — the HP of *one* wall part
+in *that* slot. Bytes 1333–1335 do not move under this fire. In the real
+arrival the slot at 1410 holds a 1, i.e. some other object. So the
+"damage" the planner has been pricing is one part's HP when that part
+happens to sit in a fixed slot, and a general damage signal needs the
+object *type* per slot, not four fixed addresses. Open; the kill signal
+remains the level counter.
+
+**7000 frames, same escapes arm, 32 seeds:** 23 reach the wall (22 at
+4500), median 3072, mean 2979, 2.25 deaths per run, 31 of 32 runs used
+their continue, **0 level clears** (pure position never crosses 4000).
+The extra 2500 frames change nothing at the wall, which is the expected
+result once the hit counts are known to be phantom: the planner arrives,
+loses its last lives to the wall, continues from the level start. The
+wall is a boss problem with no verified damage signal yet; the journey
+to it is solved at 22–23 of 32.
+
+## The wall falls, seen this time (2026-09-03, lab)
+
+With the damage term on the object tables (types at 0x530, HP at 0x580;
+the wall = types 17/16/16/4, 72 HP), eight seeds from the real arrival
+state `arrival1.state` (x=3071, two lives granted by the lab flag),
+1500 frames, escapes:
+
+| seed | deaths | typed wall HP arrival → min | best_x |
+|---|---|---|---|
+| 0 | 1 | 72 → 0 | 3072 |
+| 1 | 2 | 77 → 0 | 3072 |
+| 2 | 1 | 72 → 0 | 3072 |
+| **3** | **0** | 72 → 0 | **4000** |
+| 4 | 1 | 72 → 0 | 3072 |
+| 5 | 2 | 72 → 22 | 3072 |
+| 6 | 2 | 72 → 0 | 3072 |
+| **7** | **0** | 72 → 0 | **4000** |
+
+Two seeds advance the level counter — pure position 4000 — with zero
+deaths, so the lab's extra lives played no part in them. Seed 3 was
+re-run with the recorder and the frames checked: explosions on the upper
+cannon and the sensor, the wall face bare, then the stage-clear
+intermission with the hero and the Japanese "arrived at point A" text.
+That is the first wall kill and the first level clear observed in this
+project, and the first claim of one made after looking. "HP → 0" in the
+other seeds is ambiguous by itself — the typed sum also reads 0 when the
+objects despawn on a death — which is why the level counter stays the
+only kill criterion. The choices at the wall: `fire up-right` 12–22 per
+run, the tapped diagonal from two days ago.
+
+Running now: the same arm end to end from power-on, 32 seeds, 7000
+frames; the number that matters is seeds with position ≥ 4000.
+
+## Contra level 1, cleared from power-on: 12 of 32 (2026-09-03)
+
+The same escapes arm with the typed damage term, end to end from
+power-on, 32 seeds, 7000 frames, CRN:
+
+| | count |
+|---|---|
+| reach the wall (position ≥ 3072) | 23 / 32 |
+| **clear the level (level counter, position ≥ 4000)** | **12 / 32** |
+| deaths per run | 2.03 |
+| best_x median / mean | 3072 / 3327 |
+
+Seed 1 was re-run with the recorder and the frames checked: the wall
+fight with both cannons and the sensor exploding, the bare wall face, the
+"arrived at point A" intermission, the **AREA 2 : BASE 1** title card
+with REST 1, and the first corridor of the base. The clears used 1–2
+deaths each; none used a continue before the kill.
+
+Of the eleven seeds that reached the wall and did not clear, seven
+arrived with a typed HP sum above 72 (88–168): turrets from the cliff
+share the cannons' object type and were still in the tables, and the
+clipped term `max(0, 72 − HP)` is silent until the sum falls under 72.
+The unclipped variant (`--wall-unclipped`, the same differences within a
+decision, no baseline) is running paired on the same seeds.
+
+The road here, for the record: the fire semantics from A0 (tap, not
+hold), the escapes from two-step's choices, the object tables from a RAM
+dump under fire, and two retractions along the way. The learned policy
+alone still moves zero pixels in this game.
+
+**Level 2, first look (2026-09-03, scripted).** The base does not scroll,
+so the planner's value is flat there; the first level-2 recording was
+also paused by the harness (auto-continue fired on camera = 0; now gated
+on lives = 0). From a level-start state, standing still and tapping B:
+the room's sensor is object type 20 with 8 HP, it dies in ~8 taps, the
+wall opens; holding UP walks into room 2, whose wall is the same red
+panel with a sensor. A scan for a byte stepping +1 at the room change
+found nothing clean before the scripted run died in room 2. The base's
+progress signal — rooms cleared — is the next per-game variable to find,
+or the first case for a damage-only objective over the object table.

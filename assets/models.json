@@ -76,6 +76,33 @@
       "file": "av_smb.tar.gz",
       "bytes": 1617809,
       "sha256": "7d967ddaa5b1fdfb1259a3fc977572eb75413473607de6a075670b48b9f183bd"
+    },
+    "knowledge_2026_09_03": {
+      "title": "scans and online logs: control_/camera_/buttons_ per game, *_online.jsonl",
+      "file": "knowledge-2026-09-03.tar.gz",
+      "bytes": 35210,
+      "sha256": "1c1842b7d62023699a27ef49fcd322362df19b06beb5860aaf08d5edbf488322",
+      "base": "https://github.com/Recluse/NES-Player/releases/download/artifacts-2026-09-03",
+      "dest": "knowledge",
+      "marker": "control_ContraJ-Nes-v0.json"
+    },
+    "states_contra_2026_09_03": {
+      "title": "Contra savestates: cliff, wall, real arrival, level-2 start",
+      "file": "states-contra-2026-09-03.tar.gz",
+      "bytes": 21409,
+      "sha256": "28dc89162b18371aa7c62e95bf87414492704ee7a33e538ea6414a9812d2ca3e",
+      "base": "https://github.com/Recluse/NES-Player/releases/download/artifacts-2026-09-03",
+      "dest": "oracle_adaptive",
+      "marker": "arrival1.state"
+    },
+    "campaign_logs_2026_09_03": {
+      "title": "per-seed rows of the Sep 3 campaigns (Rush'n Attack, Contra cliff and full level)",
+      "file": "campaign-logs-2026-09-03.tar.gz",
+      "bytes": 11669,
+      "sha256": "a7010c38d28857cdb31807a89db084f7c4acfd28696f0396816fcd81e5bee499",
+      "base": "https://github.com/Recluse/NES-Player/releases/download/artifacts-2026-09-03",
+      "dest": "oracle_adaptive",
+      "marker": "contra_full7k_typed.log"
     }
   }
 }

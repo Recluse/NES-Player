@@ -71,7 +71,7 @@ src/nes_player/
 │   ├── memory.py         ObjectMemory: 16×16 prototypes, contacts, verdicts
 │   ├── audio_events.py   AudioEventDetector: onsets, clusters, death/reward meaning
 │   ├── av_align.py       AVAlign/SoundLocator: contrastive sound↔frame (InfoNCE)
-│   ├── sprites.py        shadow OAM at $0200 → exact object positions, SpriteTracker
+│   ├── sprites.py        shadow OAM at $0200 → exact hardware-sprite positions (training/audit only), SpriteTracker
 │   ├── feedback.py       where "good/bad happened" comes from; strict by default
 │   ├── text.py           HudReader: unsupervised digits, screen prompts
 │   ├── title.py          TitleWatch/TitleTracker: title screen from pixels

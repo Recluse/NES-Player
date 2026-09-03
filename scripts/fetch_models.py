@@ -47,11 +47,14 @@ def _sha256(path: Path) -> str:
 
 
 def fetch(name: str, spec: dict, base: str) -> None:
-    dest = RUNS / name
-    if (dest / "meta.json").exists():
+    dest = RUNS / spec.get("dest", name)
+    marker = dest / spec.get("marker", "meta.json")
+    if marker.exists():
         print(f"{name}: already present, skipping")
         return
-    url = f"{base}/{spec['file']}"
+    # data assets (scans, savestates, campaign logs) live in their own
+    # dated release; the entry names it
+    url = f"{spec.get('base', base)}/{spec['file']}"
     print(f"{name}: downloading {spec['bytes'] / 1e6:.1f} MB from {url}")
     with tempfile.TemporaryDirectory() as td:
         tmp = Path(td) / spec["file"]

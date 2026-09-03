@@ -23,25 +23,31 @@ averages 2–4 such futures, commits 16 frames of the winner, and repeats.
 Progress comes from the game's own position counter; a plan that dies is not
 compared on distance.
 
-The same planner, the same six templates, no per-game tuning beyond a position
-address and a boot sequence:
+The same planner, the same handful of templates, no per-game tuning beyond a
+position address and a boot sequence — and, since 3 September, not even the
+address:
 
 | environment | paired gain over the policy | seeds |
 |---|---|---|
 | SMB 1-1 | +3828 (and 20/32 full clears at 4 draws) | 32 |
 | SMB 2-1 … 6-1 | +509 … +2483, every CI clear of zero | 32 each |
-| Contra (J) | +2270 | 32 |
+| Contra (J) | +2270; **level 1 cleared from power-on in 12/32** with five composed templates and a damage term on the game's object tables | 32 |
 | Contra (U) | +2134 | 32 |
 | Super C | +1210 | 32 |
+| Rush'n Attack | +145 [+124, +166], 32/32 — position **and** templates found by scanning, zero hand-written addresses | 32 |
 
-371 of 384 paired seeds go to the planner. Read the caveats before the
-numbers impress you: the planner is privileged by construction — it looks at
-futures instead of predicting them; on Contra the learned policy is inert
-(median 0 on every seed), so the gain there is carried almost entirely by the
-template prefixes; and the games-in-minutes recipe (find the camera by
-scanning RAM for bytes flat at idle and monotone under advance) works exactly
-while a game keeps one continuous scroll counter — Ninja Gaiden's
-scene-segmented levels and Kung Fu mark where it stops.
+Read the caveats before the numbers impress you: the planner is privileged
+by construction — it looks at futures instead of predicting them; on Contra
+the learned policy is inert (median 0 on every seed), so the gain there is
+carried by the template prefixes; the Contra clear needed two things found
+the hard way (the wall's HP lives in an object table indexed by type, not at
+fixed addresses — a claim of "hits" made before that was found is retracted
+in the journal — and the cliff before the wall falls to compositions of jump
+timings, not to a longer lookahead or a rewind); and the games-in-minutes
+recipe (find the camera by scanning RAM for bytes that move with the
+picture) now also handles an 8-bit scroll with no high byte, but still stops
+at scene-segmented games like Ninja Gaiden and Kung Fu, and at Contra's own
+base stage, where nothing scrolls at all.
 
 ## What learning could not take over
 

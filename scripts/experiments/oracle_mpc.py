@@ -27,6 +27,7 @@ rather than as its first press, so the comparison is between whole plans.
 """
 
 import argparse
+import os
 import json
 import sys
 import zlib
@@ -39,6 +40,47 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
 IDLE_STEP, IDLE_MAX = 37, 1800
 WEAPON_MAIN = 400   # px the planner credits for holding spread; CLI-settable
+SCAN_POS: dict = {}  # game -> position bytes from controllability.py, opt-in
+_UNWRAP: dict = {}  # game -> [last raw, turns] for an 8-bit scroll byte
+# Contra object tables (found 2026-09-03 from a RAM dump under point-blank
+# fire): type per slot at 0x530, HP per slot at 0x580, 16 slots. The wall
+# is four objects — types 17 (HP 32), 16 (16), 16 (16), 4 (8) — in
+# whatever slots they land; earlier code summed three *type* bytes and one
+# HP byte at fixed addresses, which is why its "66" was not damage.
+WALL_TYPES = frozenset({4, 16, 17})
+WALL_HP0 = 72
+WALL_CLIP = True  # --wall-unclipped: price every typed HP point, no baseline
+
+
+def wall_hp(ram) -> int:
+    return sum(int(ram[0x580 + i]) for i in range(16)
+               if int(ram[0x530 + i]) in WALL_TYPES)
+
+
+def _unwrap(game: str, raw: int) -> int:
+    """Turn an 8-bit scroll byte into a running position.
+
+    Symmetric: a drop past 128 is a wrap forward, a rise past 128 a wrap
+    back, so restoring an earlier savestate across a wrap unwinds it.
+    ponytail: breaks if one jump moves the true scroll > 128 px (a
+    respawn pulled back a screen); anchor from x0 per decision if seen.
+    """
+    st = _UNWRAP.setdefault(game, [raw, 0])
+    d = raw - st[0]
+    if d < -128:
+        st[1] += 1
+    elif d > 128:
+        st[1] -= 1
+    st[0] = raw
+    return st[1] * 256 + raw
+
+
+def anchor_pos(env, game: str, pos0: int) -> None:
+    """Pin the unwrap counter so this process agrees with the caller's x0."""
+    sp = SCAN_POS.get(game)
+    if isinstance(sp, dict) and sp.get("hi") is None:
+        raw = int(env._env.get_ram()[sp["lo"]])
+        _UNWRAP[game] = [raw, (sp["sign"] * pos0 - raw) // 256]
 DEATH = -1e9        # a plan that dies is not compared on distance
 
 
@@ -96,6 +138,114 @@ def game_templates(h: int, game: str):
     return cands
 
 
+def auto_templates(h: int, game: str):
+    """Templates assembled from the button probe instead of from folklore.
+
+    Reads runs/knowledge/buttons_<game>.json (probe_buttons.py) and derives:
+        forward   the chord with the most position gained, held
+        fire      among chords that do not move, the one spawning the most
+                  new sprites, in whichever mode (tap/hold) spawns more —
+                  this is where "B must be tapped" is read off the console
+        jump      A + forward, by NES convention (the probe measures no
+                  vertical yet, so this one is assumed, and said so)
+    and builds the same family the hand set has: forward, jump now, jump
+    later, wait, back off, plus the fire chords where the game has a gun.
+    """
+    import json
+
+    path = Path("runs/knowledge") / f"buttons_{game}.json"
+    rows = json.loads(path.read_text())
+    chord = lambda r: frozenset(r["chord"].split("+"))  # noqa: E731
+    moving = [r for r in rows if r["mode"] == "hold" and "RIGHT" in r["chord"]
+              and not r["died"]]
+    fwd = chord(max(moving, key=lambda r: r["dpos"]))
+    still = [r for r in rows if abs(r["dpos"]) < 5 and "RIGHT" not in r["chord"]
+             and "LEFT" not in r["chord"] and r["sprites"] > 0.5]
+    fire = max(still, key=lambda r: r["sprites"]) if still else None
+    jump = fwd | {"A"}
+    left = frozenset({"LEFT"})
+    cands = [
+        ("forward", [fwd] * h),
+        ("jump now", [jump] * 10 + [fwd] * (h - 10)),
+        ("jump later", [fwd] * 12 + [jump] * 10 + [fwd] * (h - 22)),
+        ("wait", [frozenset()] * h),
+        ("back off", [left] * 12 + [fwd] * (h - 12)),
+    ]
+    if fire is not None:
+        btn = chord(fire) - {"UP", "DOWN"}      # the trigger itself
+        tap = fire["mode"] == "tap"
+
+        def pattern(active, rest, n):
+            if not tap:
+                return [active] * n
+            return [active if k % 4 < 2 else rest for k in range(n)]
+
+        up, down = frozenset({"UP", "RIGHT"}), frozenset({"DOWN"})
+        cands += [
+            ("fire up-forward", pattern(btn | up, up, h)),
+            ("prone fire", pattern(btn | down, down, h)),
+            ("jump fire", [jump | btn] * 10 + pattern(btn | up, up, h - 10)),
+        ]
+    return cands
+
+
+def scan_templates(h: int, game: str):
+    """Templates from the causal scan alone (A1 on top of A0).
+
+    Reads runs/knowledge/control_<game>.json and uses nothing per-game:
+        forward   the RIGHT-chord that pushes the scan's own position bytes
+                  furthest, averaged over controllable states; ties go to
+                  the chord that also fires (walk-and-shoot)
+        fire      the B-chord/mode with the most projectile pixels off the
+                  body — the mode carries the tap/hold semantics
+        jump      A + forward, still by convention (no vertical readout yet)
+    """
+    import json
+
+    rep = json.loads((Path("runs/knowledge") / f"control_{game}.json")
+                     .read_text())
+    play = [r for k, r in rep.items()
+            if isinstance(r, dict) and r.get("controllable")]
+    push, fire_px = {}, {}
+    for r in play:
+        for k, v in r["push"].items():
+            push[k] = push.get(k, 0) + v
+        for k, v in r["fire"].items():
+            fire_px[k] = fire_px.get(k, 0) + v["pixels_off_body"]
+    fire_key = max(fire_px, key=fire_px.get) if fire_px else None
+    has_gun = fire_key is not None and fire_px[fire_key] >= 5 * max(1, len(play))
+    fwd_keys = [k for k in push if "RIGHT" in k and k.endswith("/hold")]
+    top = max(push[k] for k in fwd_keys)
+    tied = [k for k in fwd_keys if push[k] >= 0.9 * top]
+    fk = next((k for k in tied if "B" in k), tied[0]) if has_gun else \
+        max(tied, key=lambda k: push[k])
+    fwd = frozenset(fk.split("/")[0].split("+"))
+    jump = fwd | {"A"}
+    cands = [
+        ("forward", [fwd] * h),
+        ("jump now", [jump] * 10 + [fwd] * (h - 10)),
+        ("jump later", [fwd] * 12 + [jump] * 10 + [fwd] * (h - 22)),
+        ("wait", [frozenset()] * h),
+        ("back off", [frozenset({"LEFT"})] * 12 + [fwd] * (h - 12)),
+    ]
+    if has_gun:
+        chord, mode = fire_key.split("/")
+        btn = frozenset(chord.split("+")) - {"UP", "DOWN"}
+        tap = mode == "tap"
+
+        def pattern(active, rest, n):
+            return ([active if k % 4 < 2 else rest for k in range(n)]
+                    if tap else [active] * n)
+
+        up, down = frozenset({"UP", "RIGHT"}), frozenset({"DOWN"})
+        cands += [
+            ("fire up-forward", pattern(btn | up, up, h)),
+            ("prone fire", pattern(btn | down, down, h)),
+            ("jump fire", [jump | btn] * 10 + pattern(btn | up, up, h - 10)),
+        ]
+    return cands
+
+
 def mario_x(env) -> int:
     ram = env._env.get_ram()
     return int(ram[0x6D]) * 256 + int(ram[0x86])
@@ -110,6 +260,15 @@ def game_pos(env, game: str) -> int:
     a level boundary inside a branch.
     """
     ram = env._env.get_ram()
+    if SCAN_POS.get(game):
+        # no RAM map, no hand rule: the camera pair find_camera.py caught
+        # if it exists, else A0's LEFT/RIGHT-responsive bytes summed
+        sp = SCAN_POS[game]
+        if isinstance(sp, dict):
+            if sp.get("hi") is None:
+                return sp["sign"] * _unwrap(game, int(ram[sp["lo"]]))
+            return sp["sign"] * (int(ram[sp["hi"]]) * 256 + int(ram[sp["lo"]]))
+        return int(sum(int(ram[b]) for b in sp))
     if game.startswith("SuperMario"):
         return mario_x(env)
     if game.startswith("SuperC"):
@@ -137,13 +296,17 @@ def game_value(env, game: str) -> int:
     if game.startswith("Contra"):
         ram = env._env.get_ram()
         xs, lvl = pos % 4000, pos // 4000
-        WALL_HP0, PX_PER_HIT = 66, 40
+        PX_PER_HIT = 40
         if lvl > 0:
             pos += PX_PER_HIT * WALL_HP0
         elif xs >= 3070:
-            hp = (int(ram[1333]) + int(ram[1334])
-                  + int(ram[1335]) + int(ram[1410]))
-            pos += PX_PER_HIT * max(0, WALL_HP0 - hp)
+            # The cliff's turrets share type 16 with the cannons and can
+            # still be in the tables at arrival (typed sum 120-135, not
+            # 72), so the clipped term is silent until they are gone.
+            # Unclipped, the baseline is irrelevant: only differences
+            # within a decision are ever used.
+            pos += (PX_PER_HIT * max(0, WALL_HP0 - wall_hp(ram)) if WALL_CLIP
+                    else PX_PER_HIT * (WALL_HP0 - wall_hp(ram)))
         # The owner's capsule idea: a weapon upgrade is worth diverting
         # for. 0xAA verified behaviourally by poke-and-look — 0 is the
         # rifle, 3 fans out as spread, others are mid-tier. Spread is
@@ -248,6 +411,94 @@ def _continue(env, policy, obs, l0, tail: int, repeat: int,
     return died, used
 
 
+_W: dict = {}
+
+
+def _worker_init(game: str, checkpoint: str, integ: str | None,
+                 scan_pos=None, wall_clip: bool = True,
+                 weapon_main: int = 400):
+    """One emulator and one policy per worker process, loaded once.
+
+    A spawned worker re-imports this module, so anything main set after
+    parsing flags is gone here: SCAN_POS arrives explicitly, or the worker
+    silently scores a scan-positioned game with the Contra formula (it
+    did: every candidate identical, the planner blind, best_x fiction).
+    """
+    import torch
+
+    global WALL_CLIP, WEAPON_MAIN
+    if scan_pos is not None:
+        SCAN_POS[game] = scan_pos
+    WALL_CLIP, WEAPON_MAIN = wall_clip, weapon_main
+
+    from nes_player.emulator.stable_retro import StableRetroAdapter
+    from nes_player.policy.bc import BCPolicy
+
+    torch.set_num_threads(1)
+    env = StableRetroAdapter(game, include_debug=True, state=None,
+                             integration_dir=integ)
+    env.reset(seed=0)
+    _W["env"], _W["policy"], _W["game"] = env, BCPolicy(checkpoint), game
+
+
+def _eval_job(job: dict) -> dict:
+    """Score one candidate: prefix, then `draws` continuations from `mid`.
+
+    Identical to the serial loop, including the CRN seeding of every draw,
+    so a parallel run reproduces a serial one byte for byte — the test
+    that guards this path.
+    """
+    env, policy, game = _W["env"], _W["policy"], _W["game"]
+    env.load_state(job["here"])
+    l0, x0 = job["l0"], job["x0"]
+    anchor_pos(env, game, x0)
+    died, used, o = False, 0, None
+    for k in range(job["span"]):
+        o = env.step_buttons([job["plan"][k]])
+        used += 1
+        now = (o.debug or {}).get("lives")
+        if l0 is not None and now is not None and now < l0:
+            died = True
+            break
+    if died or not job["tail"]:
+        val = DEATH if died else game_value(env, game) - x0
+        return {"name": job["name"], "died": died, "outs": None,
+                "val": val, "frames": used}
+    mid = env.save_state()
+    outs = []
+    for di in range(job["draws"]):
+        env.load_state(mid)
+        policy._stack = list(job["stack"])
+        if job["crn"]:
+            np.random.seed(zlib.crc32(
+                f"{job['seed']}:{int(x0)}:{job['name']}:{di}".encode())
+                & 0xFFFFFFFF)
+        gone, extra = _continue(env, policy, o, l0, job["tail"],
+                                job["repeat"], job["tail_temp"])
+        used += extra
+        outs.append((gone, game_value(env, game) - x0))
+        if os.environ.get("POS_DEBUG"):
+            sp = SCAN_POS.get(game) or {}
+            print(f"[w] {job['name']} di={di} x0={x0} gone={gone} "
+                  f"raw={int(env._env.get_ram()[sp.get('lo', 0)])} "
+                  f"unwrap={_UNWRAP.get(game)} gain={outs[-1][1]}",
+                  flush=True)
+    return {"name": job["name"], "died": False, "outs": outs,
+            "val": None, "frames": used}
+
+
+def value_of(outs, draws: int, death_price: float) -> float:
+    """The candidate's value from its draws — one place for the rule."""
+    if death_price:
+        return float(np.mean([x - death_price * g for g, x in outs]))
+    dead_n = sum(g for g, _ in outs)
+    if dead_n * 2 > draws:
+        # die usefully: the floor keeps every live plan above every dead
+        # one; among the dead, damage dealt before dying decides
+        return DEATH + float(np.mean([x for _, x in outs]))
+    return float(np.mean([x for g, x in outs if not g]))
+
+
 def run(checkpoint: str, game: str, state: str | None, frames: int, seed: int,
         temperature: float, repeat: int, horizon: int | None,
         commit: int, ghost_path: str | None = None,
@@ -263,7 +514,9 @@ def run(checkpoint: str, game: str, state: str | None, frames: int, seed: int,
         adaptive: float | None = None, adaptive_g2: float = 0.0,
         crn: bool = False, two_step: bool = False,
         death_price: float = 0.0, escapes: bool = False,
-        save_final: str = "", load_state: str = "") -> dict:
+        save_final: str = "", load_state: str = "",
+        save_at: int = 0, workers: int = 1, auto_tpl: str = "",
+        rollback: int = 0) -> dict:
     from nes_player.emulator.controller import BUTTONS
     from nes_player.emulator.stable_retro import StableRetroAdapter
     from nes_player.perception.motion import pick_hero
@@ -308,8 +561,20 @@ def run(checkpoint: str, game: str, state: str | None, frames: int, seed: int,
     integ = str(integ_root) if (integ_root / game).exists() else None
     env = StableRetroAdapter(game, include_debug=True, state=state,
                              integration_dir=integ)
+    pool = None
+    if workers > 1:
+        import multiprocessing as mp
+
+        pool = mp.get_context("spawn").Pool(
+            workers, initializer=_worker_init,
+            initargs=(game, checkpoint, integ, SCAN_POS.get(game),
+                      WALL_CLIP, WEAPON_MAIN))
     policy = BCPolicy(checkpoint)
     obs = begin_any(env, game)
+    # the boot/title screens may have spun an 8-bit scroll byte: the run's
+    # position starts at its raw value, or arms would carry 256-px offsets
+    # from each other's title screens into best_x
+    _UNWRAP.pop(game, None)
     if load_state:
         # A lab tool: start where a previous run ended (e.g. at a boss
         # wall), with a couple of lives granted so the probe is about the
@@ -346,7 +611,18 @@ def run(checkpoint: str, game: str, state: str | None, frames: int, seed: int,
     # even when the arm itself has no use for one.
     tracker = (SpriteTracker() if ((ghost or probe) and not ram_hero) or video
                else None)
-    cands = game_templates(horizon, game) if horizon else []
+    def make_cands(h, compose=False):
+        base = (scan_templates(h, game) if auto_tpl == "scan"
+                else auto_templates(h, game) if auto_tpl
+                else game_templates(h, game))
+        if not compose:
+            return base
+        # every ordered pair at half the horizon: the rescue re-plan buys
+        # the composition depth a single template cannot express
+        halves = make_cands(h // 2)
+        return base + [(f"{n1}+{n2}", p1 + p2)
+                       for n1, p1 in halves for n2, p2 in halves]
+    cands = make_cands(horizon) if horizon else []
     if two_step and horizon:
         # Two-step search: every ordered pair of the five behaviours, each at
         # half the horizon. The one thing a single template cannot express is
@@ -361,9 +637,16 @@ def run(checkpoint: str, game: str, state: str | None, frames: int, seed: int,
         # carried most of its choices. Add just those to the plain set, so
         # the escape hatch exists at a fraction of the 26-candidate cost.
         t = dict(templates(horizon // 2))
-        cands += [(f"{a}+{b}", t[a] + t[b]) for a, b in
-                  (("jump later", "jump now"), ("back off", "jump now"),
-                   ("jump later", "jump later"))]
+        pairs = ((("run", "jump now"), ("run", "jump later"),
+                  ("jump later", "run"), ("jump now", "run"),
+                  ("jump now", "jump now"))
+                 if game.startswith("Contra") else
+                 (("jump later", "jump now"), ("back off", "jump now"),
+                  ("jump later", "jump later")))
+        # Contra's cliff (2026-09-03): two-step passes it 8/8 where the
+        # plain set passes 1/8, and its choices there are spread over the
+        # run+jump family — a finer jump-timing grid, not one pair.
+        cands += [(f"{a}+{b}", t[a] + t[b]) for a, b in pairs]
     best_x, deaths, lives = 0, 0, (obs.debug or {}).get("lives")
     chosen: Counter = Counter()
     held: list = []
@@ -404,9 +687,30 @@ def run(checkpoint: str, game: str, state: str | None, frames: int, seed: int,
     branch_frames = 0
     escalated = decisions = 0
     credits_used, stuck, deep_in_level = 0, 0, False
-    wmax, hits_max = 0, 0
+    wmax, hp_arrival, hp_min = 0, None, None
+    saved_at_done = False
+    # B1': failure-triggered rollback. A ring of the last `rollback`
+    # decision states; when every candidate is doomed the console is
+    # rewound one decision at a time, the horizon grows by the depth so
+    # the re-plan still reaches the death it is trying to avoid, and the
+    # first surviving plan is committed whole. Discarded frames count
+    # against the budget: `i` keeps running while the game goes back.
+    hist: list = []
+    rb = {"attempts": 0, "rescued": 0, "failed": 0, "depths": [],
+          "discarded": 0}
+    rb_h = rb_depth = 0
+    rb_block = None
+    danger_until = 0  # game time until which the rich candidate set stays on
+    gt = 0  # game time: executed frames minus rewound ones
 
     for i in range(frames):
+        if rollback and not rb_h and gt % 16 == 0 and not held:
+            # snapshot on the game's clock, not the decision clock: a
+            # rescued plan is held whole, and a ring of decision states
+            # would then reach back a hundred frames in one step
+            hist.append((env.save_state(), list(policy._stack),
+                         dict(_UNWRAP), obs, best_x, deaths, lives, gt))
+            del hist[:-(rollback + 1)]
         hero = None
         if tracker is not None:
             slots = tracker.update(obs.frame_rgb, pressed,
@@ -422,13 +726,21 @@ def run(checkpoint: str, game: str, state: str | None, frames: int, seed: int,
         if (horizon and not held and defer <= 0
                 and (not needs_hero or hero is not None)):
             here = env.save_state()
+            h = rb_h or horizon
+            if rollback and gt >= danger_until:
+                rb_depth = 0  # the danger that opened the window is behind us
             x0, l0 = game_value(env, game), (obs.debug or {}).get("lives")
+            if os.environ.get("POS_DEBUG"):
+                sp = SCAN_POS.get(game) or {}
+                print(f"[m] i={i} x0={x0} l0={l0} "
+                      f"raw={int(env._env.get_ram()[sp.get('lo', 0)])} "
+                      f"unwrap={_UNWRAP.get(game)}", flush=True)
             stack = list(policy._stack)
 
             # The policy's own plan, played out in the branch so that what is
             # compared is a sequence and not a first press.
             seq, o = [], obs
-            for k in range(horizon):
+            for k in range(h):
                 if k % repeat == 0:
                     p, ranked = policy.act(o.frame_rgb, temperature)
                     if k == 0:
@@ -437,7 +749,9 @@ def run(checkpoint: str, game: str, state: str | None, frames: int, seed: int,
                 seq.append(p)
                 o = env.step_buttons([p])
             policy._stack = list(stack)
-            options = [("bc", seq), *cands]
+            rich = bool(rb_h) or gt < danger_until
+            options = [("bc", seq),
+                       *(make_cands(h, compose=True) if rich else cands)]
             env.load_state(here)
 
             scored = []
@@ -485,7 +799,25 @@ def run(checkpoint: str, game: str, state: str | None, frames: int, seed: int,
             # plan gained more than a pixel, so the "habit" control was an
             # oracle wearing a habit's name.
             skip = probe is not None or (fixed and not rescue)
-            for name, plan in (() if skip or knn is not None else options):
+            parallel = (pool is not None and not skip and knn is None
+                        and ghost is None and adaptive is None)
+            if parallel:
+                span = h if rb_h else (horizon if not tail
+                                       else min(tail_from, horizon))
+                jobs = [{"name": name, "plan": plan, "here": here,
+                         "span": span, "l0": l0, "x0": x0, "tail": tail,
+                         "draws": draws, "stack": stack, "crn": crn,
+                         "seed": seed, "repeat": repeat,
+                         "tail_temp": tail_temp}
+                        for name, plan in options]
+                plans = dict(options)
+                for r in pool.map(_eval_job, jobs):
+                    branch_frames += r["frames"]
+                    val = (r["val"] if r["outs"] is None
+                           else value_of(r["outs"], draws, death_price))
+                    scored.append((val, r["name"], plans[r["name"]]))
+            for name, plan in (() if skip or knn is not None or parallel
+                               else options):
                 if ghost is not None:
                     scored.append((learned_dx(ghost, obs.frame_rgb, hero, plan),
                                    name, plan))
@@ -503,7 +835,8 @@ def run(checkpoint: str, game: str, state: str | None, frames: int, seed: int,
                 # the *decision*: the committed prefix, then whatever comes
                 # next. `tail_from` = horizon measures the plan held to the end
                 # and then continued, which is the classic terminal value.
-                span = horizon if not tail else min(tail_from, horizon)
+                span = h if rb_h else (horizon if not tail
+                                       else min(tail_from, horizon))
                 for k in range(span):
                     o = env.step_buttons([plan[k]])
                     now = (o.debug or {}).get("lives")
@@ -676,6 +1009,37 @@ def run(checkpoint: str, game: str, state: str | None, frames: int, seed: int,
             score, name, plan = (best if best[0] > bc_score + margin
                                  else next(t for t in scored if t[1] == "bc"))
             chosen[name] += 1
+            if rollback and best[0] < DEATH / 2 \
+                    and (rb_block is None or lives != rb_block):
+                if len(hist) > rb_depth + 1:
+                    rb_depth += 1
+                    if rb_depth == 1:
+                        rb["attempts"] += 1
+                    # the death is within one lookahead of here; stay rich
+                    # until the game clock is past it
+                    danger_until = max(danger_until, gt + horizon + tail)
+                    here_, stack_, unw, obs, best_x, deaths, lives, gt0 = \
+                        hist[-(rb_depth + 1)]
+                    env.load_state(here_)
+                    policy._stack = list(stack_)
+                    _UNWRAP.clear()
+                    _UNWRAP.update(unw)
+                    rb["discarded"] += gt - gt0
+                    # the re-plan must still reach the death it is avoiding
+                    rb_h = horizon + (gt - gt0)
+                    gt = gt0
+                    held, defer = [], 0
+                    continue
+                # nothing survives from as far back as we keep: play the
+                # least bad plan and do not try again on this life
+                rb["failed"] += 1
+                rb_block, rb_h, rb_depth, danger_until = lives, 0, 0, 0
+            elif rb_h:
+                # a survivor from the rolled-back state: committed like any
+                # other plan, with the rich set kept on through the window
+                rb["rescued"] += 1
+                rb["depths"].append(rb_depth)
+                rb_h = 0
             # Choosing the policy can mean two things, and they are not worth
             # the same. Replaying the sequence that was scored commits to it
             # for the whole window. Handing the wheel back lets the policy
@@ -705,6 +1069,7 @@ def run(checkpoint: str, game: str, state: str | None, frames: int, seed: int,
                 pressed, _ = policy.act(obs.frame_rgb, temperature)
                 pressed = pressed - {"START", "SELECT"}
         obs = env.step_buttons([pressed])
+        gt += 1
         if view is not None:
             for ev in ears.push(obs.audio_pcm, i):
                 sounds.add(ev.cluster_id, ears.clusters[ev.cluster_id].heard)
@@ -761,21 +1126,33 @@ def run(checkpoint: str, game: str, state: str | None, frames: int, seed: int,
         # screen with the camera back at zero. A human presses START; so
         # does the runner, and the credit is counted. The level restarts
         # from its beginning — continues buy attempts, not position.
+        if save_at and save_final and not saved_at_done \
+                and (game_pos(env, game) if save_at >= 4000
+                     else game_pos(env, game) % 4000) >= save_at:
+            Path(save_final).write_bytes(env.save_state())
+            saved_at_done = True
         if game.startswith("Contra"):
             ram_ = env._env.get_ram()
             wmax = max(wmax, int(ram_[170]))
             if game_pos(env, game) % 4000 >= 3070:
-                hp_ = (int(ram_[1333]) + int(ram_[1334])
-                       + int(ram_[1335]) + int(ram_[1410]))
-                hits_max = max(hits_max, 66 - min(hp_, 66))
+                # typed HP of the wall's objects; a kill is still only the
+                # level counter, which game_pos folds in at 4000
+                hp_ = wall_hp(ram_)
+                if hp_arrival is None:
+                    hp_arrival, hp_min = hp_, hp_
+                hp_min = min(hp_min, hp_)
         if game.startswith("Contra") or game.startswith("SuperC"):
             xs_now = game_pos(env, game) % 4000
             if xs_now > 1000:
                 deep_in_level = True
-            if deep_in_level and xs_now == 0:
-                stuck += 1
-            else:
-                stuck = 0
+            # Game over resets the camera to 0 *and* lives to 0. The base
+            # stages never scroll horizontally, so the camera alone once
+            # read a freshly cleared level as a game over, pressed START
+            # into a live game and left it paused (2026-09-03, seen in the
+            # first level-2 recording).
+            game_over = (deep_in_level and xs_now == 0
+                         and int(lives or 0) <= 0)
+            stuck = stuck + 1 if game_over else 0
             if stuck > 120:
                 for k2 in range(600):
                     pulse = k2 % 60 in (0, 1)
@@ -793,16 +1170,21 @@ def run(checkpoint: str, game: str, state: str | None, frames: int, seed: int,
                 defer = 0
     if view is not None:
         view.close()
-    if save_final:
+    if save_final and not save_at:
         Path(save_final).write_bytes(env.save_state())
+    if pool is not None:
+        pool.close()
+        pool.join()
     env.close()
     return {"seed": seed, "best_x": best_x, "deaths": deaths,
             "branch_frames": branch_frames, "chosen": dict(chosen),
             **({"credits": credits_used} if credits_used else {}),
-            **({"wmax": wmax, "wall_hits": hits_max}
+            **({"wmax": wmax, "wall_hp_arrival": hp_arrival,
+                "wall_hp_min": hp_min}
                if game.startswith("Contra") else {}),
             **({"escalated": escalated, "decisions": decisions}
-               if adaptive is not None else {})}
+               if adaptive is not None else {}),
+            **({"rollback": rb} if rollback else {})}
 
 
 def main() -> int:
@@ -817,6 +1199,15 @@ def main() -> int:
     ap.add_argument("--frames", type=int, default=3000)
     ap.add_argument("--repeat", type=int, default=4)
     ap.add_argument("--commit", type=int, default=16)
+    ap.add_argument("--wall-unclipped", action="store_true",
+                    help="Contra: damage term without the max(0, 72 - HP) "
+                         "clip, so turrets sharing the cannons' type do not "
+                         "mute it at arrival")
+    ap.add_argument("--rollback", type=int, default=0,
+                    help="B1': when every candidate is doomed, rewind up to "
+                         "this many decisions (16 frames each), re-plan with "
+                         "a horizon grown by the depth, commit the first "
+                         "surviving plan whole")
     ap.add_argument("--temperature", type=float, default=0.9)
     ap.add_argument("--horizons", type=int, nargs="+", default=[48, 96, 144])
     ap.add_argument("--knn-memory", default="",
@@ -845,6 +1236,22 @@ def main() -> int:
                     help="start from this saved emulator state instead of "
                          "the game's own beginning — a lab tool for boss "
                          "work; grants two lives")
+    ap.add_argument("--auto-templates", nargs="?", const="probe", default="",
+                    help="assemble the candidate set from a measurement "
+                         "instead of the hand-written one: 'probe' (the "
+                         "button probe, circular) or 'scan' (the causal "
+                         "controllability scan, no RAM map)")
+    ap.add_argument("--pos-from-scan", action="store_true",
+                    help="take the progress position from the scan's own "
+                         "consistent position bytes instead of a hand rule")
+    ap.add_argument("--workers", type=int, default=1,
+                    help="emulator processes scoring candidates in "
+                         "parallel; a CRN run reproduces the serial one "
+                         "byte for byte")
+    ap.add_argument("--save-at", type=int, default=0,
+                    help="with --save-final: save the state the first time "
+                         "pure in-level position crosses this x, instead of "
+                         "at the end of the run")
     ap.add_argument("--save-final", default="",
                     help="write the emulator state at the last frame to this "
                          "file, so a later probe can start where the run "
@@ -924,8 +1331,18 @@ def main() -> int:
                          "learned ego model, to price the model against the "
                          "objective")
     args = ap.parse_args()
-    global WEAPON_MAIN
+    global WEAPON_MAIN, WALL_CLIP
     WEAPON_MAIN = args.weapon_px
+    WALL_CLIP = not args.wall_unclipped
+    if args.pos_from_scan:
+        cam = Path("runs/knowledge") / f"camera_{args.game}.json"
+        if cam.exists():
+            SCAN_POS[args.game] = json.loads(cam.read_text())
+        else:
+            rep = json.loads((Path("runs/knowledge") / f"control_{args.game}.json")
+                             .read_text())
+            SCAN_POS[args.game] = rep["position_bytes_consistent"]
+        print("pos-from-scan:", SCAN_POS[args.game])
     if args.state in ("none", ""):
         # power-on boot, for integrations that ship no default savestate
         args.state = None
@@ -954,6 +1371,14 @@ def main() -> int:
             name += f" adaptive={args.adaptive:g}"
         if args.crn and horizon:
             name += " crn"
+        if args.auto_templates and horizon:
+            name += f" auto={args.auto_templates}"
+        if args.rollback and horizon:
+            name += f" rb={args.rollback}"
+        if args.wall_unclipped and horizon:
+            name += " wall-unclipped"
+        if args.pos_from_scan and horizon:
+            name += " scanpos"
         if args.two_step and horizon:
             name += " two-step"
         if args.death_price and horizon:
@@ -987,7 +1412,9 @@ def main() -> int:
                       None if horizon is None else args.adaptive,
                       args.adaptive_g2, args.crn, args.two_step,
                       args.death_price, args.escapes, args.save_final,
-                      args.load_state)
+                      args.load_state, args.save_at, args.workers,
+                      args.auto_templates,
+                      rollback=args.rollback if horizon else 0)
             rows.append(row)
             print(json.dumps({"arm": name, **row}), flush=True)
         arms[name] = rows
