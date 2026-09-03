@@ -97,12 +97,26 @@ def main() -> int:
     ap.add_argument("game")
     ap.add_argument("--state", default="default")
     ap.add_argument("--at", type=int, nargs="+", default=[60, 300, 600])
+    ap.add_argument("--load-state", default="",
+                    help="scan this saved state instead of the game's own "
+                         "opening — a base stage answers to different "
+                         "buttons than the jungle that leads to it")
     args = ap.parse_args()
     state = None if args.state in ("none", "") else args.state
     root = Path(__file__).resolve().parents[2] / "integrations"
     integ = str(root) if (root / args.game).exists() else None
     env = StableRetroAdapter(args.game, include_debug=True, state=state,
                              integration_dir=integ)
+
+    if args.load_state:
+        env.reset(seed=0)
+        env.load_state(Path(args.load_state).read_bytes())
+        env._env.data.set_value("lives", 2)
+        for _ in range(90):
+            obs = env.step_buttons([frozenset()])
+        states = [(Path(args.load_state).stem, env.save_state())]
+        return scan_states(env, states, args.game,
+                           "_" + Path(args.load_state).stem)
 
     # a title-screen state first: the scan must call it uncontrollable
     obs = env.reset(seed=0)
@@ -122,6 +136,10 @@ def main() -> int:
             obs = env.step_buttons([frozenset()])
         states.append((f"play+{target}", env.save_state()))
 
+    return scan_states(env, states, args.game)
+
+
+def scan_states(env, states, game: str, tag: str = "") -> int:
     report = {}
     for label, st in states:
         noop = branch(env, st, frozenset(), "hold")
@@ -204,7 +222,7 @@ def main() -> int:
         common = sorted(b for b, c in votes.items() if c >= need)
         report["position_bytes_consistent"] = common
         print(f"position bytes in >= {need} of {len(play)} states:", common)
-    out = Path("runs/knowledge") / f"control_{args.game}.json"
+    out = Path("runs/knowledge") / f"control_{game}{tag}.json"
     out.write_text(json.dumps(report, indent=1, default=str))
     print("wrote", out)
     return 0

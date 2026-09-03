@@ -4898,3 +4898,135 @@ panel with a sensor. A scan for a byte stepping +1 at the room change
 found nothing clean before the scripted run died in room 2. The base's
 progress signal — rooms cleared — is the next per-game variable to find,
 or the first case for a damage-only objective over the object table.
+
+**Unclipped damage term, paired (2026-09-03).** The clipped term
+`max(0, 72 − typed HP)` is silent while the cliff's turrets (same object
+type) are still in the tables. Removing the clip — the baseline is
+irrelevant, only differences within a decision are used — on the same 32
+seeds, 7000 frames, CRN:
+
+| arm | level clears | reach the wall | best_x mean | deaths / run |
+|---|---|---|---|---|
+| clipped (default) | 12 / 32 | 23 | 3327 | 2.03 |
+| unclipped | 15 / 32 | 23 | 3414 | 1.84 |
+
+Paired best_x +87 [−58, +232]; 5 wins, 25 ties, 2 losses. On clears the
+flips are 5 one way and 2 the other, McNemar exact p = 0.45. The change
+looks right by construction and points the right way on both numbers,
+but at 32 seeds it is not resolvable — the same lesson as the 2→4 draw
+step. It stays behind `--wall-unclipped`, not as the default, until
+something certifies it; the honest summary of the day's Contra result
+remains 12/32.
+
+## A5: the object tables, asked for instead of dug up (2026-09-03)
+
+Contra's wall cost a day of RAM archaeology and one retraction, and
+nothing about the search was specific to Contra. `object_tables.py` runs
+the A0 pattern on the trigger: from one state, a no-op branch beside one
+branch per way the game can shoot — every fire chord A0 saw, plus the
+aims a probe of single chords never reaches (up, up-forward, forward).
+Bytes that fall under fire and not while idle are the raw material; four
+filters make them evidence, each one added because it fired falsely:
+
+  * **a branch ends at a lost life.** A chord containing RIGHT walks the
+    soldier into the wall; the death wipes half of RAM, and every one of
+    those bytes "falls under fire" in one step. 259 candidates became 1.
+  * **each branch is judged over its own window.** Standing still under a
+    boss's fire is short-lived, and truncating the firing branch to the
+    idle one's length hid the very steps the scan looks for.
+  * **rates, not totals.** With unequal windows a clock ticking down at
+    the same speed in both branches reads as damage in the longer one.
+  * **no lockstep copies.** Damage is not synchronised: a value falling
+    identically at a dozen addresses is one counter mirrored through a
+    table. Rush'n Attack produced seventeen immaculate copies of a scroll
+    counter, 215 → 105 in 110 steps of one.
+
+What survives is split by the distinction the retraction turned on: hit
+points are **counted down** in many small steps, while an object's type
+and flags are **wiped in one lump** when it dies. The wiped fields then
+name the parallel table: the aligned block that holds at least two of
+them, and in which every slot that holds a type also holds hit points
+(the converse fails — an emptied slot keeps its last hit-point value).
+
+On Contra's wall, from the fight state, the scan prints:
+
+```
+HP    0x582: 30 -> 0 in 30 steps of [1]  [B+RIGHT+UP/tap]
+field 0x531, 0x535, 0x536, 0x537: wiped on death
+tables: types at 0x530, hit points at 0x580, 16 slots
+  types: [1, 6, 17, 1, 1, 16, 4, 16, 0, 0, 0, 8, 8, 8, 0, 0]
+  hp:    [1, 1, 30, 1, 1, 16, 8, 13, 0, 0, 0, 5, 5, 5, 1, 5]
+```
+
+which is exactly the pair found by hand, including the wall's own
+17/16/16/4. On Rush'n Attack the honest answer is nothing: after the
+mirrors are discarded no byte counts down under fire, and indeed the
+knife kills in one hit — that game has no hit-point table to find.
+
+The scan is a hypothesis with its evidence, not a fact. A byte that falls
+under fire could be ammunition, and the only proof that a damage signal
+is real remains what it was on the wall: killing the thing advances the
+game's own level counter.
+
+## A2: a frontier keyed by the picture, and what it found in the base (2026-09-03)
+
+The Go-Explore already in the repository keys its cells on the Super
+Mario Bros. RAM map — level, camera, clock — which is the per-game
+variable a universal agent is meant to discover, and it degenerates
+exactly where the planner already fails: Contra's base does not scroll,
+so the whole stage is one cell. `frontier.py` keys cells on perception
+instead: a coarse hash of the picture plus where the moving thing is.
+
+The hash needed calibrating, and the calibration is the useful part. Over
+2200 scripted frames through two rooms of the base and the door between
+them:
+
+| grid × quantisation | scenes in room 1 | room 2 | shared |
+|---|---|---|---|
+| 12×10, 3 bits | 260 | 25 | 4 |
+| 8×7, 2 bits | 35 | 7 | 3 |
+| **6×5, 2 bits** | **22** | **4** | **2** |
+| 4×4, ~1.5 bits | 7 | 2 | 2 |
+
+At 12×10 the hash keys on where the sprites are and one room is 260
+places; at 4×4 the rooms start to merge. 6×5 at two bits is the setting.
+
+**Result on the base: the archive maps the room and goes nowhere.** 400
+iterations of 150-frame bursts from remembered states find 50 cells over
+21 scenes, and then nothing new — the position counter never moves off
+4000 and there are no deaths, because the bursts are the templates the
+scan derived in the jungle and the base wants something else.
+
+**Why, from the console rather than from guessing.** Rescanning A0 from
+inside the base (the causal scan now takes `--load-state`) says: the
+first frames after the intermission are not controllable at all (which is
+why the first rescan reported a body of zero pixels); deeper in, the body
+is 145 px at (103, 99), byte 820 answers LEFT and RIGHT in opposite
+directions — **the base does have a position, it is just not the camera**
+— RIGHT/hold pushes it 14, and *every* chord is lethal within 32 frames
+from that spot, which is a fair description of standing in a shooting
+gallery.
+
+So the base is not signal-less; the level-1 formula is simply the wrong
+reader for it. The next step is the one this makes obvious: the scan's
+position should be resolved per scene, not per game, with the frontier's
+own scene hash as the key — and the archive is what supplies the states
+to scan from.
+
+**Correction, same day: the base's position is real and useless.** The
+rescan's byte 820 does answer the buttons in play, not only in a 32-frame
+probe: walking right takes it 113 → 208, walking left 207 → 65. But 208
+is the right-hand wall of the room, and there it stops. Handed to the
+planner as its position (`--pos-scan-file`), eight paired seeds from a
+base state produce decisions **byte-identical** to the arm with the flat
+camera, and `best_x` reads 208 on every seed — the value saturates within
+the first room, so every candidate scores the same and the planner hands
+the wheel to the policy exactly as before.
+
+So "the base has a position" was too generous a reading of the scan, and
+this corrects it: what the base has is a bounded *within-room* coordinate.
+Progress there is discrete — rooms — and the only discrete signal now in
+hand is the frontier's own scene hash. That, not a scalar address, is
+what an objective for a non-scrolling stage has to be built from; and the
+saturation test above is a cheap detector for when a game needs it (the
+scan's position hits its maximum early and stays).

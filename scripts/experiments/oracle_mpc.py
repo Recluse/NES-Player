@@ -40,6 +40,15 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
 IDLE_STEP, IDLE_MAX = 37, 1800
 WEAPON_MAIN = 400   # px the planner credits for holding spread; CLI-settable
+def scene_hash(frame):
+    """A coarse fingerprint of the picture; see frontier.py for the
+    calibration (6x5 cells, two bits: one room of Contra's base is about
+    twenty scenes, the next room shares two of them)."""
+    from frontier import scene_hash as _h
+
+    return _h(frame)
+
+
 SCAN_POS: dict = {}  # game -> position bytes from controllability.py, opt-in
 _UNWRAP: dict = {}  # game -> [last raw, turns] for an 8-bit scroll byte
 # Contra object tables (found 2026-09-03 from a RAM dump under point-blank
@@ -387,7 +396,7 @@ def learned_dx(ghost, frame_rgb, hero, plan) -> float:
 
 
 def _continue(env, policy, obs, l0, tail: int, repeat: int,
-              temperature: float):
+              temperature: float, scenes: set | None = None):
     """Keep playing under a fixed continuation, and say whether it ends badly.
 
     The continuation has to be one policy and always the same one, or the value
@@ -404,6 +413,8 @@ def _continue(env, policy, obs, l0, tail: int, repeat: int,
             pressed = pressed - {"START", "SELECT"}
         obs = env.step_buttons([pressed])
         used += 1
+        if scenes is not None and k % 8 == 0:
+            scenes.add(scene_hash(obs.frame_rgb))
         now = (obs.debug or {}).get("lives")
         if l0 is not None and now is not None and now < l0:
             died = True
@@ -453,17 +464,24 @@ def _eval_job(job: dict) -> dict:
     l0, x0 = job["l0"], job["x0"]
     anchor_pos(env, game, x0)
     died, used, o = False, 0, None
+    seen = job.get("seen") or frozenset()
+    visited: set = set() if job.get("novelty") else None
     for k in range(job["span"]):
         o = env.step_buttons([job["plan"][k]])
         used += 1
+        if visited is not None and k % 8 == 0:
+            visited.add(scene_hash(o.frame_rgb))
         now = (o.debug or {}).get("lives")
         if l0 is not None and now is not None and now < l0:
             died = True
             break
     if died or not job["tail"]:
         val = DEATH if died else game_value(env, game) - x0
+        if not died and visited is not None:
+            val += job["novelty"] * len(visited - seen)
         return {"name": job["name"], "died": died, "outs": None,
-                "val": val, "frames": used}
+                "val": val, "frames": used,
+                "visited": sorted(visited - seen) if visited else []}
     mid = env.save_state()
     outs = []
     for di in range(job["draws"]):
@@ -473,10 +491,19 @@ def _eval_job(job: dict) -> dict:
             np.random.seed(zlib.crc32(
                 f"{job['seed']}:{int(x0)}:{job['name']}:{di}".encode())
                 & 0xFFFFFFFF)
+        draw_seen: set | None = set() if visited is not None else None
         gone, extra = _continue(env, policy, o, l0, job["tail"],
-                                job["repeat"], job["tail_temp"])
+                                job["repeat"], job["tail_temp"], draw_seen)
         used += extra
-        outs.append((gone, game_value(env, game) - x0))
+        gain = game_value(env, game) - x0
+        if visited is not None:
+            # Novelty as an objective term, for stages where position
+            # saturates: a plan is worth what it reaches, and in a room
+            # with no camera "further" can only mean "somewhere not seen".
+            new = (visited | draw_seen) - seen
+            gain += job["novelty"] * len(new)
+            visited |= draw_seen
+        outs.append((gone, gain))
         if os.environ.get("POS_DEBUG"):
             sp = SCAN_POS.get(game) or {}
             print(f"[w] {job['name']} di={di} x0={x0} gone={gone} "
@@ -484,7 +511,8 @@ def _eval_job(job: dict) -> dict:
                   f"unwrap={_UNWRAP.get(game)} gain={outs[-1][1]}",
                   flush=True)
     return {"name": job["name"], "died": False, "outs": outs,
-            "val": None, "frames": used}
+            "val": None, "frames": used,
+            "visited": sorted(visited - seen) if visited else []}
 
 
 def value_of(outs, draws: int, death_price: float) -> float:
@@ -516,7 +544,7 @@ def run(checkpoint: str, game: str, state: str | None, frames: int, seed: int,
         death_price: float = 0.0, escapes: bool = False,
         save_final: str = "", load_state: str = "",
         save_at: int = 0, workers: int = 1, auto_tpl: str = "",
-        rollback: int = 0) -> dict:
+        rollback: int = 0, novelty: float = 0.0) -> dict:
     from nes_player.emulator.controller import BUTTONS
     from nes_player.emulator.stable_retro import StableRetroAdapter
     from nes_player.perception.motion import pick_hero
@@ -689,6 +717,7 @@ def run(checkpoint: str, game: str, state: str | None, frames: int, seed: int,
     credits_used, stuck, deep_in_level = 0, 0, False
     wmax, hp_arrival, hp_min = 0, None, None
     saved_at_done = False
+    seen_scenes: set = set()
     # B1': failure-triggered rollback. A ring of the last `rollback`
     # decision states; when every candidate is doomed the console is
     # rewound one decision at a time, the horizon grows by the depth so
@@ -808,11 +837,15 @@ def run(checkpoint: str, game: str, state: str | None, frames: int, seed: int,
                          "span": span, "l0": l0, "x0": x0, "tail": tail,
                          "draws": draws, "stack": stack, "crn": crn,
                          "seed": seed, "repeat": repeat,
-                         "tail_temp": tail_temp}
+                         "tail_temp": tail_temp, "novelty": novelty,
+                         "seen": frozenset(seen_scenes) if novelty else None}
                         for name, plan in options]
                 plans = dict(options)
                 for r in pool.map(_eval_job, jobs):
                     branch_frames += r["frames"]
+                    # every scene any branch reached is known from now on,
+                    # so the same discovery is not paid for twice
+                    seen_scenes.update(r.get("visited") or ())
                     val = (r["val"] if r["outs"] is None
                            else value_of(r["outs"], draws, death_price))
                     scored.append((val, r["name"], plans[r["name"]]))
@@ -1178,6 +1211,7 @@ def run(checkpoint: str, game: str, state: str | None, frames: int, seed: int,
     env.close()
     return {"seed": seed, "best_x": best_x, "deaths": deaths,
             "branch_frames": branch_frames, "chosen": dict(chosen),
+            **({"scenes_branched": len(seen_scenes)} if novelty else {}),
             **({"credits": credits_used} if credits_used else {}),
             **({"wmax": wmax, "wall_hp_arrival": hp_arrival,
                 "wall_hp_min": hp_min}
@@ -1203,6 +1237,11 @@ def main() -> int:
                     help="Contra: damage term without the max(0, 72 - HP) "
                          "clip, so turrets sharing the cannons' type do not "
                          "mute it at arrival")
+    ap.add_argument("--novelty", type=float, default=0.0,
+                    help="px a plan earns per scene it reaches that this "
+                         "run has not seen; for stages where position "
+                         "saturates (a base with no camera). Needs "
+                         "--workers > 1: the archive travels in the job")
     ap.add_argument("--rollback", type=int, default=0,
                     help="B1': when every candidate is doomed, rewind up to "
                          "this many decisions (16 frames each), re-plan with "
@@ -1241,6 +1280,10 @@ def main() -> int:
                          "instead of the hand-written one: 'probe' (the "
                          "button probe, circular) or 'scan' (the causal "
                          "controllability scan, no RAM map)")
+    ap.add_argument("--pos-scan-file", default="",
+                    help="read the position bytes from this scan report "
+                         "instead of the game's own: a base stage answers "
+                         "to a different byte than the jungle before it")
     ap.add_argument("--pos-from-scan", action="store_true",
                     help="take the progress position from the scan's own "
                          "consistent position bytes instead of a hand rule")
@@ -1334,7 +1377,11 @@ def main() -> int:
     global WEAPON_MAIN, WALL_CLIP
     WEAPON_MAIN = args.weapon_px
     WALL_CLIP = not args.wall_unclipped
-    if args.pos_from_scan:
+    if args.pos_scan_file:
+        rep_ = json.loads(Path(args.pos_scan_file).read_text())
+        SCAN_POS[args.game] = rep_["position_bytes_consistent"]
+        print("pos-from-scan-file:", SCAN_POS[args.game])
+    elif args.pos_from_scan:
         cam = Path("runs/knowledge") / f"camera_{args.game}.json"
         if cam.exists():
             SCAN_POS[args.game] = json.loads(cam.read_text())
@@ -1377,6 +1424,8 @@ def main() -> int:
             name += f" rb={args.rollback}"
         if args.wall_unclipped and horizon:
             name += " wall-unclipped"
+        if args.novelty and horizon:
+            name += f" novelty={args.novelty:g}"
         if args.pos_from_scan and horizon:
             name += " scanpos"
         if args.two_step and horizon:
@@ -1414,7 +1463,8 @@ def main() -> int:
                       args.death_price, args.escapes, args.save_final,
                       args.load_state, args.save_at, args.workers,
                       args.auto_templates,
-                      rollback=args.rollback if horizon else 0)
+                      rollback=args.rollback if horizon else 0,
+                      novelty=args.novelty if horizon else 0.0)
             rows.append(row)
             print(json.dumps({"arm": name, **row}), flush=True)
         arms[name] = rows
