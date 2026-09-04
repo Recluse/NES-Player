@@ -5123,3 +5123,228 @@ reachable and everything else is noise. What the base needs is not a
 better term but a longer or hierarchical horizon — the same class of
 problem as the wall, which was only solved once damage gave the window
 something to count. Left open, with the evidence in one place.
+
+## The base, six objectives later, and the arithmetic that ends it (2026-09-03)
+
+A subagent found the base's progress counter: byte 100 steps 0, 1, 2
+across rooms, confirmed on three differently-played runs with two
+transitions each, stepping exactly twice per run and nowhere else — not
+during fifteen deaths, not during a wandering prelude. It also rejected a
+byte that changed exactly once at the first transition and would have
+passed a single-transition test: a free-running timer on a ~768-frame
+schedule. That is the standard this project should hold candidates to.
+
+The finding turned out to be about the objective, not the counter: byte
+100 is the camera's high byte, already inside `game_pos`. The progress
+signal was in the value all along, and a room reads as +256.
+
+Two of the day's conclusions have to be withdrawn:
+
+  * **"the vertical term changes nothing"** — it measured the median of
+    everything that moved between two frames, which in that room is enemy
+    fire. Holding UP, DOWN or nothing all gave 0.57. A6 (`hero_tiles.py`)
+    now finds the player's sprites causally, and marking the result on
+    frames puts the cross on the soldier.
+  * **"the transition is not reachable inside a 144-frame window"** — it
+    is, from in front of the door, in about fifty frames. The planner
+    does not fail to see the transition; it fails to walk to the door.
+
+With the hero fixed and the door's position taken from the manual, six
+objectives have now been measured in the base, over the same eight
+paired seeds:
+
+| arm | deaths / run | rooms entered |
+|---|---|---|
+| plain | 0.50 | 0 / 8 |
+| novelty, scene only | 0.50 | 0 / 8 |
+| novelty, scene + body | 0.50 | 0 / 8 |
+| manual's targets (prior) | 0.25 | 0 / 8 |
+| prior + hero-corrected "up" | 0.25 | 0 / 8 |
+| prior + route note (near the door, and up) | 0.25 | 0 / 8 |
+| prior + route + death priced at 400 | 0.25 | 0 / 8 |
+
+A scripted check shows the terms firing as designed: the sensor dies
+around frame 400, the prior's target term reaches zero, the exit term
+switches on at 75 of a possible 300, and the hero is standing at x≈107
+with the door at 112. The gradient is there and the planner still will
+not take it, and the reason is arithmetic rather than perception.
+
+Walking up through that room is fatal inside the lookahead — the
+scripted transition cost fifteen deaths in a single run — and a death is
+either a veto or, priced finitely, 400 px. A room is worth 256. **Under
+this project's own metric, dying to reach the next room is a bad trade,
+and the planner is right to refuse it.** Raising the exit bonus until it
+wins would be tuning a number until the agent does what I wanted.
+
+What the base actually needs is for a room to be worth what it leads to,
+not what it is: value that spans more than one room, whether by horizon
+or by a hierarchy over rooms. That is the same shape as the wall, which
+only fell when damage gave a 144-frame window something to count. The
+difference is that this is now arithmetic with numbers in it rather than
+a guess, and the counter to build that value on is in hand.
+
+**The diagnostic, and it settles it (2026-09-03).** If the refusal is
+arithmetic, then paying a room what a room is worth downstream should
+make the planner cross; if it is blindness, nothing will. `--room-px
+4000` pays that, in the objective only — the metric still reads
+`game_pos`, so a crossing has to be a real crossing.
+
+| arm | rooms entered | deaths / run |
+|---|---|---|
+| everything above, death priced at 400 | 0 / 8 | 0.25 |
+| the same, with a room paid 4000 | **7 / 8** | 0.25 |
+
+Seven of eight seeds enter room two, six of them **without dying at
+all**. So the room was reachable the whole time, by the templates the
+planner already had, inside the horizon it already had. Nothing was
+missing but a reason to go.
+
+This is a diagnostic and not a result to keep: 4000 px per room is a
+number chosen to win an argument, and shipping it would mean an agent
+that advances because I told it advancing is worth a lot. What it
+establishes is the shape of the real fix — a room must be valued by what
+it leads to, which is what a value spanning several rooms (a horizon
+over the counter, or a hierarchy above it) would supply honestly. The
+counter to build it on is byte 100, and the evidence that the machinery
+underneath already works is these seven crossings.
+
+## The base opens: 5 of 8, seen in the frames (2026-09-04)
+
+Score traces per decision (`SCORE_DEBUG=1`) showed why five objectives
+had failed identically: once the sensor died, **every candidate scored
+exactly zero**. The exit term never reached the workers. Three defects,
+each visible in the trace and fixed in turn:
+
+  * the hero was looked up by his tiles only at the branch end, and the
+    candidate that walks him to the door is precisely the one that changes
+    his tiles — now he is found at the root, followed by continuity, and
+    seeded from the main line's own track;
+  * a frame that shows no sprite near the track returned nothing rather
+    than the track;
+  * walking forward reveals the next room's sensor, and the manual's
+    target term counted that as a loss of 320 px — the prior was punishing
+    the advance it exists to buy. Newly seen targets are clipped; only
+    damage counts.
+
+With those, the manual's prior, its route note (the door at x≈112) and a
+death price from data (`--death-price -1`: the level progress a game over
+would forfeit, over the lives in hand; ≈0 in a fresh base, ~3000 at the
+wall), on the same eight seeds:
+
+| arm | rooms entered | deaths / run |
+|---|---|---|
+| plain | 0 / 8 | 0.50 |
+| every earlier objective (six of them) | 0 / 8 | 0.25–0.50 |
+| diagnostic room bonus of 4000 | 7 / 8 | 0.25 |
+| **prior + route + data-priced death, terms actually reaching the scores** | **5 / 8** | 0.25 |
+
+The five crossings are all deathless; the deaths belong to the three
+seeds that stayed. Seed 0 was recorded and the frames checked: the
+sensor explodes, the wall goes dark and opens, and the next frames are a
+different room — the hatch on the far wall, the sensor on the left, as
+the room-counter subagent had described it. In room two the soldier
+parks in the right-hand corner again, so this is one room and not the
+stage.
+
+The gap between 5/8 and the diagnostic's 7/8 is the price of having no
+number chosen to win: everything here is from the scans, the manual, and
+the game's own forfeit. Whether the death price or the exit term carried
+it is the ablation running now; 32 seeds follow.
+
+**Ablation, and a retraction (2026-09-04).** The same fixes with the
+default death veto instead of the data-priced death:
+
+| arm | rooms entered | deaths |
+|---|---|---|
+| fixes + death priced from data | 5 / 8 | (0,1,1,0,0,0,0,0) |
+| fixes + the veto | 5 / 8 | (0,1,1,0,0,0,0,0) |
+
+Seed for seed identical. The death price contributed nothing, which
+withdraws yesterday's "the refusal is arithmetic — a room at 256 against
+a life at 400, and the planner is right to refuse". It was not a trade;
+it was a term returning zero. The crossing candidates do not die in most
+draws, so the veto never fired on them, and once the exit term reached
+the scores they won on their own. The `--room-px 4000` diagnostic
+"worked" for the same reason — a large gradient on the room counter
+pulled candidates that were already able to cross — and not because it
+outweighed a death. `--death-price -1` stays as a measured option; it is
+not what opened the base.
+
+Three diagnoses of the base were wrong today before one was right: a
+horizon problem (no), a perception problem (partly — the hero was
+bullets), an arithmetic problem (no). The right one came from reading
+the scores per decision, which took ten minutes and should have been the
+first thing done.
+
+**32 seeds, and a harness artefact found by the shape of the result
+(2026-09-04).** The confirmation run with the veto default gave 10 of 32
+rooms — but 5, 5, 0, 0 by blocks of eight seeds. Not noise. The cause is
+the per-seed idle the harness uses to desynchronise the game's own
+randomness (37 × seed frames, up to 1800): meant for a start screen, it
+was being applied *after* the savestate, so in the base the soldier stood
+under fire before the run began. Measured: seed 2 idles 74 frames and
+keeps both lives; seed 10 idles 370 and keeps one; seeds 18 and 26 idle
+666 and 962 and start with none. The second half of the seeds were
+playing their last life or past it. The idle is now skipped after a
+loaded state (the policy's own seed still desynchronises the tails).
+Every earlier lab comparison carried this on both arms, so the pairings
+stand; the absolute rates were depressed. The bc arm's monotone rise
+with seed index on Rush'n Attack (546 → 854 over seeds 0–24) is likely
+the same mechanism at a start screen — there the idle runs in a live
+level too — and is noted as such, not yet verified. The 32 seeds are
+being rerun without the handicap.
+
+**Confirmation, fourth attempt, and what the first three taught about
+sampling (2026-09-04).** The base's first room, prior + route note, the
+default veto, nothing hand-tuned, 1800 frames:
+
+| sampling of the start | rooms | by blocks of 8 |
+|---|---|---|
+| idle 37×seed frames before lives are granted | 10 / 32 | 5, 5, 0, 0 |
+| no idle at all | (10 / 10, stopped) | one run repeated: 28 of 32 branch-frame counts identical |
+| idle 0–63 frames | (1 / 10, stopped) | one enemy phase, and a bad one |
+| idle 37×seed with lives granted after it | 13 / 32 | 6, 4, 3, 0 — long idles ended in a game over |
+| **idle 37×seed, nine lives through it, two after** | **17 / 32** | **6, 4, 4, 3** |
+
+**17 of 32 = 53% (Wilson 95% CI 36–69%)**, 28 distinct branch-frame
+counts out of 32, no block collapsing. Deaths 0.44 per run, crossers and
+stayers alike. That is the number: from a base state with a uniformly
+random enemy phase, the planner with the manual's two notes opens the
+room about half the time, and the failures are phases where it does not,
+not a systematic defect.
+
+The three false starts are worth the table. A savestate makes the seed
+do less than it does from power-on, and the harness's desynchronising
+idle — right for a start screen — costs lives in a shooting gallery; the
+shape of the result by seed block was what exposed each mistake, and
+would be invisible in a mean.
+
+## A7: the section counter found from the picture (2026-09-04)
+
+The one input the base still needed by hand was its room counter, found
+that morning by a subagent's scripted play and a RAM diff. `--trace`
+now records the executed line (RAM, scene hash, brightness per frame),
+and `section_scan.py` reads the counter off two planner runs that each
+changed room: transitions come from the picture — in Contra the screen
+fades to black, and in both traces the fade began exactly one frame
+after the counter stepped — and the counter is whatever is constant
+inside every segment and steps +1 across them, in both traces.
+
+```
+trace s0: 1800 frames, transition at [363]
+trace s1: 1800 frames, transition at [455]
+bytes that step +1 at every transition in every trace: [100, 203, 405]
+```
+
+The same three bytes the agent found (100 and its two mirrors), with no
+script written for the game and no address typed. The first version used
+scene-hash changes as the marker and found nothing: a coarse hash of a
+busy room changes seventy-odd times in 1800 frames. Fades first; the
+hash only as a fallback, and then only when the picture never returns to
+anything from the previous 300 frames. Two traces are required by
+construction — a single transition admitted a free-running timer once.
+
+With this, every per-game input the planner uses in Contra has a scan
+that finds it: controls (A0), templates (A1), camera (find_camera),
+objects (A5), the player (A6), sections (A7). What remains human is the
+manual: what to destroy and where the door is.

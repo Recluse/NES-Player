@@ -35,19 +35,27 @@ address:
 | Contra (U) | +2134 | 32 |
 | Super C | +1210 | 32 |
 | Rush'n Attack | +145 [+124, +166], 32/32 — position **and** templates found by scanning, zero hand-written addresses | 32 |
+| Contra (J), the base | first room opened in **17/32** from a room state, with the manual's two notes (what to destroy, where the door is) and every other input from scans | 32 |
+
+Every per-game input the planner uses in Contra is now found by a scan
+rather than typed: which buttons do what and whether fire is tapped or held
+(`controllability.py`), the templates built from that (`scan_templates`),
+the camera or an 8-bit scroll (`find_camera.py`), the object tables that
+hold hit points (`object_tables.py`), the player's own sprites
+(`hero_tiles.py`), and the stage's section counter from the fades between
+rooms (`section_scan.py`). What stays human is the manual: a small file per
+game saying what the game wants destroyed and where the exit is
+(`assets/priors/`), which is what a person reads before playing too.
 
 Read the caveats before the numbers impress you: the planner is privileged
 by construction — it looks at futures instead of predicting them; on Contra
 the learned policy is inert (median 0 on every seed), so the gain there is
-carried by the template prefixes; the Contra clear needed two things found
-the hard way (the wall's HP lives in an object table indexed by type, not at
-fixed addresses — a claim of "hits" made before that was found is retracted
-in the journal — and the cliff before the wall falls to compositions of jump
-timings, not to a longer lookahead or a rewind); and the games-in-minutes
-recipe (find the camera by scanning RAM for bytes that move with the
-picture) now also handles an 8-bit scroll with no high byte, but still stops
-at scene-segmented games like Ninja Gaiden and Kung Fu, and at Contra's own
-base stage, where nothing scrolls at all.
+carried by the template prefixes; the journal records four retractions from
+these two days, each caught by a frame or a scripted check rather than by
+thought (a "hits" count that was a savestate's constant, a vertical term that
+was measuring enemy fire, a "horizon problem" and an "arithmetic problem"
+that were one term returning zero); and the base result is one room, not
+the stage — in the next room the soldier parks in a corner again.
 
 ## What learning could not take over
 

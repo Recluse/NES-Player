@@ -40,6 +40,12 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
 IDLE_STEP, IDLE_MAX = 37, 1800
 WEAPON_MAIN = 400   # px the planner credits for holding spread; CLI-settable
+def scene_hash_only(frame) -> int:
+    from frontier import scene_hash as _h
+
+    return _h(frame)
+
+
 def scene_cell(frame, prev):
     """The frontier's cell: what the picture looks like, and where the
     moving thing is in it. The scene alone is too sparse to steer with —
@@ -75,20 +81,46 @@ def prior_templates(h: int) -> list:
     return out
 
 
-def body_y(frame, prev) -> float:
-    """How high up the screen the moving thing is, 0 (top) to 1 (bottom).
+HERO_TILES: dict = {}   # game -> the sprite tiles the player is drawn from
 
-    From the picture, like the frontier's cell: what moved between two
-    frames is mostly the player. Used only after the prior's targets are
-    gone, when "up" is the way on and no counter says so.
+
+def hero_xy(ram, last: tuple | None = None) -> tuple | None:
+    """Where the player is, from the sprite table, by his own tiles.
+
+    The first version of this measured the median of everything that moved
+    between two frames and called it the body. In Contra's base that is
+    enemy fire: holding UP, DOWN or nothing all gave 0.57 with the same
+    spread, so a term built on it was steering on noise. The console knows
+    better — the player is drawn from a small set of tiles, and those
+    tiles are found causally (see hero_tiles.py), not guessed.
     """
-    if prev is None:
-        return 1.0
-    d = np.abs(frame[..., :3].mean(-1) - prev[..., :3].mean(-1))
-    if d.max() < 8:
-        return 1.0
-    ys, _ = np.nonzero(d > d.max() * 0.5)
-    return float(np.median(ys)) / frame.shape[0] if len(ys) else 1.0
+    tiles = HERO_TILES.get("tiles")
+    if not tiles:
+        return None
+    oam = np.asarray(ram[0x200:0x200 + 256]).reshape(64, 4)
+    vis = oam[oam[:, 0] < 0xEF]
+    if not len(vis):
+        return None
+    own = vis[np.isin(vis[:, 1], list(tiles))]
+    if len(own):
+        return float(np.median(own[:, 3])), float(np.median(own[:, 0]))
+    if last is None:
+        return None
+    # The player is drawn from different tiles as he turns and walks away,
+    # so the tile set alone loses him mid-stride. Once he has been found
+    # causally, follow him by continuity: the sprites nearest to where he
+    # was a moment ago.
+    near = vis[(np.abs(vis[:, 3].astype(int) - last[0]) < 20)
+               & (np.abs(vis[:, 0].astype(int) - last[1]) < 20)]
+    if not len(near):
+        return None
+    return float(np.median(near[:, 3])), float(np.median(near[:, 0]))
+
+
+def body_y(frame, prev, ram=None, last=None) -> float:
+    """How high up the screen the player is, 0 (top) to 1 (bottom)."""
+    xy = hero_xy(ram, last) if ram is not None else None
+    return 1.0 if xy is None else xy[1] / 240.0
 
 
 def prior_value(ram) -> int:
@@ -118,6 +150,7 @@ _UNWRAP: dict = {}  # game -> [last raw, turns] for an 8-bit scroll byte
 WALL_TYPES = frozenset({4, 16, 17})
 WALL_HP0 = 72
 WALL_CLIP = True  # --wall-unclipped: price every typed HP point, no baseline
+ROOM_PX = 0       # --room-px: diagnostic only, see the base write-up
 
 
 def wall_hp(ram) -> int:
@@ -346,16 +379,27 @@ def game_pos(env, game: str) -> int:
     return int(ram[48]) * 4000 + int(ram[100]) * 256 + int(ram[101])
 
 
-def prior_exit_value(frame, prev, ram) -> int:
+def prior_exit_value(ram, last=None) -> int:
     """Once the manual's targets are destroyed, reward moving into the
     opening. A room whose exit is upward gives the planner nothing to
     climb towards otherwise: position saturates at the far wall, and the
     frames showed the soldier standing there for 1500 frames with the
     door open beside him."""
     px = int(PRIOR.get("exit_up_px", 0))
-    if not px or prior_value(ram) != 0:
+    if not px or prior_value(ram) != 0 or not HERO_TILES.get("tiles"):
         return 0
-    return int(px * (1.0 - body_y(frame, prev)))
+    # the track is the answer when the frame itself shows nobody near it:
+    # a flicker frame, or a pose drawn from tiles the scan never saw
+    xy = hero_xy(ram, last) or last
+    if xy is None:
+        return 0
+    # A route note, which is what a manual actually gives: the door is at
+    # a place, and the way on is through it. Rewarding "up" alone told the
+    # planner to climb anywhere; the transition only happens at the door.
+    want_x = PRIOR.get("exit_at_x")
+    near = 1.0 if want_x is None else max(
+        0.0, 1.0 - abs(xy[0] - float(want_x)) / 64.0)
+    return int(px * near * (1.0 - xy[1] / 240.0))
 
 
 def game_value(env, game: str) -> int:
@@ -379,6 +423,11 @@ def game_value(env, game: str) -> int:
         pos += prior_value(env._env.get_ram())
     if game.startswith("Contra"):
         ram = env._env.get_ram()
+        if ROOM_PX:
+            # Diagnostic, never a default: is the planner's refusal to walk
+            # through fire a mistake, or the correct answer to a bad trade?
+            # Paying a room what a room is worth downstream answers it.
+            pos += ROOM_PX * int(ram[100])
         xs, lvl = pos % 4000, pos // 4000
         PX_PER_HIT = 40
         if lvl > 0:
@@ -493,6 +542,9 @@ def _continue(env, policy, obs, l0, tail: int, repeat: int,
         used += 1
         if sink is not None:
             sink["prev"], sink["last"] = prev_frame, obs.frame_rgb
+            if "hero" in sink and k % 2 == 0:
+                sink["hero"] = hero_xy(env._env.get_ram(), sink["hero"]) \
+                    or sink["hero"]
         if scenes is not None and k % 8 == 0:
             scenes.add(scene_cell(obs.frame_rgb, prev_frame))
         now = (obs.debug or {}).get("lives")
@@ -507,7 +559,8 @@ _W: dict = {}
 
 def _worker_init(game: str, checkpoint: str, integ: str | None,
                  scan_pos=None, wall_clip: bool = True,
-                 weapon_main: int = 400, prior: dict | None = None):
+                 weapon_main: int = 400, prior: dict | None = None,
+                 hero_tiles: dict | None = None, room_px: float = 0.0):
     """One emulator and one policy per worker process, loaded once.
 
     A spawned worker re-imports this module, so anything main set after
@@ -520,9 +573,12 @@ def _worker_init(game: str, checkpoint: str, integ: str | None,
     global WALL_CLIP, WEAPON_MAIN
     if scan_pos is not None:
         SCAN_POS[game] = scan_pos
-    WALL_CLIP, WEAPON_MAIN = wall_clip, weapon_main
+    global ROOM_PX
+    WALL_CLIP, WEAPON_MAIN, ROOM_PX = wall_clip, weapon_main, room_px
     if prior:
         PRIOR.update(prior)
+    if hero_tiles:
+        HERO_TILES.update(hero_tiles)
 
     from nes_player.emulator.stable_retro import StableRetroAdapter
     from nes_player.policy.bc import BCPolicy
@@ -549,10 +605,22 @@ def _eval_job(job: dict) -> dict:
     seen = job.get("seen") or frozenset()
     visited: set = set() if job.get("novelty") else None
     prev = None
+    # The player is found by his tiles where he stands, then followed by
+    # continuity: the candidate that walks him to the door is exactly the
+    # one that changes his tiles, and looking him up by tiles alone at the
+    # end of that branch found nobody, scored 0, and lost to standing still.
+    hero = (hero_xy(env._env.get_ram(), job.get("hero")) or job.get("hero")) \
+        if HERO_TILES.get("tiles") else None
+    # what the manual's targets are worth at the root: a target that only
+    # appears when you walk forward (the next room's sensor) must not read
+    # as a loss, or the prior punishes the very advance it exists to buy
+    hp_root = -prior_value(env._env.get_ram()) if PRIOR else 0
     for k in range(job["span"]):
         prev = o.frame_rgb if (visited is not None and o is not None) else None
         o = env.step_buttons([job["plan"][k]])
         used += 1
+        if hero is not None and k % 2 == 0:
+            hero = hero_xy(env._env.get_ram(), hero) or hero
         if visited is not None and k % 8 == 0:
             visited.add(scene_cell(o.frame_rgb, prev))
         now = (o.debug or {}).get("lives")
@@ -561,6 +629,10 @@ def _eval_job(job: dict) -> dict:
             break
     if died or not job["tail"]:
         val = DEATH if died else game_value(env, game) - x0
+        if died and job.get("death_price"):
+            # under a finite price a death in the prefix is what it cost,
+            # not a veto — otherwise the price only ever applies to tails
+            val = game_value(env, game) - x0 - job["death_price"]
         if not died and visited is not None:
             val += job["novelty"] * len(visited - seen)
         return {"name": job["name"], "died": died, "outs": None,
@@ -576,15 +648,24 @@ def _eval_job(job: dict) -> dict:
                 f"{job['seed']}:{int(x0)}:{job['name']}:{di}".encode())
                 & 0xFFFFFFFF)
         draw_seen: set | None = set() if visited is not None else None
-        sink: dict = {}
+        sink: dict = {"hero": hero} if hero is not None else {}
         gone, extra = _continue(env, policy, o, l0, job["tail"],
                                 job["repeat"], job["tail_temp"], draw_seen,
                                 sink)
         used += extra
         gain = game_value(env, game) - x0
+        if PRIOR:
+            hp_end = -prior_value(env._env.get_ram())
+            if hp_end > hp_root:
+                gain += hp_end - hp_root      # newly seen targets: no penalty
         if PRIOR.get("exit_up_px"):
-            gain += prior_exit_value(sink.get("last"), sink.get("prev"),
-                                     env._env.get_ram())
+            ex = prior_exit_value(env._env.get_ram(), sink.get("hero"))
+            gain += ex
+            if os.environ.get("SCORE_DEBUG") and job["name"] in ("advance up", "wait"):
+                r_ = env._env.get_ram()
+                print(f"[w] {job['name']} di={di} exit={ex} hero={sink.get('hero')} "
+                      f"tiles={bool(HERO_TILES.get('tiles'))} prior_v={prior_value(r_)} "
+                      f"gone={gone}", flush=True)
         if visited is not None:
             # Novelty as an objective term, for stages where position
             # saturates: a plan is worth what it reaches, and in a room
@@ -633,7 +714,7 @@ def run(checkpoint: str, game: str, state: str | None, frames: int, seed: int,
         death_price: float = 0.0, escapes: bool = False,
         save_final: str = "", load_state: str = "",
         save_at: int = 0, workers: int = 1, auto_tpl: str = "",
-        rollback: int = 0, novelty: float = 0.0) -> dict:
+        rollback: int = 0, novelty: float = 0.0, trace: str = "") -> dict:
     from nes_player.emulator.controller import BUTTONS
     from nes_player.emulator.stable_retro import StableRetroAdapter
     from nes_player.perception.motion import pick_hero
@@ -685,7 +766,8 @@ def run(checkpoint: str, game: str, state: str | None, frames: int, seed: int,
         pool = mp.get_context("spawn").Pool(
             workers, initializer=_worker_init,
             initargs=(game, checkpoint, integ, SCAN_POS.get(game),
-                      WALL_CLIP, WEAPON_MAIN, dict(PRIOR)))
+                      WALL_CLIP, WEAPON_MAIN, dict(PRIOR),
+                      dict(HERO_TILES), ROOM_PX))
     policy = BCPolicy(checkpoint)
     obs = begin_any(env, game)
     # the boot/title screens may have spun an 8-bit scroll byte: the run's
@@ -702,7 +784,29 @@ def run(checkpoint: str, game: str, state: str | None, frames: int, seed: int,
         except Exception:
             pass
         obs = env.step_buttons([frozenset()])
+    # The per-seed idle desynchronises the game's own randomness at a
+    # start screen. Applied after a savestate it means standing under fire
+    # for up to 1800 frames before the run begins: in Contra's base seeds
+    # 16-31 started with no lives left and crossed 0 of 16 rooms while
+    # seeds 0-15 crossed 10 of 16. A loaded state is desynchronised by
+    # the policy's own seed instead.
+    # Without any idle, runs from one savestate differ only by the tail
+    # policy's sampling and come out near-identical (branch-frame counts
+    # repeat to the frame across seeds): thirty-two of those are one trial.
+    # Under a second of idle shifts the enemies' phases and is survivable.
+    # Phase matters: from one base state the crossing succeeds at some
+    # enemy phases and fails at others (idle 0 and 148-259 crossed, 3-111
+    # did not), so the seeds must sample the whole cycle — but the idle
+    # itself must not cost the lives it used to. Full-range idle, then the
+    # lab's lives are granted after it rather than before.
+    if load_state:
+        # enough lives to survive the idle without a game over: with 1036
+        # frames of idle the run was starting on a black continue screen
+        env._env.data.set_value("lives", 9)
     for _ in range(IDLE_STEP * seed % IDLE_MAX):
+        obs = env.step_buttons([frozenset()])
+    if load_state:
+        env._env.data.set_value("lives", 2)
         obs = env.step_buttons([frozenset()])
 
     ghost = GhostPredictor(ghost_path) if ghost_path else None
@@ -809,6 +913,8 @@ def run(checkpoint: str, game: str, state: str | None, frames: int, seed: int,
     wmax, hp_arrival, hp_min = 0, None, None
     saved_at_done = False
     seen_scenes: set = set()
+    hero_last = None   # the main line's hero track, seed for every branch
+    tr_ram, tr_scene, tr_lum = [], [], []   # --trace: the executed line only
     # B1': failure-triggered rollback. A ring of the last `rollback`
     # decision states; when every candidate is doomed the console is
     # rewound one decision at a time, the horizon grows by the depth so
@@ -850,6 +956,17 @@ def run(checkpoint: str, game: str, state: str | None, frames: int, seed: int,
             if rollback and gt >= danger_until:
                 rb_depth = 0  # the danger that opened the window is behind us
             x0, l0 = game_value(env, game), (obs.debug or {}).get("lives")
+            # A-2: a life is worth what losing it forfeits. Game over sends
+            # the level back to its start, so a death on the last life costs
+            # the level's progress so far; with lives in hand that loss is
+            # spread over them. No constant: at the wall with one life it is
+            # ~3000 px, in a fresh base with two lives it is nothing.
+            dp = death_price
+            if death_price < 0:
+                forfeit = (game_pos(env, game) % 4000
+                           if game.startswith(("Contra", "SuperC"))
+                           else game_pos(env, game))
+                dp = float(forfeit) / max(1, int(l0 or 1))
             if os.environ.get("POS_DEBUG"):
                 sp = SCAN_POS.get(game) or {}
                 print(f"[m] i={i} x0={x0} l0={l0} "
@@ -929,6 +1046,7 @@ def run(checkpoint: str, game: str, state: str | None, frames: int, seed: int,
                          "draws": draws, "stack": stack, "crn": crn,
                          "seed": seed, "repeat": repeat,
                          "tail_temp": tail_temp, "novelty": novelty,
+                         "death_price": dp, "hero": hero_last,
                          "seen": frozenset(seen_scenes) if novelty else None}
                         for name, plan in options]
                 plans = dict(options)
@@ -938,7 +1056,7 @@ def run(checkpoint: str, game: str, state: str | None, frames: int, seed: int,
                     # so the same discovery is not paid for twice
                     seen_scenes.update(r.get("visited") or ())
                     val = (r["val"] if r["outs"] is None
-                           else value_of(r["outs"], draws, death_price))
+                           else value_of(r["outs"], draws, dp))
                     scored.append((val, r["name"], plans[r["name"]]))
             for name, plan in (() if skip or knn is not None or parallel
                                else options):
@@ -1130,6 +1248,11 @@ def run(checkpoint: str, game: str, state: str | None, frames: int, seed: int,
                         + [(0.0, n, pl) for _, n, pl in scored]
             best = max(scored, key=lambda t: t[0])
             bc_score = next(s for s, n, _ in scored if n == "bc")
+            if os.environ.get("SCORE_DEBUG"):
+                top = sorted(scored, key=lambda t: -t[0])[:5]
+                print(f"[s] i={i} pos={game_pos(env, game)} dp={dp:.0f} "
+                      + " | ".join(f"{n}:{v:.0f}" for v, n, _ in top),
+                      flush=True)
             score, name, plan = (best if best[0] > bc_score + margin
                                  else next(t for t in scored if t[1] == "bc"))
             chosen[name] += 1
@@ -1194,6 +1317,12 @@ def run(checkpoint: str, game: str, state: str | None, frames: int, seed: int,
                 pressed = pressed - {"START", "SELECT"}
         obs = env.step_buttons([pressed])
         gt += 1
+        if trace:
+            tr_ram.append(np.frombuffer(bytes(env._env.get_ram()), np.uint8))
+            tr_scene.append(scene_hash_only(obs.frame_rgb))
+            tr_lum.append(float(obs.frame_rgb.mean()))
+        if HERO_TILES.get("tiles"):
+            hero_last = hero_xy(env._env.get_ram(), hero_last) or hero_last
         if view is not None:
             for ev in ears.push(obs.audio_pcm, i):
                 sounds.add(ev.cluster_id, ears.clusters[ev.cluster_id].heard)
@@ -1300,6 +1429,11 @@ def run(checkpoint: str, game: str, state: str | None, frames: int, seed: int,
         pool.close()
         pool.join()
     env.close()
+    if trace:
+        out = Path(trace.replace(".npz", "") + f"_s{seed}.npz")
+        np.savez_compressed(out, ram=np.stack(tr_ram), scene=np.array(tr_scene),
+                            lum=np.array(tr_lum))
+        print("trace:", out, flush=True)
     return {"seed": seed, "best_x": best_x, "deaths": deaths,
             "branch_frames": branch_frames, "chosen": dict(chosen),
             **({"scenes_branched": len(seen_scenes)} if novelty else {}),
@@ -1328,6 +1462,14 @@ def main() -> int:
                     help="Contra: damage term without the max(0, 72 - HP) "
                          "clip, so turrets sharing the cannons' type do not "
                          "mute it at arrival")
+    ap.add_argument("--trace", default="",
+                    help="record the executed line — RAM, scene hash and "
+                         "frame brightness per frame — to this npz prefix, "
+                         "for the section-counter scan")
+    ap.add_argument("--room-px", type=float, default=0.0,
+                    help="diagnostic: extra px per room already entered, to "
+                         "ask whether the planner's refusal to trade a life "
+                         "for a room is arithmetic rather than blindness")
     ap.add_argument("--prior", default="",
                     help="A4: a manual's knowledge as a file — extra "
                          "templates in buttons, and the object types the "
@@ -1405,7 +1547,9 @@ def main() -> int:
     ap.add_argument("--death-price", type=float, default=0.0,
                     help="px subtracted from a draw that dies, instead of "
                          "the majority-death veto; prices P(death) into the "
-                         "value where the veto makes minority deaths free")
+                         "value where the veto makes minority deaths free. "
+                         "-1 = auto: the level progress a game over would "
+                         "forfeit, divided by the lives in hand")
     ap.add_argument("--two-step", action="store_true",
                     help="search ordered pairs of the five behaviours at half "
                          "the horizon each (25 pairs + the policy's own "
@@ -1470,9 +1614,14 @@ def main() -> int:
                          "learned ego model, to price the model against the "
                          "objective")
     args = ap.parse_args()
-    global WEAPON_MAIN, WALL_CLIP
+    global WEAPON_MAIN, WALL_CLIP, ROOM_PX
+    ROOM_PX = args.room_px
     if args.prior:
         PRIOR.update(json.loads(Path(args.prior).read_text()))
+        hero = Path("runs/knowledge") / f"hero_{args.game}.json"
+        if hero.exists():
+            HERO_TILES.update(json.loads(hero.read_text()))
+            print("hero tiles:", HERO_TILES.get("tiles"))
         print("prior:", len(PRIOR.get("templates", ())), "templates,",
               "targets", PRIOR.get("target_types"))
     WEAPON_MAIN = args.weapon_px
@@ -1528,12 +1677,14 @@ def main() -> int:
             name += f" novelty={args.novelty:g}"
         if args.prior and horizon:
             name += " prior"
+        if args.room_px and horizon:
+            name += f" room-px={args.room_px:g}"
         if args.pos_from_scan and horizon:
             name += " scanpos"
         if args.two_step and horizon:
             name += " two-step"
         if args.death_price and horizon:
-            name += f" dp={args.death_price:g}"
+            name += " dp=auto" if args.death_price < 0 else f" dp={args.death_price:g}"
         if args.escapes and horizon:
             name += " escapes"
         if use_probe:
@@ -1566,7 +1717,8 @@ def main() -> int:
                       args.load_state, args.save_at, args.workers,
                       args.auto_templates,
                       rollback=args.rollback if horizon else 0,
-                      novelty=args.novelty if horizon else 0.0)
+                      novelty=args.novelty if horizon else 0.0,
+                      trace=args.trace if horizon else "")
             rows.append(row)
             print(json.dumps({"arm": name, **row}), flush=True)
         arms[name] = rows

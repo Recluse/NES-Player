@@ -5,7 +5,8 @@
     "The wall at the end of the jungle is destroyed by its cannons and the sensor between them; point-blank diagonal fire is what reaches them.",
     "A base stage does not scroll. Its exit opens when the room's sensor is destroyed, and the way on is upward through the door.",
     "Flying capsules carry weapons; shooting one and walking into what it drops is worth a detour.",
-    "Once a room's sensor is destroyed the way on is upward through the door, so a cleared room rewards moving up the screen."
+    "Once a room's sensor is destroyed the way on is upward through the door, so a cleared room rewards moving up the screen.",
+    "The door out of a base room is in the middle of the far wall, near screen x=112; walking up anywhere else does nothing."
   ],
   "templates": [
     {
@@ -42,5 +43,6 @@
     4
   ],
   "target_px": 40,
-  "exit_up_px": 300
+  "exit_up_px": 300,
+  "exit_at_x": 112
 }
