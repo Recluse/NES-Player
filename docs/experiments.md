@@ -5425,12 +5425,53 @@ Three things to keep straight about it:
   * **Accuracy predicted none of this, again, and more sharply than
     before.** The new clone scores 0.793 against a majority baseline of
     0.738 — 5.5 points of skill — and plays. The old one scores 0.943
-    against 0.377 — 56 points — and never moves. The action vocabulary is
-    the tell: the clears taught it eleven commands including
-    `B+UP+RIGHT`, the diagonal that kills the wall, which the exploration
-    data never contained.
+    against 0.377 — 56 points — and never moves.
 
 So the earlier verdict stands where it was measured and needs one
 sentence added: the planner's *choice* did not distil, and its
 *successful trajectories* do — partially, and only as far as the
 demonstrations reach.
+
+**The action vocabulary was not the cause (2026-09-08, ablation).** The
+first write-up called the new commands the tell: the clears taught the
+clone eleven actions including `B+UP+RIGHT`, the diagonal that kills the
+wall, absent from the exploration data. The reviewer pointed out that
+this cannot carry the result — the clone stops at a median of 1952 and
+the wall begins at 3072, so a wall-killing action explains none of the
++1719 that came before it. The clean test: retrain on the same twelve
+clears with every rare diagonal rewritten to the nearest action the old
+vocabulary had (UP and DOWN dropped, 8.2% of frames), giving a clone with
+exactly seven actions and no diagonals at all.
+
+| clone | best_x median | mean | deaths / run |
+|---|---|---|---|
+| trained on clears, full vocabulary | 1952 | 1719 | 3.06 |
+| **the same clears, diagonals mapped away** | **1996** | 1538 | 2.12 |
+| trained on exploration episodes | 0 | 0 | 0.00 |
+
+The ablated clone still beats the old data by +1538 [+1223, +1815], 32 of
+32, and is indistinguishable from the unablated one (−181 [−569, +208],
+winning 13 of 32). So the vocabulary was a symptom of the demonstrations,
+not the mechanism; what carries the gain is the state coverage and the
+temporal structure of trajectories that went far. The causal claim is
+withdrawn and this ablation replaces it.
+
+**Seen and unseen seeds (same day).** The twelve seeds recorded for
+training are twelve of the thirty-two used for evaluation, which the
+first write-up did not say. Split:
+
+| | clone median | paired vs the old clone |
+|---|---|---|
+| the 12 seeds trained on | 1860 | +1714 [+1345, +2014], 12/12 |
+| **the 20 never trained on** | **1996** | **+1722 [+1475, +1923], 20/20** |
+
+The unseen seeds are, if anything, slightly better, so the result is not
+memorisation of particular runs — but the split belongs in the claim, not
+in a footnote.
+
+**Wording narrowed, on the same review.** "Trajectories distil" is
+established for one game, twelve demonstrations and partial progress, so
+the claim is now "successful trajectories partially distilled in Contra".
+And "every per-game input is found by a scan" means every low-level
+numeric one: the semantic prior — what to destroy, where the exit is —
+remains a human per-game input, legitimate but an input.

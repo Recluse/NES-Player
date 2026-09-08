@@ -117,17 +117,28 @@ def main() -> int:
                 out.append((a, int(big_down.sum()), sg))
         return out
 
-    # a vertical counter may run either way as the hero climbs; try both
-    # and let the agreement with the picture decide
-    cands3 = candidates(sgn) + (candidates(-sgn) if args.up else [])
-    best_sign = {}
-    for a, w, sg in cands3:
-        best_sign.setdefault(a, sg)
-    sgn = max(set(sg for _, _, sg in cands3), key=lambda g: sum(
-        1 for _, _, x in cands3 if x == g)) if cands3 else sgn
+    # A vertical counter may run either way as the hero climbs, so both
+    # signs are collected — and the choice between them is the picture's,
+    # not a headcount. Counting candidates picks whichever direction has
+    # more timers in it, which is an accident of the game's memory; the
+    # agreement below is the only thing that knows about the screen.
+    def agree_with(sg, addr):
+        col = (S_raw * sg)[:, addr].astype(float)
+        d = col[LAG:] - col[:-LAG]
+        d[d < -128] += 256
+        return abs(float(np.corrcoef(d, dx)[0, 1])) if d.std() > 0 else 0.0
+
+    signs = [sgn] + ([-sgn] if args.up else [])
+    per_sign = {sg: candidates(sg) for sg in signs}
+    sgn = max(signs, key=lambda sg: max(
+        (agree_with(sg, a) for a, _, _ in per_sign[sg]), default=0.0))
+    if len(signs) > 1:
+        print("counter direction:", "+1" if sgn > 0 else "-1",
+              "(best agreement",
+              f"{max((agree_with(sgn, a) for a, _, _ in per_sign[sgn]), default=0.0):.2f})")
     S = S_raw * sgn
     flat = (np.diff(I * sgn, axis=0) == 0).all(0)
-    cands = [(a, w) for a, w, sg in cands3 if sg == sgn]
+    cands = [(a, w) for a, w, _ in per_sign[sgn]]
     print("moving, idle-flat bytes (addr, wraps):", cands)
 
     def agree(a):

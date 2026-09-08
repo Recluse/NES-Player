@@ -372,7 +372,11 @@ def game_pos(env, game: str) -> int:
                 if sp.get("wraps", 1) == 0:
                     return sp["sign"] * int(ram[sp["lo"]])
                 return sp["sign"] * _unwrap(game, int(ram[sp["lo"]]))
-            return sp["sign"] * (int(ram[sp["hi"]]) * 256 + int(ram[sp["lo"]]))
+            raw = int(ram[sp["hi"]]) * 256 + int(ram[sp["lo"]])
+            # A counter that runs down as the hero advances (Ikari climbs
+            # while its camera pair counts backwards) is read from the top,
+            # so progress stays a positive, increasing number.
+            return raw if sp["sign"] > 0 else 0xFFFF - raw
         return int(sum(int(ram[b]) for b in sp))
     if game.startswith("SuperMario"):
         return mario_x(env)
@@ -477,14 +481,24 @@ def answers_the_pad(env, frames: int = 20, min_px: float = 40.0) -> bool:
     measured that title.
     """
     here = env.save_state()
-    outs = []
-    for chord in (frozenset({"RIGHT"}), frozenset()):
+    env.load_state(here)
+    for _ in range(frames):
+        o = env.step_buttons([frozenset()])
+    idle = o.frame_rgb.astype(np.int16)
+    # Several chords, not just RIGHT: a game that answers only UP or only
+    # A — a climb, a menu-less shooter — would otherwise read as a title
+    # screen and the boot loop would keep pressing START at a live game.
+    for chord in (frozenset({"RIGHT"}), frozenset({"UP"}),
+                  frozenset({"A"}), frozenset({"B"})):
         env.load_state(here)
         for _ in range(frames):
             o = env.step_buttons([chord])
-        outs.append(o.frame_rgb.astype(np.int16))
+        if float((np.abs(o.frame_rgb.astype(np.int16) - idle).max(-1)
+                  > 24).sum()) >= min_px:
+            env.load_state(here)
+            return True
     env.load_state(here)
-    return float((np.abs(outs[0] - outs[1]).max(-1) > 24).sum()) >= min_px
+    return False
 
 
 def begin_any(env, game: str):
