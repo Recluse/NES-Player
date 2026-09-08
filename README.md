@@ -49,18 +49,20 @@ game saying what the game wants destroyed and where the exit is
 
 Read the caveats before the numbers impress you: the planner is privileged
 by construction — it looks at futures instead of predicting them; on Contra
-the learned policy is inert (median 0 on every seed), so the gain there is
-carried by the template prefixes; the journal records four retractions from
+the learned policy used to be inert, so the planner's gain there is carried
+by the template prefixes (a clone trained on the planner's own clears does
+play — see below — but it is not what the planner is measured against); the journal records four retractions from
 these two days, each caught by a frame or a scripted check rather than by
 thought (a "hits" count that was a savestate's constant, a vertical term that
 was measuring enemy fire, a "horizon problem" and an "arithmetic problem"
 that were one term returning zero); and the base result is one room, not
 the stage — in the next room the soldier parks in a corner again.
 
-## What learning could not take over
+## What learning could and could not take over
 
 The obvious next step — distil the planner into a network and stop paying for
-rollouts — was tried to the end and failed with measured causes. A learner was
+rollouts — was tried to the end. Distilling its **choice** failed with measured
+causes. A learner was
 priced in five roles (value estimator, action chooser, binary gate, DAgger
 student, compute allocator) and lost all five; a battery of seven input
 representations, from two scalars to the full privileged state, captured the
@@ -70,7 +72,19 @@ every control: monolithic 96-frame plans are toxic (half the progress, double
 the deaths) and a few hand-written compositions buy most of it back; and at 32
 paired seeds the online noise floor certifies only planner-sized effects —
 finer economics is measured offline, on stored rollout matrices, under common
-random numbers. The full chronology, retractions included, is
+random numbers. Distilling its **successful trajectories** is a different target, and that one
+works in part. Once the planner began clearing Contra's first level, twelve of
+those clears were recorded as ordinary episodes and a clone was trained on
+them with the same recipe as before — only the data changed. Playing from
+pixels and sound alone, with no planner and no rewinding, it goes from a
+median of 0 to 1952 over 32 seeds, +1719 [+1516, +1895], winning every seed;
+it runs the bridge, jumps the water and shoots, and it clears nothing, where
+its teacher clears 12 of 32. Two honest notes belong with it: the knowledge is
+the planner's, and validation accuracy predicted none of it — the clone that
+plays beats its majority baseline by 5.5 points, the inert one beat its own by
+56.
+
+The full chronology, retractions included, is
 [docs/experiments.md](docs/experiments.md).
 
 ## The perception stack

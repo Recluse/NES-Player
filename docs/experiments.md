@@ -5348,3 +5348,89 @@ With this, every per-game input the planner uses in Contra has a scan
 that finds it: controls (A0), templates (A1), camera (find_camera),
 objects (A5), the player (A6), sections (A7). What remains human is the
 manual: what to destroy and where the door is.
+
+## B-2: a vertical camera, and two things the axis was hiding (2026-09-08)
+
+Ikari Warriors climbs the screen, so `find_camera --up` advances with
+B+UP and measures the picture's shift on the other axis. The axis was
+the easy part; two general defects surfaced behind it.
+
+**Booting must not depend on a per-game variable.** Ikari's RAM map
+reports `lives` as zero throughout, so the boot loop spent its whole
+2000-frame budget pulsing START at a title screen and every scan
+downstream measured that title — the first "vertical camera" it found
+was a title-screen artefact. `begin_any` now also asks the console the
+way A0 does: two synchronous branches, one holding a direction, and the
+picture either answers the pad or it does not. `find_camera` shares that
+boot, so one fix covers both.
+
+**How far apart to compare frames depends on how fast the level moves.**
+Contra's jungle scrolls a pixel or two per frame and four frames apart
+is plenty; Ikari climbs at 0.16 px/frame, where a four-frame comparison
+reads zero in a third of the samples and the agreement test drowns in
+quantisation. The lag is now chosen as the first that actually sees
+motion — eight frames and −1.3 px for Ikari.
+
+**A single byte is not necessarily a wrapping scroll.** The fallback
+required wraps, which in Ikari would have picked an animation counter
+turning over 73 times. Its progress is byte 1630, counting 0 → 228
+monotonically and never wrapping. The scan now takes the byte that
+agrees most with the picture and labels which kind it is; the planner
+respects the label and does not unwrap a counter into turns it never
+made. Checked by scale rather than by eye: the picture climbs about 190
+px over 1800 frames while 1629 and 1630 rise 225–228 without a single
+decrease.
+
+Regression, same day: Contra still resolves to the 100/101 camera pair,
+Rush'n Attack still to byte 20 as an 8-bit scroll with two wraps at
+agreement 0.57.
+
+Not claimed: that the planner plays Ikari. This is the progress signal
+only — a paired campaign there is its own job, and Ikari is a
+twin-stick shooter whose templates the scan has not been asked for yet.
+
+## D: a clone trained on the planner's clears plays Contra (2026-09-08)
+
+The honest track's last untried door. Five roles of student had failed at
+distilling the planner's *choice among candidates*; this tries something
+else — cloning the *trajectories* of runs that actually finish the level,
+which did not exist until the planner started clearing it. `--record`
+writes the executed line as an ordinary training episode; twelve clearing
+seeds from the 7000-frame campaign were re-run and recorded.
+
+Same architecture, same recipe as the existing Contra clone (three
+epochs, video and audio, attention weight 1.0). The only difference is
+the data: 57 instinct-exploration episodes against 12 planner clears.
+Both play with pixels and sound alone, no planner, 32 seeds, 4500 frames:
+
+| clone, trained on | best_x median | IQM | mean | deaths / run |
+|---|---|---|---|---|
+| 57 exploration episodes | 0 | 0 | 0 | 0.00 |
+| **12 planner clears** | **1952** | 1884 | 1719 | 3.06 |
+
+Paired difference +1719 [+1516, +1895], 32 wins of 32. Seed 4 was
+recorded and the frames checked: the soldier runs the bridge, jumps the
+water gaps, shoots the turrets, dies, continues, and gets to 2208 px.
+This is the first time a policy in this repository plays Contra at all.
+
+Three things to keep straight about it:
+
+  * **The knowledge is the planner's.** The clone is honest at play time
+    — pixels and audio, no RAM, no rewinding — but it learned from a
+    demonstrator that looked at futures. The metadata of every recorded
+    episode says so.
+  * **It is far short of its teacher.** The planner with escapes reaches
+    a median of 3072 and clears the level in 12 of 32; the clone reaches
+    1952 and clears none.
+  * **Accuracy predicted none of this, again, and more sharply than
+    before.** The new clone scores 0.793 against a majority baseline of
+    0.738 — 5.5 points of skill — and plays. The old one scores 0.943
+    against 0.377 — 56 points — and never moves. The action vocabulary is
+    the tell: the clears taught it eleven commands including
+    `B+UP+RIGHT`, the diagonal that kills the wall, which the exploration
+    data never contained.
+
+So the earlier verdict stands where it was measured and needs one
+sentence added: the planner's *choice* did not distil, and its
+*successful trajectories* do — partially, and only as far as the
+demonstrations reach.

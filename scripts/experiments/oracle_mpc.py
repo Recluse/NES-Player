@@ -367,6 +367,10 @@ def game_pos(env, game: str) -> int:
         sp = SCAN_POS[game]
         if isinstance(sp, dict):
             if sp.get("hi") is None:
+                # a byte that never wrapped in the scan is a counter, not
+                # a scroll: unwrapping it would invent turns it never made
+                if sp.get("wraps", 1) == 0:
+                    return sp["sign"] * int(ram[sp["lo"]])
                 return sp["sign"] * _unwrap(game, int(ram[sp["lo"]]))
             return sp["sign"] * (int(ram[sp["hi"]]) * 256 + int(ram[sp["lo"]]))
         return int(sum(int(ram[b]) for b in sp))
@@ -461,21 +465,44 @@ def game_progress(d: dict, progress_of) -> int:
     return progress_of(d)
 
 
+def answers_the_pad(env, frames: int = 20, min_px: float = 40.0) -> bool:
+    """Is this a running game or a picture? Ask the pad, as A0 does.
+
+    A title screen ignores a direction; a level does not. Two synchronous
+    branches from here, one holding RIGHT and one doing nothing, and the
+    question is whether the pictures end up different. This replaces
+    waiting for a `lives` counter to read positive, which Ikari Warriors
+    never does — its map reports zero throughout, so the boot loop spent
+    its whole budget pulsing START at a title and every scan downstream
+    measured that title.
+    """
+    here = env.save_state()
+    outs = []
+    for chord in (frozenset({"RIGHT"}), frozenset()):
+        env.load_state(here)
+        for _ in range(frames):
+            o = env.step_buttons([chord])
+        outs.append(o.frame_rgb.astype(np.int16))
+    env.load_state(here)
+    return float((np.abs(outs[0] - outs[1]).max(-1) > 24).sum()) >= min_px
+
+
 def begin_any(env, game: str):
     """Past the title screen, for games without SMB's countdown clock.
 
-    SMB's _begin detects the running game by its timer ticking down; games
-    without a `time` variable get the blunt version — pulse START until the
-    lives counter reads positive, then hand over.
+    SMB's _begin detects the running game by its timer ticking down. For
+    everything else: pulse START, and every so often ask the console
+    whether the picture answers the pad yet.
     """
     from nes_player.policy.go_explore import _begin
 
     if game.startswith("SuperMario"):
         return _begin(env)
     obs = env.reset(seed=0)
-    for i in range(2000):
+    for i in range(3000):
         d = obs.debug or {}
-        if i > 120 and int(d.get("lives", 0) or 0) > 0:
+        if i > 120 and (int(d.get("lives", 0) or 0) > 0
+                        or (i % 120 == 0 and answers_the_pad(env))):
             break
         pulse = i % 60 in (0, 1)
         obs = env.step_buttons([frozenset({"START"}) if pulse
@@ -714,7 +741,8 @@ def run(checkpoint: str, game: str, state: str | None, frames: int, seed: int,
         death_price: float = 0.0, escapes: bool = False,
         save_final: str = "", load_state: str = "",
         save_at: int = 0, workers: int = 1, auto_tpl: str = "",
-        rollback: int = 0, novelty: float = 0.0, trace: str = "") -> dict:
+        rollback: int = 0, novelty: float = 0.0, trace: str = "",
+        record: str = "") -> dict:
     from nes_player.emulator.controller import BUTTONS
     from nes_player.emulator.stable_retro import StableRetroAdapter
     from nes_player.perception.motion import pick_hero
@@ -915,6 +943,7 @@ def run(checkpoint: str, game: str, state: str | None, frames: int, seed: int,
     seen_scenes: set = set()
     hero_last = None   # the main line's hero track, seed for every branch
     tr_ram, tr_scene, tr_lum = [], [], []   # --trace: the executed line only
+    rec_obs, rec_act = [], []              # --record: the line as an episode
     # B1': failure-triggered rollback. A ring of the last `rollback`
     # decision states; when every candidate is doomed the console is
     # rewound one decision at a time, the horizon grows by the depth so
@@ -1317,6 +1346,9 @@ def run(checkpoint: str, game: str, state: str | None, frames: int, seed: int,
                 pressed = pressed - {"START", "SELECT"}
         obs = env.step_buttons([pressed])
         gt += 1
+        if record:
+            rec_obs.append(obs)
+            rec_act.append(pressed)
         if trace:
             tr_ram.append(np.frombuffer(bytes(env._env.get_ram()), np.uint8))
             tr_scene.append(scene_hash_only(obs.frame_rgb))
@@ -1429,6 +1461,23 @@ def run(checkpoint: str, game: str, state: str | None, frames: int, seed: int,
         pool.close()
         pool.join()
     env.close()
+    if record and rec_obs:
+        # An episode of the planner's own play, in the format the trainer
+        # reads. The planner is privileged and the clone that learns from
+        # this is not — that is the point of the comparison, and the
+        # episode carries the distinction in its metadata.
+        from nes_player.data.writer import EpisodeWriter
+
+        ep = Path(record) / f"{game}_oracle_s{seed:03d}"
+        w = EpisodeWriter(out_dir=ep, metadata={
+            "game": game, "source": "oracle-mpc",
+            "sample_rate": env.sample_rate, "seed": seed,
+            "best_x": int(best_x), "deaths": int(deaths),
+            "note": "the demonstrator looked at futures; the learner may not"})
+        for o, a in zip(rec_obs, rec_act, strict=True):
+            w.append(o, (a,))
+        w.close()
+        print("recorded:", ep, len(rec_obs), "frames", flush=True)
     if trace:
         out = Path(trace.replace(".npz", "") + f"_s{seed}.npz")
         np.savez_compressed(out, ram=np.stack(tr_ram), scene=np.array(tr_scene),
@@ -1462,6 +1511,10 @@ def main() -> int:
                     help="Contra: damage term without the max(0, 72 - HP) "
                          "clip, so turrets sharing the cannons' type do not "
                          "mute it at arrival")
+    ap.add_argument("--record", default="",
+                    help="write the executed line as a training episode "
+                         "into this directory, so a clone can be trained on "
+                         "the planner's own clears")
     ap.add_argument("--trace", default="",
                     help="record the executed line — RAM, scene hash and "
                          "frame brightness per frame — to this npz prefix, "
@@ -1718,7 +1771,8 @@ def main() -> int:
                       args.auto_templates,
                       rollback=args.rollback if horizon else 0,
                       novelty=args.novelty if horizon else 0.0,
-                      trace=args.trace if horizon else "")
+                      trace=args.trace if horizon else "",
+                      record=args.record if horizon else "")
             rows.append(row)
             print(json.dumps({"arm": name, **row}), flush=True)
         arms[name] = rows
