@@ -756,7 +756,7 @@ def run(checkpoint: str, game: str, state: str | None, frames: int, seed: int,
         save_final: str = "", load_state: str = "",
         save_at: int = 0, workers: int = 1, auto_tpl: str = "",
         rollback: int = 0, novelty: float = 0.0, trace: str = "",
-        record: str = "") -> dict:
+        record: str = "", record_if: int = 0) -> dict:
     from nes_player.emulator.controller import BUTTONS
     from nes_player.emulator.stable_retro import StableRetroAdapter
     from nes_player.perception.motion import pick_hero
@@ -1475,7 +1475,7 @@ def run(checkpoint: str, game: str, state: str | None, frames: int, seed: int,
         pool.close()
         pool.join()
     env.close()
-    if record and rec_obs:
+    if record and rec_obs and best_x >= record_if:
         # An episode of the planner's own play, in the format the trainer
         # reads. The planner is privileged and the clone that learns from
         # this is not — that is the point of the comparison, and the
@@ -1529,6 +1529,10 @@ def main() -> int:
                     help="write the executed line as a training episode "
                          "into this directory, so a clone can be trained on "
                          "the planner's own clears")
+    ap.add_argument("--record-if", type=int, default=0,
+                    help="only keep the recorded episode when the run got "
+                         "at least this far, so a demonstration set can be "
+                         "gathered in one pass instead of two")
     ap.add_argument("--trace", default="",
                     help="record the executed line — RAM, scene hash and "
                          "frame brightness per frame — to this npz prefix, "
@@ -1786,7 +1790,8 @@ def main() -> int:
                       rollback=args.rollback if horizon else 0,
                       novelty=args.novelty if horizon else 0.0,
                       trace=args.trace if horizon else "",
-                      record=args.record if horizon else "")
+                      record=args.record if horizon else "",
+                      record_if=args.record_if)
             rows.append(row)
             print(json.dumps({"arm": name, **row}), flush=True)
         arms[name] = rows

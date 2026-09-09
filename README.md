@@ -84,6 +84,17 @@ the planner's, and validation accuracy predicted none of it — the clone that
 plays beats its majority baseline by 5.5 points, the inert one beat its own by
 56.
 
+How many clears does that take? Eighty more planner runs produced fifty-nine,
+and clones trained on nested subsets of 6, 12, 24 and 59 of them are
+indistinguishable: −83 [−247, +71] between the ends of the ladder. The whole
+distance from zero to about 1900 is bought by the first handful, and the next
+fifty buy nothing. Every subset also stops in the same narrow band, which
+reads less like a shortage of examples than like the clone leaving the
+demonstrated states at one particular place — something more of the same
+trajectories cannot fix, since they all pass through those states. The next
+experiment follows from that: demonstrations recorded where the clone
+actually fails, not more of the ones where it already succeeds.
+
 The full chronology, retractions included, is
 [docs/experiments.md](docs/experiments.md).
 

@@ -5475,3 +5475,45 @@ the claim is now "successful trajectories partially distilled in Contra".
 And "every per-game input is found by a scan" means every low-level
 numeric one: the semantic prior — what to destroy, where the exit is —
 remains a human per-game input, legitimate but an input.
+
+## What a demonstration is worth: the curve is flat (2026-09-09)
+
+If cloning the planner's clears works, the obvious question is how many
+clears it takes. `--record-if` gathers a demonstration set in one pass —
+run, and keep the episode only when it finished the level — and eighty
+seeds of the planner produced fifty-nine clears. Four clones were then
+trained on nested subsets in a fixed order, same recipe, and evaluated on
+the same 32 seeds, so the only thing changing along the ladder is how
+many demonstrations there were.
+
+| demonstrations | best_x median | IQM | mean | deaths / run | runs past 2500 |
+|---|---|---|---|---|---|
+| 6 | 1907 | 1917 | 1888 | 2.81 | 0 |
+| 12 | 1893 | 1885 | 1799 | 2.56 | 0 |
+| 24 | 1895 | 1902 | 1808 | 2.53 | 0 |
+| 59 | 1897 | 1896 | 1804 | 2.47 | 0 |
+| the old exploration data | 0 | 0 | 0 | 0.00 | 0 |
+
+**Fifty-nine demonstrations are worth no more than six**: −83 [−247,
++71], winning 14 of 32. Deaths drift down slightly (2.81 → 2.47) and
+nothing else moves. The whole gap between zero and 1900 is bought by the
+first handful of clears, and the next fifty buy nothing.
+
+Two readings, and the data does not separate them yet. Either the policy
+is at its capacity, or — more likely, given that every rung stops in the
+same narrow band (1800–2000 on 19 of 32 seeds, nothing past 2423) — the
+clone leaves the demonstrated distribution at one particular place and
+has nothing to imitate once it is off it. More of the same trajectories
+cannot fix that by construction: they all pass through the same states.
+
+That makes the next experiment a specific one rather than a hopeful one.
+Not more demonstrations, but demonstrations *where the clone actually
+fails*: run the clone, and where it stalls, hand the console to the
+planner, record the rescue, add it to the data. That is DAgger, but over
+trajectories rather than over the planner's choice — the target that
+worked, aimed at the states that matter.
+
+Caveat on the collection: these fifty-nine clears were recorded after the
+boot change of 8 September, and their clear rate (47 of 80) is not
+comparable with the 12 of 32 measured before it. The rate is not used
+anywhere in the ladder, which compares clones on fixed evaluation seeds.
