@@ -64,6 +64,10 @@ def build_parser() -> argparse.ArgumentParser:
     t.add_argument("--init-from", default=None,
                    help="base checkpoint: reuse the body and audio encoder, retrain the heads")
     t.add_argument("--max-episodes", type=int, default=None)
+    t.add_argument("--arch", choices=("conv", "linear"), default="conv",
+                   help="'linear' maps pixels to buttons directly, one weight "
+                        "per pixel per action. Slower to fit and possible to "
+                        "look at: the weights reshape into a picture")
     t.add_argument("--keep-epochs", action="store_true",
                    help="also write every epoch as its own run directory, "
                         "so each can be played instead of trusting the "

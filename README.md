@@ -101,6 +101,18 @@ its loss fell the whole way. At one epoch, where the instrument is steady, six
 training runs put the rescues at **+169 [−107, +445]**, positive in five of
 six. Zero is inside, so that stays a lead rather than a result.
 
+Measuring properly finally paid for itself on the next question. A policy with
+one weight per pixel per action and nothing in between — the conv net's problem
+with the representation removed — reaches 985 px against the conv net's 1641,
+so the representation is worth **+656 [+282, +1031]** over six training runs
+each. But the arm that isolates it also settles an older question: switching
+off the attention loss, which supervises *where* the network looks, costs
+**−353 [−526, −180]**, losing all six. That loss was added long ago, measured
+once, and never checked across training runs. It is also the steadiest arm, so
+the hint about where to look removes most of the run-to-run lottery as well.
+Meanwhile the arm that fits the demonstrations best plays worst, for the sixth
+time running.
+
 The methodological lesson cost more than the experiment. The first three seeds
 agreed on +221, +277 and +239, and that agreement is exactly what made it look
 certain; three fresh seeds gave −355, +382 and +252. Three numbers that agree

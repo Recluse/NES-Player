@@ -5639,3 +5639,55 @@ What survives the day: the demonstration curve is flat on real data; one epoch
 is worth three and costs a third as much; and the rescues are a lead worth ten
 or twelve training runs if anyone intends to publish a number about them, not
 the six spent here.
+
+## Pixels straight to buttons, and what actually carries the honest track (2026-09-10)
+
+If the clone's knowledge can be written down, it should be possible to write it
+down. `--arch linear` is a policy with one weight per pixel per action and
+nothing in between: the same training problem the conv net solves, with the
+representation removed. Whatever separates the two is what the representation
+is worth, and the linear weights reshape into a picture, so this policy can be
+looked at rather than probed (`scripts/experiments/linear_map.py`).
+
+A softmax cannot be moved by anything every action shares, so the map subtracts
+the mean weight across actions before drawing. Without that it shows the
+average brightness of Contra rather than the policy.
+
+Three arms, six training seeds each, one epoch, the same 59 demonstrations and
+the same 32 evaluation seeds. The third arm is the conv net with the attention
+loss switched off, so that the linear comparison differs by the representation
+alone.
+
+| training seed | linear | conv, no attention | conv + attention |
+|---|---|---|---|
+| 0 | 1498 | 1220 | 1566 |
+| 1 | 829 | 1059 | 1629 |
+| 2 | 605 | 1240 | 1646 |
+| 3 | 961 | 1470 | 1904 |
+| 4 | 1046 | 1226 | 1508 |
+| 5 | 970 | 1513 | 1592 |
+| **mean** | **985** | **1288** | **1641** |
+| spread across runs (sd) | 295 | 171 | **138** |
+
+**The attention loss is worth +353 [+180, +526], winning 6 of 6.** It is the
+first effect in this file measured at the training-run level that survives
+being measured that way. It is also the steadiest arm: supervising where the
+network looks does not only raise the mean, it removes most of the run-to-run
+lottery that wrecked the two results above. The loss was added months ago,
+measured once, and never checked across training runs. On this evidence it,
+rather than depth, is what carries the honest track.
+
+The representation is worth **+656 [+282, +1031]** over the linear policy, 6 of
+6. Against the conv net without attention the linear arm is −303 [−657, +50],
+1 of 6 — probably worse, not demonstrably so.
+
+A prediction of mine that the data refused: the linear problem is convex, so I
+expected its play to be stable across seeds. Its spread is the **largest** of
+the three, 295 against 138. Convexity is a statement about the optimum, and one
+epoch of AdamW is nowhere near one; where the batch order leaves you is where
+you stay.
+
+And the sixth consecutive failure of validation accuracy to predict play, the
+plainest yet. The no-attention arm fits best of all — 0.804 to 0.815 against a
+0.719 majority baseline — and plays 353 px worse than the attention arm, which
+fits at 0.785 to 0.791. Better copying, worse play, six times out of six.

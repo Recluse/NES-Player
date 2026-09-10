@@ -298,6 +298,33 @@ def stack_to_tensor(stack: np.ndarray) -> torch.Tensor:
     return t.permute(0, 3, 1, 2).reshape(-1, *stack.shape[1:3])
 
 
+class LinearNet(nn.Module):
+    """Pixels straight to buttons: one weight per pixel per action, and nothing
+    in between. It is the same training problem the conv net solves, with the
+    representation removed, so the gap between the two is what the
+    representation is worth. The weights reshape back into a picture, which
+    means this policy can be looked at rather than probed."""
+
+    def __init__(self, n_actions: int, in_ch: int = FRAME_STACK * 3):
+        super().__init__()
+        self.in_ch = in_ch
+        self.fc = nn.Linear(in_ch * INPUT_HW[0] * INPUT_HW[1], n_actions)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return self.fc(x.flatten(1))
+
+
+class LinearNetAV(LinearNet):
+    """The same, with the log-mel window entering through its own linear map."""
+
+    def __init__(self, n_actions: int, in_ch: int = FRAME_STACK * 3):
+        super().__init__(n_actions, in_ch)
+        self.mel = nn.Linear(MEL_N * MEL_FRAMES, n_actions)
+
+    def forward(self, x: torch.Tensor, m: torch.Tensor) -> torch.Tensor:
+        return self.fc(x.flatten(1)) + self.mel(m.flatten(1))
+
+
 class AudioEncoder(nn.Module):
     """A small encoder for the log-mel window: 2D CNN to a 128-dim embedding."""
 
@@ -405,6 +432,7 @@ def train_bc(
     attn_source: str = "tracker",
     memory: str = "short",
     keep_epochs: bool = False,
+    arch: str = "conv",
 ) -> dict:
     offsets = FRAME_OFFSETS[memory]
     torch.manual_seed(seed)
@@ -485,10 +513,13 @@ def train_bc(
         val_ds = torch.utils.data.ConcatDataset([d for d, _ in parts[-n_val_eps:]])
         val_labels = np.concatenate([lbl for _, lbl in parts[-n_val_eps:]])
         n_val_count = len(val_labels)
-    if use_audio:
-        model = BCNetAV(len(vocab), in_ch=len(offsets) * 3)
-    else:
-        model = BCNet(len(vocab), in_ch=len(offsets) * 3)
+    nets = {"conv": (BCNet, BCNetAV), "linear": (LinearNet, LinearNetAV)}
+    if arch not in nets:
+        raise ValueError(f"unknown arch {arch!r}: {', '.join(nets)}")
+    if arch == "linear" and attn:
+        raise ValueError("--attn supervises conv activations; the linear policy "
+                         "has none. Drop --attn or use --arch conv")
+    model = nets[arch][bool(use_audio)](len(vocab), in_ch=len(offsets) * 3)
     if init_from:   # transfer: body and audio encoder from the base, new heads —
         # the target game has a different action vocabulary
         base = torch.load(Path(init_from) / "model.pt", map_location="cpu")
@@ -596,6 +627,7 @@ def train_bc(
         "memory": memory,
         "input_hw": list(INPUT_HW),
         "modality": "av" if use_audio else "video",
+        "arch": arch,
         "best_epoch": best_epoch,
         "attn": attn,
         "attn_source": attn_source,
@@ -634,15 +666,17 @@ class BCPolicy:
         self.offsets = tuple(meta.get("frame_offsets", DEFAULT_OFFSETS))
         self.span = max(self.offsets)
         in_ch = len(self.offsets) * 3
+        video, av = ({"conv": (BCNet, BCNetAV),
+                      "linear": (LinearNet, LinearNetAV)}[meta.get("arch", "conv")])
         if self.modality == "av":
-            self.model = BCNetAV(len(self.vocab), in_ch=in_ch).to(self.dev).eval()
+            self.model = av(len(self.vocab), in_ch=in_ch).to(self.dev).eval()
             st = meta["mel_stats"]
             self._mel_t = mel_transform(st["sample_rate"])
             self._mel_mean, self._mel_std = st["mean"], st["std"]
             self._audio_ring: list[np.ndarray] = []
             self._mel_cache = None
         else:
-            self.model = BCNet(len(self.vocab), in_ch=in_ch).to(self.dev).eval()
+            self.model = video(len(self.vocab), in_ch=in_ch).to(self.dev).eval()
         self.model.load_state_dict(torch.load(run / "model.pt", map_location=self.dev))
         self._stack: list[np.ndarray] = []
         self.last_features: np.ndarray | None = None   # (8, h, w), for the dashboard
@@ -765,6 +799,10 @@ class BCPolicy:
         return (pressed, ranked, cam) if with_cam else (pressed, ranked)
 
     def _forward_with_cam(self, x: torch.Tensor, mel: torch.Tensor | None = None):
+        if not hasattr(self.model, "body"):   # the linear policy has no conv to look at
+            raise RuntimeError("class activation maps need a conv body; this "
+                               "checkpoint is --arch linear, whose weights are "
+                               "the picture (scripts/experiments/linear_map.py)")
         acts: dict = {}
         hook = self.model.body[4].register_forward_hook(   # the last conv layer
             lambda m, i, o: acts.__setitem__("a", o))
