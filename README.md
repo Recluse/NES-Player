@@ -86,14 +86,27 @@ plays beats its majority baseline by 5.5 points, the inert one beat its own by
 
 How many clears does that take? Eighty more planner runs produced fifty-nine,
 and clones trained on nested subsets of 6, 12, 24 and 59 of them are
-indistinguishable: −83 [−247, +71] between the ends of the ladder. The whole
+indistinguishable: −182 [−415, +34] between the ends of the ladder. The whole
 distance from zero to about 1900 is bought by the first handful, and the next
-fifty buy nothing. Every subset also stops in the same narrow band, which
-reads less like a shortage of examples than like the clone leaving the
-demonstrated states at one particular place — something more of the same
-trajectories cannot fix, since they all pass through those states. The next
-experiment follows from that: demonstrations recorded where the clone
-actually fails, not more of the ones where it already succeeds.
+fifty buy nothing.
+
+Recording demonstrations where the clone actually fails is the obvious next
+move, and measuring it turned out to be the hard part. Letting the planner take
+the wheel wherever the clone stalls and training on the rescues looked worth
++278 px on one training run, then −240 px on three. Playing every epoch of
+every run explained why: the second and third epochs add no progress at all and
+quadruple the spread between runs, from 340 px to 1527 px. One clone that
+scored 1885 after a single epoch was trained down to 563 by the third, while
+its loss fell the whole way. At one epoch, where the instrument is steady, six
+training runs put the rescues at **+169 [−107, +445]**, positive in five of
+six. Zero is inside, so that stays a lead rather than a result.
+
+The methodological lesson cost more than the experiment. The first three seeds
+agreed on +221, +277 and +239, and that agreement is exactly what made it look
+certain; three fresh seeds gave −355, +382 and +252. Three numbers that agree
+are a coincidence that happens often. The unit of observation here is a
+training run, and six of them are not enough to publish a few hundred pixels.
+The 0 → 1952 result clears that bar by a wide margin.
 
 The full chronology, retractions included, is
 [docs/experiments.md](docs/experiments.md).

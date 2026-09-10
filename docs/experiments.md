@@ -5478,6 +5478,16 @@ remains a human per-game input, legitimate but an input.
 
 ## What a demonstration is worth: the curve is flat (2026-09-09)
 
+> **Retracted 2026-09-10. The numbers below were measured on collapsed
+> data.** Every rung trained on one demonstration, not on six, twelve,
+> twenty-four and fifty-nine. On macOS, `cp -R src/ dst/` with a trailing
+> slash copies the directory's *contents*, so each episode overwrote the
+> previous one and the trainer saw a single episode directory. All four
+> training logs read `episodes: 1, frames: 7000`. The conclusion happened
+> to survive the rerun; the measurement behind it did not. The section is
+> kept as written, and the corrected one follows.
+
+
 If cloning the planner's clears works, the obvious question is how many
 clears it takes. `--record-if` gathers a demonstration set in one pass —
 run, and keep the episode only when it finished the level — and eighty
@@ -5517,3 +5527,115 @@ Caveat on the collection: these fifty-nine clears were recorded after the
 boot change of 8 September, and their clear rate (47 of 80) is not
 comparable with the 12 of 32 measured before it. The rate is not used
 anywhere in the ladder, which compares clones on fixed evaluation seeds.
+
+
+## The same ladder, measured (2026-09-10)
+
+The bug surfaced because the DAgger arm produced a checkpoint byte-identical
+to the clears-only one — `md5 runs/bc_dagger1/model.pt` matched
+`runs/bc_ladder_59/model.pt`. Two different datasets cannot train the same
+weights, so the datasets were not different.
+
+Copying is gone from the rerun rather than fixed. `train-bc` already takes
+`--max-episodes` and comma-separated sources, so the rungs are prefixes of
+one sorted list by construction and the DAgger mixture needs no scratch
+directory. The training logs now read `episodes: 6, frames: 42000` through
+`episodes: 59, frames: 413000`.
+
+| demonstrations | best_x median | IQM | mean | deaths / run | past 2500 | val_acc / baseline |
+|---|---|---|---|---|---|---|
+| 6 | 1996 | 1954 | 1949 | 2.72 | 0 | 0.763 / 0.716 |
+| 12 | 1952 | 1884 | 1719 | 3.06 | 0 | 0.793 / 0.738 |
+| 24 | 680 | 883 | 1020 | 2.75 | 0 | 0.779 / 0.712 |
+| 59 | 1969 | 1907 | 1767 | 2.75 | **2** | 0.815 / 0.719 |
+
+Fifty-nine demonstrations against six: **−182 [−415, +34]**, winning 15 of
+32. The interval covers zero, so the flat curve holds — this time against
+data that exists.
+
+Two things are visible only now. The twelve-demonstration rung reproduces
+the published clone to the digit: median 1952, 3.06 deaths per run, from a
+different script on the same twelve episodes. And the twenty-four rung
+collapses to a median of 680 while its validation accuracy sits exactly
+where it belongs, between the rungs on either side. Training did not break;
+play did. That is one training run, and the next section explains it.
+
+## The clone was over-trained, and it hid everything (2026-09-10)
+
+DAgger over trajectories, run as planned: the clone drives, the planner takes
+the wheel where it stops getting anywhere, and only the planner's frames are
+recorded. Eighty seeds of that produced 44 correction episodes, 252 rescues in
+all. Trained together with the 59 clears — 103 episodes, 484848 frames — the
+mixture scored a median of 2040 against 1969, +278 [+76, +496], winning 21 of
+32.
+
+That interval is over evaluation seeds with one training run per arm, and the
+collapsed rung above is a standing warning about exactly that. `train-bc`
+gained a `--seed` flag — it had been pinned to zero and unreachable from the
+command line — and both arms were retrained on three seeds. The mixture then
+came out at 1380 against 1620, **worse**, dragged there by one run that fell to
+563. So the question became where a spread like that comes from, and
+`--keep-epochs` was added to answer it: every epoch is written as its own run
+directory, so every epoch can be played instead of trusting the
+validation-accuracy pick. Six runs, three epochs each, eighteen evaluations on
+the same 32 seeds.
+
+| arm | training seed | epoch 1 | epoch 2 | epoch 3 |
+|---|---|---|---|---|
+| 59 clears | 0 | 1566 | 1701 | 1767 |
+| 59 clears | 1 | 1629 | 1126 | 1365 |
+| 59 clears | 2 | 1646 | 1853 | 1728 |
+| + 44 rescues | 0 | 1787 | 2045 | 2090 |
+| + 44 rescues | 1 | 1906 | 1975 | 1533 |
+| + 44 rescues | 2 | 1885 | 1814 | **563** |
+
+Read down the first column. Across the six runs, per epoch:
+
+| epoch | mean | worst | best | spread |
+|---|---|---|---|---|
+| 1 | 1736 | 1566 | 1906 | **340** |
+| 2 | 1753 | 1126 | 2045 | 919 |
+| 3 | 1507 | 563 | 2090 | **1527** |
+
+**The second and third epochs buy variance, not skill.** The mean across runs
+does not rise; the spread quadruples. The run that collapsed to 563 was at 1885
+after one epoch and 1814 after two, and fell apart on the third while the loss
+went on falling. It was not a bad initialisation. It was trained into the
+ground. Six more one-epoch runs on fresh seeds put the whole band at 1508–1904
+for clears and 1549–1906 for the mixture, so the stability is not an artefact
+of the three seeds it was noticed on.
+
+Two side observations. The validation-accuracy epoch pick, the obvious suspect,
+is not the culprit: where it fired it chose epoch 2 over epoch 3 and lost 45 px,
+not won 1500. And the evaluations reproduce to the digit — 1767.3, 2045.1,
+1365.1, 1532.6, 1727.5, 562.5 all came back identical on the rerun — so
+training at a fixed seed and evaluation are both deterministic, and the spread
+really is the seed.
+
+## What the rescues are worth, honestly (2026-09-10)
+
+At one epoch, six training runs per pair:
+
+| training seed | 59 clears | + 44 rescues | difference |
+|---|---|---|---|
+| 0 | 1566 | 1787 | +221 |
+| 1 | 1629 | 1906 | +277 |
+| 2 | 1646 | 1885 | +239 |
+| 3 | 1904 | 1549 | **−355** |
+| 4 | 1508 | 1891 | +382 |
+| 5 | 1592 | 1844 | +252 |
+
+**+169 [−107, +445]** over training runs, t = 1.58, positive in 5 of 6. Zero is
+inside. **DAgger over trajectories is not established.**
+
+The first three seeds are the ones the one-epoch idea was noticed on, and they
+gave +221, +277, +239 — a standard deviation of 28 px. That agreement is what
+made it look certain. The three fresh seeds gave −355, +382, +252, a standard
+deviation of 394. **Three numbers that agree are not evidence; they are a
+coincidence that happens often.** This is the same mistake as the one retracted
+at the top of this page, wearing better clothes.
+
+What survives the day: the demonstration curve is flat on real data; one epoch
+is worth three and costs a third as much; and the rescues are a lead worth ten
+or twelve training runs if anyone intends to publish a number about them, not
+the six spent here.

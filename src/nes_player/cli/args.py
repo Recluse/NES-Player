@@ -64,6 +64,14 @@ def build_parser() -> argparse.ArgumentParser:
     t.add_argument("--init-from", default=None,
                    help="base checkpoint: reuse the body and audio encoder, retrain the heads")
     t.add_argument("--max-episodes", type=int, default=None)
+    t.add_argument("--keep-epochs", action="store_true",
+                   help="also write every epoch as its own run directory, "
+                        "so each can be played instead of trusting the "
+                        "validation-accuracy pick")
+    t.add_argument("--seed", type=int, default=0,
+                   help="training seed: weight init and the validation split. "
+                        "Repeat a run with two or three of these before believing "
+                        "a difference between checkpoints")
     t.add_argument("--attn", type=float, default=0.0,
                    help="attention-loss weight: pull conv attention onto tracker boxes")
     t.add_argument("--attn-lead", type=int, nargs="+", default=[0],

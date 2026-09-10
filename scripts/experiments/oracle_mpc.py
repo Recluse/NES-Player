@@ -756,7 +756,8 @@ def run(checkpoint: str, game: str, state: str | None, frames: int, seed: int,
         save_final: str = "", load_state: str = "",
         save_at: int = 0, workers: int = 1, auto_tpl: str = "",
         rollback: int = 0, novelty: float = 0.0, trace: str = "",
-        record: str = "", record_if: int = 0) -> dict:
+        record: str = "", record_if: int = 0,
+        dagger: int = 0, dagger_frames: int = 300) -> dict:
     from nes_player.emulator.controller import BUTTONS
     from nes_player.emulator.stable_retro import StableRetroAdapter
     from nes_player.perception.motion import pick_hero
@@ -958,6 +959,12 @@ def run(checkpoint: str, game: str, state: str | None, frames: int, seed: int,
     hero_last = None   # the main line's hero track, seed for every branch
     tr_ram, tr_scene, tr_lum = [], [], []   # --trace: the executed line only
     rec_obs, rec_act = [], []              # --record: the line as an episode
+    # --dagger: the clone drives and the planner is called in only where the
+    # clone stops getting anywhere. More of the demonstrations it already
+    # has changes nothing (the ladder of 6, 12, 24, 59 is flat), because
+    # they all pass through states it already handles; what it lacks is
+    # what to do from the states it reaches on its own and cannot leave.
+    stall, best_seen, planner_budget, rescues = 0, None, 0, 0
     # B1': failure-triggered rollback. A ring of the last `rollback`
     # decision states; when every candidate is doomed the console is
     # rewound one decision at a time, the horizon grows by the depth so
@@ -992,7 +999,22 @@ def run(checkpoint: str, game: str, state: str | None, frames: int, seed: int,
         elif ram_hero:
             hero = RamHero(env._env.get_ram())
         needs_hero = ghost is not None or probe is not None
+        if dagger:
+            pos_now = game_pos(env, game)
+            if best_seen is None or pos_now > best_seen:
+                best_seen, stall = pos_now, 0
+            else:
+                stall += 1
+            if planner_budget > 0:
+                planner_budget -= 1
+                if planner_budget == 0:
+                    stall = 0          # give the clone the wheel again
+            elif stall >= dagger:
+                planner_budget, stall = dagger_frames, 0
+                rescues += 1
+                held, defer = [], 0    # drop whatever the clone was doing
         if (horizon and not held and defer <= 0
+                and (not dagger or planner_budget > 0)
                 and (not needs_hero or hero is not None)):
             here = env.save_state()
             h = rb_h or horizon
@@ -1360,7 +1382,9 @@ def run(checkpoint: str, game: str, state: str | None, frames: int, seed: int,
                 pressed = pressed - {"START", "SELECT"}
         obs = env.step_buttons([pressed])
         gt += 1
-        if record:
+        if record and (not dagger or planner_budget > 0):
+            # only the rescue itself is a correction; the clone's own frames
+            # are already in the data it was trained on
             rec_obs.append(obs)
             rec_act.append(pressed)
         if trace:
@@ -1506,7 +1530,8 @@ def run(checkpoint: str, game: str, state: str | None, frames: int, seed: int,
                if game.startswith("Contra") else {}),
             **({"escalated": escalated, "decisions": decisions}
                if adaptive is not None else {}),
-            **({"rollback": rb} if rollback else {})}
+            **({"rollback": rb} if rollback else {}),
+            **({"rescues": rescues} if dagger else {})}
 
 
 def main() -> int:
@@ -1529,6 +1554,12 @@ def main() -> int:
                     help="write the executed line as a training episode "
                          "into this directory, so a clone can be trained on "
                          "the planner's own clears")
+    ap.add_argument("--dagger", type=int, default=0,
+                    help="DAgger over trajectories: let the policy drive and "
+                         "call the planner in after this many frames without "
+                         "progress, recording only what the planner does")
+    ap.add_argument("--dagger-frames", type=int, default=300,
+                    help="how long the planner keeps the wheel once called")
     ap.add_argument("--record-if", type=int, default=0,
                     help="only keep the recorded episode when the run got "
                          "at least this far, so a demonstration set can be "
@@ -1791,7 +1822,8 @@ def main() -> int:
                       novelty=args.novelty if horizon else 0.0,
                       trace=args.trace if horizon else "",
                       record=args.record if horizon else "",
-                      record_if=args.record_if)
+                      record_if=args.record_if, dagger=args.dagger,
+                      dagger_frames=args.dagger_frames)
             rows.append(row)
             print(json.dumps({"arm": name, **row}), flush=True)
         arms[name] = rows

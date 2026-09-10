@@ -404,6 +404,7 @@ def train_bc(
     attn_lead: int | tuple[int, ...] = 0,
     attn_source: str = "tracker",
     memory: str = "short",
+    keep_epochs: bool = False,
 ) -> dict:
     offsets = FRAME_OFFSETS[memory]
     torch.manual_seed(seed)
@@ -538,6 +539,7 @@ def train_bc(
     # two checkpoints produced play that was indistinguishable. So this picks
     # the best clone, which is the most this loss can be asked for.)
     best_acc, best_epoch, best_state = -1.0, -1, None
+    epoch_states: list[dict] = []
     for epoch in range(epochs):
         model.train()
         total, correct, loss_sum = 0, 0, 0.0
@@ -572,6 +574,9 @@ def train_bc(
             best_acc, best_epoch = rec["val_acc"], epoch
             best_state = {k: v.detach().cpu().clone()
                           for k, v in model.state_dict().items()}
+        if keep_epochs:
+            epoch_states.append({k: v.detach().cpu().clone()
+                                 for k, v in model.state_dict().items()})
         print(rec)
 
     out = Path(out_dir)
@@ -600,6 +605,14 @@ def train_bc(
         "val_majority_baseline": majority,
     }
     (out / "meta.json").write_text(json.dumps(meta, indent=2))
+    # Every epoch as its own run directory, so each can be played. The
+    # selector below picks by validation accuracy, which does not predict
+    # play; keeping the alternatives makes that choice measurable.
+    for n, state in enumerate(epoch_states):
+        sub = out / f"epoch{n}"
+        sub.mkdir(exist_ok=True)
+        torch.save(state, sub / "model.pt")
+        (sub / "meta.json").write_text(json.dumps(meta, indent=2))
     provenance.write(out, config={k: v for k, v in meta.items()
                                   if k not in ("history", "vocab_masks",
                                                "vocab_names", "mel_stats")},
