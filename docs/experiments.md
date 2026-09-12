@@ -5691,3 +5691,45 @@ And the sixth consecutive failure of validation accuracy to predict play, the
 plainest yet. The no-attention arm fits best of all — 0.804 to 0.815 against a
 0.719 majority baseline — and plays 353 px worse than the attention arm, which
 fits at 0.785 to 0.791. Better copying, worse play, six times out of six.
+
+## How much attention: the curve saturates at the weight we shipped (2026-09-10)
+
+The attention loss turned out to be the one confirmed lever, and its weight had
+never been chosen by measurement — 1.0 was a guess that stuck. Four weights, six
+training seeds each, one epoch, the same 59 demonstrations and the same 32
+evaluation seeds. The 0.0 and 1.0 columns are the arms measured in the previous
+section.
+
+| training seed | 0.0 | 0.5 | 1.0 | 2.0 |
+|---|---|---|---|---|
+| 0 | 1220 | 1267 | 1566 | 1933 |
+| 1 | 1059 | 1301 | 1629 | 1327 |
+| 2 | 1240 | 1647 | 1646 | 1802 |
+| 3 | 1470 | 1565 | 1904 | 1988 |
+| 4 | 1226 | 1501 | 1508 | 1469 |
+| 5 | 1513 | 1674 | 1592 | 1299 |
+| **mean** | **1288** | **1493** | **1641** | **1636** |
+| spread across runs (sd) | 171 | 173 | 138 | **309** |
+
+| step | difference | runs won |
+|---|---|---|
+| 0.0 → 0.5 | **+204 [+67, +342]** | 6 of 6 |
+| 0.5 → 1.0 | +148 [−54, +351] | 4 of 6 |
+| 1.0 → 2.0 | −4 [−280, +271] | 3 of 6 |
+
+**The curve saturates at 1.0 and the guess was a good one.** Half the weight
+already buys 204 px of the 353 px the loss is worth, the second half is not
+separable from noise, and doubling past 1.0 buys nothing at all while doubling
+the spread between training runs, 138 to 309. That last number is the day's
+pattern once more: pushing a term harder than it wants to go does not lower the
+mean so much as widen the lottery.
+
+So the default stays where it is, for the first time on evidence rather than by
+inheritance. Nothing to change is a result when the alternative was to keep not
+knowing.
+
+The obvious companion question — whether the target should come from the
+console's sprite table instead of the pixel tracker — could not be asked. Those
+masks are built by replaying the episode, and the recorded clears carry no
+starting point to replay from. Recording now writes one; the existing
+demonstrations do not have it, so that comparison waits for a fresh campaign.

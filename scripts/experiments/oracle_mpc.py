@@ -959,6 +959,8 @@ def run(checkpoint: str, game: str, state: str | None, frames: int, seed: int,
     hero_last = None   # the main line's hero track, seed for every branch
     tr_ram, tr_scene, tr_lum = [], [], []   # --trace: the executed line only
     rec_obs, rec_act = [], []              # --record: the line as an episode
+    rec_state = b""                        # the emulator state at its first frame
+    pre_state = b""                        # the state before the step being taken
     # --dagger: the clone drives and the planner is called in only where the
     # clone stops getting anywhere. More of the demonstrations it already
     # has changes nothing (the ladder of 6, 12, 24, 59 is flat), because
@@ -1380,11 +1382,22 @@ def run(checkpoint: str, game: str, state: str | None, frames: int, seed: int,
             if i % repeat == 0:
                 pressed, _ = policy.act(obs.frame_rgb, temperature)
                 pressed = pressed - {"START", "SELECT"}
+        if record and not rec_obs:
+            # Where the episode is about to begin, so it can be replayed later.
+            # frames[0] is the frame *after* the first action, so the state has
+            # to be taken before the step, not after it. Without this an
+            # episode can only be re-derived from power-on, and these runs idle
+            # a random number of frames first — which is why --attn-source oam,
+            # whose masks come from a replay, cannot be built for anything
+            # recorded before this line existed.
+            pre_state = bytes(env._env.em.get_state())
         obs = env.step_buttons([pressed])
         gt += 1
         if record and (not dagger or planner_budget > 0):
             # only the rescue itself is a correction; the clone's own frames
             # are already in the data it was trained on
+            if not rec_obs:
+                rec_state = pre_state
             rec_obs.append(obs)
             rec_act.append(pressed)
         if trace:
@@ -1515,6 +1528,8 @@ def run(checkpoint: str, game: str, state: str | None, frames: int, seed: int,
         for o, a in zip(rec_obs, rec_act, strict=True):
             w.append(o, (a,))
         w.close()
+        if rec_state:
+            (ep / "start.state").write_bytes(rec_state)
         print("recorded:", ep, len(rec_obs), "frames", flush=True)
     if trace:
         out = Path(trace.replace(".npz", "") + f"_s{seed}.npz")

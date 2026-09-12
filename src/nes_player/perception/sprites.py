@@ -108,11 +108,30 @@ def _open_matching_env(ep: Episode, first_action: int):
     """
     from nes_player.emulator.stable_retro import StableRetroAdapter
 
+    game = ep.metadata["game"]
+    # Games with a repo integration carry their ROM and RAM map there and are
+    # invisible to stable-retro's own registry; without this the replay dies on
+    # "no romfiles found" rather than on anything to do with sprites.
+    integ_root = Path(__file__).resolve().parents[3] / "integrations"
+    integ = str(integ_root) if (integ_root / game).exists() else None
     want = np.asarray(ep.frames[0], np.int16)
     pressed = buttons_from_mask(first_action)
     closest = np.inf
+    saved = ep.path / "start.state"
+    if saved.exists():   # the recorder wrote where this episode begins
+        env = StableRetroAdapter(game, include_debug=True, state=None,
+                                 integration_dir=integ)
+        env.reset(seed=0)
+        env._env.em.set_state(saved.read_bytes())
+        obs = env.step_buttons([pressed])
+        diff = float(np.abs(obs.frame_rgb.astype(np.int16) - want).mean())
+        if diff == 0.0:
+            return env, "start.state"
+        env.close()
+        closest = diff
     for state in (ep.metadata.get("state", "default"), None):
-        env = StableRetroAdapter(ep.metadata["game"], include_debug=True, state=state)
+        env = StableRetroAdapter(game, include_debug=True, state=state,
+                                 integration_dir=integ)
         env.reset(seed=0)
         obs = env.step_buttons([pressed])
         diff = float(np.abs(obs.frame_rgb.astype(np.int16) - want).mean())
