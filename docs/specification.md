@@ -41,6 +41,15 @@ than one particular game. It should be able to:
 - plan inside its own world model;
 - carry skills across games of different genres.
 
+**The target these add up to, added 2026-09-16 and not yet reached:**
+*manual-assisted zero-shot play* — a game the model has never trained on, and,
+before it starts, the documentation that shipped in the box with the cartridge.
+Not a prior written by whoever runs the experiment, not addresses read out of
+the emulator's memory. A person meeting a new game gets exactly that much, and
+this is the test that says whether the agent can use it. The mechanism is in
+place and is measurably worth something; the test itself has not been run. See
+[manuals.md](manuals.md).
+
 ## 3. Hypothesis
 
 An agent pretrained on a set of dissimilar NES games should learn a new game

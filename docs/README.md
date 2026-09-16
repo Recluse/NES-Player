@@ -20,6 +20,9 @@ to prove, then pick a document below.
 | [cores.md](cores.md) | Emulation cores: which are supported, how to switch, what differs |
 | [roms.md](roms.md) | Which ROMs the tests expect, by checksum. None are distributed |
 | [experiments.md](experiments.md) | The experiment log, negative results included |
+| [manuals.md](manuals.md) | Where the game manuals come from, and the target they set up |
+| [preregistration.md](preregistration.md) | What is frozen before confirmatory seeds, and what a comparison of a given size can resolve |
+| [claims.jsonl](claims.jsonl) | Every published number as one machine-readable line, recomputed from the logs by `recheck_claims.py` |
 
 ## Implementation status
 

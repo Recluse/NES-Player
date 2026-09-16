@@ -14,6 +14,28 @@ that openly cheats: it uses the emulator itself as a world model. That verdict
 was reached by paired experiments, survived every attempt to overturn it, and
 is the most interesting thing here.
 
+## What it is all for
+
+Both of those are means. The end, written down here before it is reached: the
+model has never seen the game, and before it starts it is handed the
+documentation that shipped in the box. **Manual-assisted zero-shot play.** Not
+a prior tuned by whoever is running the experiment, not addresses read out of
+the emulator's memory — the manual, the way a person gets it, in the box with
+the cartridge.
+
+That is a fair description of how anyone meets a game they have not played, and
+it is a harder test than anything below. Every number in this file was measured
+on a game that had already been watched for weeks.
+
+Where that stands, so the target is not mistaken for a result: the mechanism
+exists and is worth something measurable — `assets/priors/` is read by the
+planner, and the base's first room opens 17 times in 32 with it. Since
+16 September the prior's `source` names a scan of the actual manual rather than
+recollection of it, and the scope of each fact came from the manual's own
+control pages rather than from a guess (`docs/manuals.md`). What has **not**
+happened is the test itself: a game nobody here has tuned for, its manual, and
+a number. Until that runs, this is a direction, not an achievement.
+
 ## What plays today
 
 `scripts/experiments/oracle_mpc.py`: at each decision the planner saves the
@@ -255,7 +277,7 @@ uv run nes-player explore --game Gradius-Nes-v0 \
 
 # Train on those episodes
 uv run nes-player train-bc --episode datasets/explore_gradius \
-    --out runs/bc_gradius --audio --attn 1.0 --epochs 3
+    --out runs/bc_gradius --audio --attn 1.0
 ```
 
 ## Documentation
@@ -269,8 +291,16 @@ Everything is in [`docs/`](docs/README.md): the
 [training](docs/training.md),
 [emulation cores](docs/cores.md),
 [models](docs/models.md),
-[ROMs](docs/roms.md) and the
+[ROMs](docs/roms.md),
+[where the manuals come from](docs/manuals.md),
+[what a comparison of this size can resolve](docs/preregistration.md) and the
 [experiment log](docs/experiments.md).
+
+Every published number lives in [`docs/claims.jsonl`](docs/claims.jsonl) as one
+machine-readable line, and `recheck_claims.py` recomputes all of them from the
+logs in about a tenth of a second. Four claims on the experiment log have been
+retracted, each caught by somebody noticing in time; the registry is so the
+fifth does not depend on that.
 
 ## Licence
 
