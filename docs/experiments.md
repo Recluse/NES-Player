@@ -5785,3 +5785,128 @@ the mean.
 
 A third result in a row whose content is that nothing should change — which is
 worth more than the two that had to be retracted on 10 September.
+
+## The base is six rooms, and the second one needed a step sideways (2026-09-15)
+
+The log had said for six weeks that the base's second room needs "value
+spanning several rooms". Reading the traces instead of the summary said
+otherwise. Starting the planner *in* the second room with lives in hand, all
+eight seeds lost both lives without advancing — so arriving bankrupt was not
+the explanation either. Then the object table:
+
+    slot 6, type 20: alive all 2095 frames, HP 8 at the start, HP 8 at the end
+
+**The sensor never lost a single hit point.** The door's opening condition was
+not being met at all, which is a different problem from the door being
+underpriced. Every firing template aimed right, because every fight that shaped
+them was to the right, and this room's sensor sits to the left of the door.
+
+With mirrored templates behind `--mirror-fire`, five of eight seeds destroy the
+sensor and four reach room 4, having started from room 2. The room path reads
+`1 → 2 → 3 → 4 → 5` in RAM, and room 5 holds no type-20 sensor at all but does
+hold a type-16 object — the manual's "evil core at the center of Base 1". So
+**the base is six rooms**, 0 to 5, ending in a boss.
+
+The explanation for why the mirrored templates work was wrong, and the manual
+corrected it the next day: on 3D screens the gun points forward only and
+left/right strafe. The sensor is reached by *stepping sideways until the shot
+lines up*, not by aiming left. The result stands; the mechanism was not what it
+looked like.
+
+## A room, priced (2026-09-15)
+
+With the length known, the exchange rate is arithmetic rather than taste. The
+metric strides a stage at 4000 and the base has six rooms, so a room is worth
+667; the metric already pays 256 for the byte step, so the objective owes 411.
+The `--room-px 4000` used as a diagnostic since 3 September is ten times too
+much, which is why under it the planner charged for the door without regard to
+its lives.
+
+At 411, from the stage's start state, 32 seeds: **32 of 32 enter the next room,
+against 0 of 32 at the default**, deaths 2.00 against 0.84, exact McNemar
+p = 4.7e-10.
+
+That number survived a scare worth recording. All 32 seeds shared one
+branch-frame count and one best_x, which is the signature of seeds that do not
+vary — the failure this page already records from 4 September — and the result
+was withdrawn on the spot. It should not have been: `branch_frames` is
+decisions times candidates times horizon, so when every run uses its whole
+budget it *cannot* vary, and it only carries information where runs end early
+on a game over, which is where the 4 September criterion came from. The real
+check is the chosen-template histogram: 32 of 32 distinct, with deaths varying
+across seeds. The runs differ; only the outcome is uniform. **The right
+diagnostic applied to the wrong situation is still the wrong diagnostic.**
+
+## What the prior was doing to the jungle (2026-09-16)
+
+Turning the base's configuration on from power-on broke the first level
+completely: 0 of 8 clears where the documented arm gets 5 of 8, with most seeds
+stalled at x 635. Three suspects, in the order they were cleared, none of them
+by guessing:
+
+* **Direction.** The prior's notes are about a base — "a base stage does not
+  scroll, the way on is upward" — and were applied to the whole game, so in the
+  jungle they paid for climbing and standing. Real, fixed by giving the prior a
+  `scope`, and **not sufficient**: the jungle stayed broken.
+* **The data-priced death.** Innocent. Without the prior it clears 6 of 8,
+  exactly the documented arm.
+* **The target term's scale**, which the score trace named in one line.
+
+That trace is the whole story. Candidates scored 1696 or −1184 where a whole
+96-frame window of progress is worth 16 to 96 px, and `wait` was chosen 1992
+times out of about 3500. At 40 px per hit point with up to 16 hit points of
+targets on screen, the term swings 640 px where a screen of progress is 256.
+Standing still keeps enemies from appearing, so standing still won. The planner
+was right; the number was wrong.
+
+Priced by what destroying the thing opens, which differs by stage: the wall is
+72 hit points (from the scan) and ends the stage, worth the 928 px left to the
+stride, so **13 px per hit point** where the stage scrolls; a room sensor is 8
+hit points and opens a room worth 667, so **83 px** inside the base. The flat
+40 was three times too much in one place and half enough in the other.
+
+## Removing the wrong thing for the right reason (2026-09-16)
+
+Raising the sensor's price broke the base, because the target *list* is a
+per-stage fact too and I had only scoped the price. Base rooms carry
+wall-typed objects in their own right — 44 hit points of type 17 in room 3 —
+and at 83 px each that prices a room at five times what it is worth. The manual
+is explicit: Base 1 is a maze where you "destroy sensors while avoiding attacks
+from the Royal Guard". Only the sensor is a target there.
+
+Scoping the list to type 20 alone then made the base *worse*, 0 of 8, and the
+trace says why:
+
+    i=624  bc:-664 | run:-664 | jump now:-664 | wait:-664
+
+**Every candidate scores identically.** Not badly — identically, so the search
+is blind and picks arbitrarily. Position is pinned at 4000 in a stage that does
+not scroll, the room cannot change inside a 96-frame window, the exit term
+waits for the sensor to die, and −664 is the sensor's 8 hit points at 83, which
+no candidate manages to change.
+
+Which means the base's 8 of 8 was working **because of** the wall-typed objects
+that had no business being targets: shooting them varied the score inside the
+window and gave the search a gradient, and the sensor died as a side effect.
+Removing them was right and cost the stage its only dense signal.
+
+The honest fix is not to put them back. The base needs a term that pays for
+*aiming* rather than for the discrete fact of a hit — the same shape as the
+wall in the jungle, which fell not when its price rose but when damage gave the
+window something to count.
+
+That is feasible, and the feasibility was checked rather than assumed. The
+object table carries type and hit points but no coordinates, so the target's
+place on screen comes from the same causal trick that found the hero's sprites:
+split the frames by whether the sensor is alive, and see which tiles leave.
+
+| tile | x median / spread | y median / spread |
+|---|---|---|
+| 194 | 116 / 13 | 106 / **4.0** |
+| 218 | 117 / 15 | 88 / **4.2** |
+| 192 | 117 / 13 | 90 / **4.0** |
+| 14 | 122 / 32 | 128 / 21 |
+
+Three sit still and one flies; the spread separates the sensor from a bullet
+without anyone naming either. The next piece of work is that scan, and a term
+on the distance between the hero's x and a live target's x.

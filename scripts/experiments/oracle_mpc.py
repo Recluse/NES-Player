@@ -146,7 +146,15 @@ def prior_value(ram) -> int:
     points come from the scan, so the number is measured and only the
     naming is human.
     """
-    types = PRIOR.get("target_types")
+    # Which things are targets is itself a per-stage fact, and the manual says
+    # so: the jungle ends at a wall you destroy, while Base 1 is "a maze,
+    # destroying sensors while avoiding attacks from the Royal Guard". The base
+    # rooms do carry wall-typed objects — 44 hit points of type 17 in room 3 —
+    # and calling those targets priced the room at five times what it is worth.
+    sc = PRIOR.get("scope") or {}
+    in_scope = prior_in_scope(ram)
+    types = (sc.get("target_types") if in_scope and "target_types" in sc
+             else PRIOR.get("target_types"))
     if not types:
         return 0
     tab = PRIOR.get("tables") or {"type_base": 0x530, "hp_base": 0x580,
@@ -159,10 +167,8 @@ def prior_value(ram) -> int:
     # of progress is 256, and the planner answered by standing still, which was
     # arithmetically correct. Priced instead: the wall's 72 hit points buy the
     # rest of the stage, a base room's 8-hit-point sensor buys a room.
-    px = PRIOR.get("target_px", 40)
-    sc = PRIOR.get("scope") or {}
-    if "target_px" in sc and prior_in_scope(ram):
-        px = sc["target_px"]
+    px = sc["target_px"] if in_scope and "target_px" in sc \
+        else PRIOR.get("target_px", 40)
     return -int(px) * live
 
 

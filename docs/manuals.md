@@ -13,6 +13,23 @@ These are the scans, opened and checked rather than cited from memory.
 |---|---|
 | NES / Famicom / FDS manuals, 3316 PDFs, most with a text layer | https://archive.org/details/rx2MRPnes1250pxPDF |
 | Contra, US NES manual, 600 dpi with OCR | https://archive.org/details/contra-usa_202412 |
+| The same Rx2.0 project as a Calibre library | https://archive.org/details/Rx2MRPnesCalibre |
+| NES manuals, curated, full colour | https://www.nesfiles.com/ |
+| NES manuals, "culled from various sources" | https://www.digitpress.com/library/manuals/nes/index.html |
+| Manuals across platforms, per-game pages | https://www.gamesdatabase.org/ |
+| Scanned documentation, preservation project | https://www.gamingalexandria.com/ |
+| NES downloads including documentation | https://www.oldgames.sk/en/downloads?platform=nes |
+| SNES manuals | https://sites.google.com/view/snesmanuals |
+| Super Famicom manuals | https://sites.google.com/view/superfamicommanuals |
+| Arcade service and operator documentation | https://arcadertfm.com/ |
+| replacementdocs, manuals by request | https://replacementdocs.com/ |
+| nesworld, manuals section | https://www.nesworld.com/manuals.php |
+
+Every row answered when this table was written; `nesworld` sits behind an
+interstitial and needs a browser rather than a fetch. The first two rows are
+the ones actually used so far — the rest are there because a single collection
+is a single point of failure, and because the Super Famicom and arcade rows
+cover platforms this repository does not play yet.
 
 The collection holds the games this repository plays, including
 `Contra (Re-Translation).pdf` — the **Japanese** Famicom manual, which is the

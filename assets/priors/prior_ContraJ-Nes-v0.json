@@ -50,7 +50,11 @@
   "equals": 1,
   "why": "the base: byte 48 is the stage counter and 1 is the base. The manual says these things about a base stage — it does not scroll, its exit opens when the sensor dies, and the way on is upward. Applied to the jungle they tell the planner to climb and stand firing.",
   "target_px": 83,
-  "target_px_why": "the base: a room sensor is 8 hit points and destroying it opens the room, worth 667 px by the stage arithmetic (4000 over the six rooms measured 15 September). 667/8 = 83 px per hit point."
+  "target_px_why": "the base: a room sensor is 8 hit points and destroying it opens the room, worth 667 px by the stage arithmetic (4000 over the six rooms measured 15 September). 667/8 = 83 px per hit point.",
+  "target_types": [
+   20
+  ],
+  "target_types_why": "the base: the manual says Base 1 is a maze where you destroy sensors and avoid the Royal Guard, so only the sensor is a target here. The rooms do carry wall-typed objects — 44 hit points of type 17 in room 3, 22 in rooms 1 and 4 — and counting those as targets priced a room at several times what it is worth."
  },
  "target_px_why": "scrolling stages: the wall at the end of a zone is 72 hit points (WALL_HP0, from the scan) and destroying it ends the stage, which is worth the distance left to the 4000 stride — about 928 px from the wall at 3072. 928/72 = 13 px per hit point. The old 40 was picked by hand and swamped progress: a whole screen is 256 px."
 }
