@@ -123,6 +123,22 @@ def body_y(frame, prev, ram=None, last=None) -> float:
     return 1.0 if xy is None else xy[1] / 240.0
 
 
+def prior_in_scope(ram) -> bool:
+    """Does the manual's stage-specific half apply where we are standing?
+
+    A manual indexes its facts by stage, because the manual is written that
+    way: our own note says "a base stage does not scroll, and the way on is
+    upward". Applied to the whole game, that note told the planner to climb
+    the jungle and stand firing — eight seeds of eight stalled at x 635, none
+    reached the wall, and deaths fell because it was no longer going anywhere.
+    So the file carries a scope, and a fact without one applies everywhere.
+    """
+    sc = PRIOR.get("scope")
+    if not sc:
+        return True
+    return int(ram[int(sc["ram"])]) == int(sc["equals"])
+
+
 def prior_value(ram) -> int:
     """What the manual says is worth destroying, priced by the A5 tables.
 
@@ -137,7 +153,17 @@ def prior_value(ram) -> int:
                                   "slots": 16}
     live = sum(int(ram[tab["hp_base"] + i]) for i in range(tab["slots"])
                if int(ram[tab["type_base"] + i]) in types)
-    return -int(PRIOR.get("target_px", 40)) * live
+    # A target is worth what destroying it opens, and that differs by stage, so
+    # the price does too. The flat 40 px per hit point was picked by hand and
+    # fitted neither: in the jungle the term swung 640 px where a whole screen
+    # of progress is 256, and the planner answered by standing still, which was
+    # arithmetically correct. Priced instead: the wall's 72 hit points buy the
+    # rest of the stage, a base room's 8-hit-point sensor buys a room.
+    px = PRIOR.get("target_px", 40)
+    sc = PRIOR.get("scope") or {}
+    if "target_px" in sc and prior_in_scope(ram):
+        px = sc["target_px"]
+    return -int(px) * live
 
 
 SCAN_POS: dict = {}  # game -> position bytes from controllability.py, opt-in
@@ -203,6 +229,7 @@ def templates(h: int):
 
 
 FIRE_DIAG = frozenset({"UP", "RIGHT", "B"})
+MIRROR_FIRE = False   # --mirror-fire: also aim left, see the base's second room
 
 
 def game_templates(h: int, game: str):
@@ -236,6 +263,21 @@ def game_templates(h: int, game: str):
             ("jump fire", [jump_diag] * 10
              + taps(FIRE_DIAG, diag_rest, h - 10)),
         ]
+        if MIRROR_FIRE:
+            # Every firing candidate above aims right, because every fight
+            # that shaped them was to the right. The base's second room puts
+            # its sensor on the left of the door, and the traces show why the
+            # room never opens: the sensor sits at 8 hit points for two
+            # thousand frames and never loses one. Nothing here could have hit
+            # it. Left is as available as right on the pad, so this is a
+            # symmetry the candidate set was missing, not new knowledge.
+            fire_left = frozenset({"UP", "LEFT", "B"})
+            left_rest = frozenset({"UP", "LEFT"})
+            flat_left = frozenset({"LEFT", "B"})
+            cands += [
+                ("fire up-left", taps(fire_left, left_rest, h)),
+                ("fire left", taps(flat_left, frozenset({"LEFT"}), h)),
+            ]
     return cands
 
 
@@ -394,7 +436,9 @@ def prior_exit_value(ram, last=None) -> int:
     frames showed the soldier standing there for 1500 frames with the
     door open beside him."""
     px = int(PRIOR.get("exit_up_px", 0))
-    if not px or prior_value(ram) != 0 or not HERO_TILES.get("tiles"):
+    if not px or not prior_in_scope(ram):
+        return 0
+    if prior_value(ram) != 0 or not HERO_TILES.get("tiles"):
         return 0
     # the track is the answer when the frame itself shows nobody near it:
     # a flicker frame, or a pose drawn from tiles the scan never saw
@@ -431,10 +475,13 @@ def game_value(env, game: str) -> int:
         pos += prior_value(env._env.get_ram())
     if game.startswith("Contra"):
         ram = env._env.get_ram()
-        if ROOM_PX:
-            # Diagnostic, never a default: is the planner's refusal to walk
-            # through fire a mistake, or the correct answer to a bad trade?
-            # Paying a room what a room is worth downstream answers it.
+        if ROOM_PX and int(ram[48]) == 1:
+            # Only in the base, and the gate is the whole point. Byte 100 is
+            # the screen index while a stage scrolls and the room index while
+            # it does not, and 256 per step is right for a screen: a screen is
+            # a screen. It is wrong for a room, which takes a stage's worth of
+            # work. Ungated this would pay 411 extra per screen of the jungle
+            # too and double the value of walking right.
             pos += ROOM_PX * int(ram[100])
         xs, lvl = pos % 4000, pos // 4000
         PX_PER_HIT = 40
@@ -601,7 +648,8 @@ _W: dict = {}
 def _worker_init(game: str, checkpoint: str, integ: str | None,
                  scan_pos=None, wall_clip: bool = True,
                  weapon_main: int = 400, prior: dict | None = None,
-                 hero_tiles: dict | None = None, room_px: float = 0.0):
+                 hero_tiles: dict | None = None, room_px: float = 0.0,
+                 mirror_fire: bool = False):
     """One emulator and one policy per worker process, loaded once.
 
     A spawned worker re-imports this module, so anything main set after
@@ -614,8 +662,9 @@ def _worker_init(game: str, checkpoint: str, integ: str | None,
     global WALL_CLIP, WEAPON_MAIN
     if scan_pos is not None:
         SCAN_POS[game] = scan_pos
-    global ROOM_PX
+    global ROOM_PX, MIRROR_FIRE
     WALL_CLIP, WEAPON_MAIN, ROOM_PX = wall_clip, weapon_main, room_px
+    MIRROR_FIRE = mirror_fire
     if prior:
         PRIOR.update(prior)
     if hero_tiles:
@@ -757,7 +806,8 @@ def run(checkpoint: str, game: str, state: str | None, frames: int, seed: int,
         save_at: int = 0, workers: int = 1, auto_tpl: str = "",
         rollback: int = 0, novelty: float = 0.0, trace: str = "",
         record: str = "", record_if: int = 0,
-        dagger: int = 0, dagger_frames: int = 300) -> dict:
+        dagger: int = 0, dagger_frames: int = 300,
+        lives: int = 2) -> dict:
     from nes_player.emulator.controller import BUTTONS
     from nes_player.emulator.stable_retro import StableRetroAdapter
     from nes_player.perception.motion import pick_hero
@@ -810,7 +860,7 @@ def run(checkpoint: str, game: str, state: str | None, frames: int, seed: int,
             workers, initializer=_worker_init,
             initargs=(game, checkpoint, integ, SCAN_POS.get(game),
                       WALL_CLIP, WEAPON_MAIN, dict(PRIOR),
-                      dict(HERO_TILES), ROOM_PX))
+                      dict(HERO_TILES), ROOM_PX, MIRROR_FIRE))
     policy = BCPolicy(checkpoint)
     obs = begin_any(env, game)
     # the boot/title screens may have spun an 8-bit scroll byte: the run's
@@ -823,7 +873,7 @@ def run(checkpoint: str, game: str, state: str | None, frames: int, seed: int,
         # boss and not about arriving there on the last life.
         env.load_state(Path(load_state).read_bytes())
         try:
-            env._env.data.set_value("lives", 2)
+            env._env.data.set_value("lives", lives)
         except Exception:
             pass
         obs = env.step_buttons([frozenset()])
@@ -849,7 +899,7 @@ def run(checkpoint: str, game: str, state: str | None, frames: int, seed: int,
     for _ in range(IDLE_STEP * seed % IDLE_MAX):
         obs = env.step_buttons([frozenset()])
     if load_state:
-        env._env.data.set_value("lives", 2)
+        env._env.data.set_value("lives", lives)
         obs = env.step_buttons([frozenset()])
 
     ghost = GhostPredictor(ghost_path) if ghost_path else None
@@ -887,8 +937,14 @@ def run(checkpoint: str, game: str, state: str | None, frames: int, seed: int,
         return base + [(f"{n1}+{n2}", p1 + p2)
                        for n1, p1 in halves for n2, p2 in halves]
     cands = make_cands(horizon) if horizon else []
+    # The manual's own templates are stage-scoped, and a run from power-on
+    # crosses the boundary: the jungle wants forward, the base wants up. So
+    # both lists exist and the decision picks by where the console says it is.
+    cands_scoped = cands
     if PRIOR and horizon:
-        cands = cands + prior_templates(horizon)
+        cands_scoped = cands + prior_templates(horizon)
+        if not PRIOR.get("scope"):
+            cands = cands_scoped
     if two_step and horizon:
         # Two-step search: every ordered pair of the five behaviours, each at
         # half the horizon. The one thing a single template cannot express is
@@ -1054,8 +1110,10 @@ def run(checkpoint: str, game: str, state: str | None, frames: int, seed: int,
                 o = env.step_buttons([p])
             policy._stack = list(stack)
             rich = bool(rb_h) or gt < danger_until
+            here_cands = (cands_scoped
+                          if prior_in_scope(env._env.get_ram()) else cands)
             options = [("bc", seq),
-                       *(make_cands(h, compose=True) if rich else cands)]
+                       *(make_cands(h, compose=True) if rich else here_cands)]
             env.load_state(here)
 
             scored = []
@@ -1583,6 +1641,16 @@ def main() -> int:
                     help="record the executed line — RAM, scene hash and "
                          "frame brightness per frame — to this npz prefix, "
                          "for the section-counter scan")
+    ap.add_argument("--lives", type=int, default=2,
+                    help="lab only, with --load-state: lives granted after the "
+                         "idle prefix. The default two is what a probe about a "
+                         "boss wants; a probe about how long a stage is wants "
+                         "more, or it measures the life budget instead")
+    ap.add_argument("--mirror-fire", action="store_true",
+                    help="add the left-facing mirror of the firing templates. "
+                         "Every one of them aims right because every fight "
+                         "that shaped them was to the right; the base's second "
+                         "room puts its sensor on the left")
     ap.add_argument("--room-px", type=float, default=0.0,
                     help="diagnostic: extra px per room already entered, to "
                          "ask whether the planner's refusal to trade a life "
@@ -1731,7 +1799,8 @@ def main() -> int:
                          "learned ego model, to price the model against the "
                          "objective")
     args = ap.parse_args()
-    global WEAPON_MAIN, WALL_CLIP, ROOM_PX
+    global WEAPON_MAIN, WALL_CLIP, ROOM_PX, MIRROR_FIRE
+    MIRROR_FIRE = args.mirror_fire
     ROOM_PX = args.room_px
     if args.prior:
         PRIOR.update(json.loads(Path(args.prior).read_text()))
@@ -1838,7 +1907,7 @@ def main() -> int:
                       trace=args.trace if horizon else "",
                       record=args.record if horizon else "",
                       record_if=args.record_if, dagger=args.dagger,
-                      dagger_frames=args.dagger_frames)
+                      dagger_frames=args.dagger_frames, lives=args.lives)
             rows.append(row)
             print(json.dumps({"arm": name, **row}), flush=True)
         arms[name] = rows

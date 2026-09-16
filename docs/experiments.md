@@ -5733,3 +5733,55 @@ console's sprite table instead of the pixel tracker — could not be asked. Thos
 masks are built by replaying the episode, and the recorded clears carry no
 starting point to replay from. Recording now writes one; the existing
 demonstrations do not have it, so that comparison waits for a fresh campaign.
+
+## Step size, not path length: the recipe sits in a narrow place (2026-09-13)
+
+An outside review offered an alternative to the over-training story for why
+the second and third epochs widen the spread between training runs. One epoch
+does not reach an optimum, so total path length is step size times steps; if
+the spread is about path length, doubling the step in a single epoch should
+reproduce what the third epoch did, and halving it should be steady. Written
+down before the run, along with the prediction.
+
+Three step sizes, six training seeds each, one epoch, same 59 demonstrations
+and same 32 evaluation seeds. The middle column is the arm already measured.
+
+| training seed | 1.5e-4 | 3e-4 | 6e-4 |
+|---|---|---|---|
+| 0 | 1731 | 1566 | 1609 |
+| 1 | 1600 | 1629 | 1218 |
+| 2 | 1020 | 1646 | 2014 |
+| 3 | 1728 | 1904 | 1798 |
+| 4 | 1194 | 1508 | 1392 |
+| 5 | 798 | 1592 | 1807 |
+| **mean** | **1345** | **1641** | **1640** |
+| spread across runs (sd) | 397 | **138** | 294 |
+| worst run | 798 | **1508** | 1218 |
+
+**The prediction fails on the half it could fail on.** Halving the step, which
+was supposed to be the steady arm, is the least steady of the three and 296 px
+worse, winning 1 of 6. Doubling it does not move the mean at all: −1 [−289,
++287].
+
+What survives is not about the mean. The default's spread is 138 against 397
+and 294 either side — but six numbers are far too few to read a variance off a
+table, so: F = 8.3 against a two-sided 5% critical 7.15 for the half step,
+which is real, and F = 4.6 for the double, which is not. So one thing is
+established, that **a smaller step widens the lottery**, and nothing is
+established about a larger one.
+
+The bottom row matters more than the mean. The default's worst run is 1508;
+the half step's worst is 798, with 50 deaths over 32 runs — the standing-still
+signature of the clones that fell apart on 10 September. Undershooting breaks
+the clone the same way overshooting does, which neither the log's story nor the
+review's predicted.
+
+And the coincidence worth keeping. The attention-weight curve gave spreads of
+171, 138 and 309 at weights 0, 1 and 2. This gives 397, 138 and 294. **Two
+independent knobs, and the shipped setting is the spread minimum on both.**
+One parameter landing there is luck; two looks like the recipe standing in a
+narrow place, where any move outward widens the lottery rather than lowering
+the mean.
+
+A third result in a row whose content is that nothing should change — which is
+worth more than the two that had to be retracted on 10 September.

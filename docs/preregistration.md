@@ -104,3 +104,43 @@ subsetting seeds, changing the metric, or extending the frame budget.
   them is far inside the seed spread, and both lose heavily to the policy, so
   the binding half of the criterion is beating `bc` either way.
 * Changing the metric, the frame budget or the commitment after the fact.
+
+## What a comparison of this size can resolve (added 2026-09-13)
+
+Two of the campaigns run in September were unmeasurable before they were
+launched, and that was visible in advance. With paired runs the smallest
+effect a comparison can resolve is the two-sided 95% t bound, `t·sd/√n`, and
+the spreads this project actually observes are known:
+
+| sd of the difference | 138 | 171 | 200 | 263 | 309 | 394 |
+|---|---|---|---|---|---|---|
+| resolvable with 6 runs | 145 | 179 | 210 | 276 | 324 | 413 |
+| resolvable with 13 runs | 84 | 104 | 121 | 159 | 187 | 239 |
+| resolvable with 20 runs | 65 | 80 | 94 | 123 | 145 | 184 |
+
+The DAgger question — is +169 px real — sat under the six-run line from the
+start. "Unmeasurable at this size" is a different sentence from "did not
+replicate", and only the first one saves the machine time.
+
+Before a campaign, therefore: state the effect worth detecting, take the sd
+from the nearest comparison already on disk, and read off the runs needed. If
+that number is unaffordable, the campaign does not answer the question and
+should be redesigned rather than run.
+
+**Which to buy, seeds or runs.** The spread between runs mixes the training
+lottery with the finite evaluation sample, and the two have opposite remedies.
+`nes_player.evaluation.stats.variance_split` separates them from logs already
+on disk, at no cost. Measured here: the evaluation sample is 84% of the spread
+for the attention comparison but only 23% for DAgger, so extra evaluation seeds
+would sharpen the first and do almost nothing for the second.
+
+At the cost of the current recipe — about 160 s to train one epoch, about 95 s
+to evaluate 32 seeds — extra training runs win in both cases, and by a wide
+margin where training noise dominates. That ratio is a property of the recipe,
+not a law: under the three-epoch schedule used until 10 September, training
+cost twelve minutes and buying evaluation seeds was the better trade. Recompute
+it when the recipe changes.
+
+More evaluation seeds are still worth buying for a reason the variance
+arithmetic does not see: 32 seeds sample the game's phases thinly, and this
+project has already been fooled once by seeds that were not independent.

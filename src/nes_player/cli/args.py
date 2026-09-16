@@ -59,7 +59,13 @@ def build_parser() -> argparse.ArgumentParser:
     t = sub.add_parser("train-bc", help="behavioural cloning on recorded episodes")
     t.add_argument("--episode", required=True)
     t.add_argument("--out", required=True)
-    t.add_argument("--epochs", type=int, default=4)
+    t.add_argument("--epochs", type=int, default=1,
+                   help="One, measured rather than inherited: over six training "
+                        "runs the second and third epochs add no progress "
+                        "(1736, 1753, 1507) and quadruple the spread between "
+                        "runs (340 to 1527). One run that scored 1885 after a "
+                        "single epoch was trained down to 563 by the third "
+                        "while its loss fell the whole way")
     t.add_argument("--audio", action="store_true", help="multimodal model (video + sound)")
     t.add_argument("--init-from", default=None,
                    help="base checkpoint: reuse the body and audio encoder, retrain the heads")
@@ -72,6 +78,11 @@ def build_parser() -> argparse.ArgumentParser:
                    help="also write every epoch as its own run directory, "
                         "so each can be played instead of trusting the "
                         "validation-accuracy pick")
+    t.add_argument("--lr", type=float, default=3e-4,
+                   help="AdamW step size. One epoch does not reach an optimum, "
+                        "so where the run stops depends on how far each step "
+                        "moves — which is a candidate explanation for the spread "
+                        "between training runs")
     t.add_argument("--seed", type=int, default=0,
                    help="training seed: weight init and the validation split. "
                         "Repeat a run with two or three of these before believing "

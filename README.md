@@ -27,6 +27,10 @@ The same planner, the same handful of templates, no per-game tuning beyond a
 position address and a boot sequence — and, since 3 September, not even the
 address:
 
+**Privileged track — the planner reads the emulator and rewinds it.** These
+numbers are what a search with a perfect world model can reach; they are not
+what a policy plays.
+
 | environment | paired gain over the policy | seeds |
 |---|---|---|
 | SMB 1-1 | +3828 (and 20/32 full clears at 4 draws) | 32 |
@@ -75,14 +79,24 @@ finer economics is measured offline, on stored rollout matrices, under common
 random numbers. Distilling its **successful trajectories** is a different target, and that one
 works in part. Once the planner began clearing Contra's first level, twelve of
 those clears were recorded as ordinary episodes and a clone was trained on
-them with the same recipe as before — only the data changed. Playing from
-pixels and sound alone, with no planner and no rewinding, it goes from a
-median of 0 to 1952 over 32 seeds, +1719 [+1516, +1895], winning every seed;
-it runs the bridge, jumps the water and shoots, and it clears nothing, where
-its teacher clears 12 of 32. Two honest notes belong with it: the knowledge is
-the planner's, and validation accuracy predicted none of it — the clone that
-plays beats its majority baseline by 5.5 points, the inert one beat its own by
-56.
+them with the same recipe as before — only the data changed. It plays from
+pixels and sound alone, with no planner and no rewinding.
+
+**Honest track — pixels and sound, no emulator state, no rewinding.** The
+teacher is listed in italics for scale, not as a peer: it searches the future,
+the clone looks at a screen.
+
+| Contra (J), 32 seeds | median progress | clears |
+|---|---|---|
+| clone trained on 57 exploration episodes | 0 | 0 / 32 |
+| **clone trained on 12 planner clears** | **1952** | 0 / 32 |
+| *its teacher, the privileged planner* | *3072* | *12 / 32* |
+
+The clone's gain over the inert one is +1719 [+1516, +1895], winning every
+seed; it runs the bridge, jumps the water and shoots, and it clears nothing.
+Two honest notes belong with it: the knowledge is the planner's, and validation
+accuracy predicted none of it — the clone that plays beats its majority
+baseline by 5.5 points, the inert one beat its own by 56.
 
 How many clears does that take? Eighty more planner runs produced fifty-nine,
 and clones trained on nested subsets of 6, 12, 24 and 59 of them are

@@ -18,6 +18,7 @@ def cmd_train_bc(args: argparse.Namespace) -> None:
                     seed=args.seed,
                     keep_epochs=args.keep_epochs,
                     arch=args.arch,
+                    lr=args.lr,
                     attn=args.attn, attn_lead=tuple(args.attn_lead),
                     attn_source=args.attn_source, memory=args.memory)
     last = meta["history"][-1]

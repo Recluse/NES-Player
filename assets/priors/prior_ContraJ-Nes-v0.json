@@ -1,48 +1,56 @@
 {
-  "game": "ContraJ-Nes-v0",
-  "source": "the game's own manual and thirty-year-old muscle memory, written down before the runs that use it",
-  "notes": [
-    "The wall at the end of the jungle is destroyed by its cannons and the sensor between them; point-blank diagonal fire is what reaches them.",
-    "A base stage does not scroll. Its exit opens when the room's sensor is destroyed, and the way on is upward through the door.",
-    "Flying capsules carry weapons; shooting one and walking into what it drops is worth a detour.",
-    "Once a room's sensor is destroyed the way on is upward through the door, so a cleared room rewards moving up the screen.",
-    "The door out of a base room is in the middle of the far wall, near screen x=112; walking up anywhere else does nothing."
-  ],
-  "templates": [
-    {
-      "name": "advance up",
-      "hold": [
-        "UP"
-      ],
-      "frames": 48
-    },
-    {
-      "name": "fire up",
-      "tap": [
-        "B",
-        "UP"
-      ],
-      "rest": [
-        "UP"
-      ],
-      "frames": 48
-    },
-    {
-      "name": "fire standing",
-      "tap": [
-        "B"
-      ],
-      "rest": [],
-      "frames": 48
-    }
-  ],
-  "target_types": [
-    20,
-    17,
-    16,
-    4
-  ],
-  "target_px": 40,
-  "exit_up_px": 300,
-  "exit_at_x": 112
+ "game": "ContraJ-Nes-v0",
+ "source": "the game manual, read rather than recalled: Contra (Re-Translation).pdf in archive.org/details/rx2MRPnes1250pxPDF — the Japanese Famicom manual, which is the one matching this ROM. See docs/manuals.md. Entries below name the page they come from.",
+ "notes": [
+  "The wall at the end of the jungle is destroyed by its cannons and the sensor between them; point-blank diagonal fire is what reaches them.",
+  "A base stage does not scroll. Its exit opens when the room's sensor is destroyed, and the way on is upward through the door.",
+  "Flying capsules carry weapons; shooting one and walking into what it drops is worth a detour.",
+  "Once a room's sensor is destroyed the way on is upward through the door, so a cleared room rewards moving up the screen.",
+  "The door out of a base room is in the middle of the far wall, near screen x=112; walking up anywhere else does nothing."
+ ],
+ "templates": [
+  {
+   "name": "advance up",
+   "hold": [
+    "UP"
+   ],
+   "frames": 48
+  },
+  {
+   "name": "fire up",
+   "tap": [
+    "B",
+    "UP"
+   ],
+   "rest": [
+    "UP"
+   ],
+   "frames": 48
+  },
+  {
+   "name": "fire standing",
+   "tap": [
+    "B"
+   ],
+   "rest": [],
+   "frames": 48
+  }
+ ],
+ "target_types": [
+  20,
+  17,
+  16,
+  4
+ ],
+ "target_px": 13,
+ "exit_up_px": 300,
+ "exit_at_x": 112,
+ "scope": {
+  "ram": 48,
+  "equals": 1,
+  "why": "the base: byte 48 is the stage counter and 1 is the base. The manual says these things about a base stage — it does not scroll, its exit opens when the sensor dies, and the way on is upward. Applied to the jungle they tell the planner to climb and stand firing.",
+  "target_px": 83,
+  "target_px_why": "the base: a room sensor is 8 hit points and destroying it opens the room, worth 667 px by the stage arithmetic (4000 over the six rooms measured 15 September). 667/8 = 83 px per hit point."
+ },
+ "target_px_why": "scrolling stages: the wall at the end of a zone is 72 hit points (WALL_HP0, from the scan) and destroying it ends the stage, which is worth the distance left to the 4000 stride — about 928 px from the wall at 3072. 928/72 = 13 px per hit point. The old 40 was picked by hand and swamped progress: a whole screen is 256 px."
 }
