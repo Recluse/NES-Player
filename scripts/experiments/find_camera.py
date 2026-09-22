@@ -183,6 +183,21 @@ def main() -> int:
         kind = "8-bit scroll, unwrap it" if wraps else "a counter, use as is"
         print(f"SINGLE BYTE: {best_a} (agreement {agree(best_a):.2f}, "
               f"{wraps} wraps) — {kind}")
+    # A single byte is only ever the best of a bad field, so it has to earn
+    # the file it is written to. Vice: Project Doom's opening stage drives the
+    # road past you whether you touch the pad or not — 939 of 2048 bytes move
+    # while idle — and this scan, whose whole premise is "flat while idle,
+    # monotone while moving", duly ranked noise and named a winner at 0.05
+    # agreement. A pair that survives the wrap test is structural evidence and
+    # needs no threshold; a lone byte does.
+    MIN_AGREE = 0.25
+    if found and found.get("hi") is None and agree(found["lo"]) < MIN_AGREE:
+        print(f"REFUSING to record byte {found['lo']}: agreement "
+              f"{agree(found['lo']):.2f} is below {MIN_AGREE}. Nothing here "
+              f"tracks the picture. If the stage scrolls by itself, this scan "
+              f"cannot work on it by construction — progress has to come from "
+              f"somewhere that is not 'what moves when I move'.")
+        found = None
     if found:
         out = Path("runs/knowledge") / f"camera_{args.game}.json"
         out.parent.mkdir(parents=True, exist_ok=True)

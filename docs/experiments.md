@@ -5910,3 +5910,45 @@ split the frames by whether the sensor is alive, and see which tiles leave.
 Three sit still and one flies; the spread separates the sensor from a bullet
 without anyone naming either. The next piece of work is that scan, and a term
 on the distance between the hero's x and a live target's x.
+
+## A game that scrolls whether you touch the pad or not (2026-09-22)
+
+Vice: Project Doom was added because its stages are not one kind of game —
+platformer, shooting gallery, driving — which makes it a transfer test rather
+than another corridor. stable-retro already ships the integration, so there was
+nothing to build: `ViceProjectDoom-Nes-v0` boots, answers the pad from its
+`Level1` state, and exposes lives and score and nothing else.
+
+Then the scans, and both failed in the same informative way.
+
+The button probe returned zero for every chord, because it measures a button by
+the forward position it gains and this integration publishes no position at
+all. That is what `find_camera.py` exists for, and it answered with byte 39 at
+an agreement of **0.13** with the picture — then 0.05 when asked for a vertical
+camera.
+
+Looking at the frames says why, and it is not a bug in the scan. The default
+state is the **driving stage**: a road scrolling past a car, with SCORE, TIME
+and STAGE 1-1 on a HUD. So:
+
+| | mean frame-to-frame change | bytes moving |
+|---|---|---|
+| idle, no buttons | 13.07 | 939 of 2048 |
+| holding a direction | 13.41 | — |
+
+**The stage scrolls on its own.** The scan's premise — keep the bytes that are
+flat while idle and monotone while moving — is false here by construction, so
+it ranked noise and named a winner. Nothing was wrong with it except being
+asked a question its assumptions do not cover.
+
+It now refuses instead. A lone byte has to reach 0.25 agreement with the
+picture to be written to `runs/knowledge/`; a hi/lo pair that survives the wrap
+test is structural and still needs no threshold. Contra's pair and Rush'n
+Attack's single byte at 0.57 are unaffected — the only thing the threshold
+rejects is the finding that was not one.
+
+What this leaves is the interesting part. In an auto-scrolling stage, progress
+cannot be "what moves when I move", because everything moves when you do
+nothing. The signal is on the screen — the HUD says STAGE 1-1, and this project
+already reads counters off the picture rather than out of memory. For once the
+honest track has something the privileged one lacks.
