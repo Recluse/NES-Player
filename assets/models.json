@@ -103,6 +103,15 @@
       "base": "https://github.com/Recluse/NES-Player/releases/download/artifacts-2026-09-03",
       "dest": "oracle_adaptive",
       "marker": "contra_full7k_typed.log"
+    },
+    "bc_stage2_vice": {
+      "title": "Vice: Project Doom road + Contra (stage-2 clone)",
+      "file": "bc_stage2_vice.tar.gz",
+      "bytes": 15270553,
+      "sha256": "49573eb4d0fab1759408650f7cb229fd4d47f77cff28e49c62b5be88d29bd177",
+      "game": "ViceProjectDoom-Nes-v0",
+      "val_acc": 0.811,
+      "majority_baseline": 0.728
     }
   }
 }

@@ -49,12 +49,20 @@ def main() -> int:
     ap.add_argument("--left", action="store_true",
                     help="the level scrolls right-to-left; look for bytes "
                          "that decrease under advance instead")
+    ap.add_argument("--advance", default="",
+                    help="comma-separated buttons that move the hero on, when "
+                         "they are not B+direction (Vice's car drives on A)")
+    ap.add_argument("--load-state", default="",
+                    help="scan from this saved state instead of the boot — "
+                         "for a stage the boot does not reach (Vice's 2-1)")
     ap.add_argument("--frames", type=int, default=1800,
                     help="length of the long run used for wrap detection")
     args = ap.parse_args()
 
     adv, jmp = ((ADVANCE_U, JUMP_U) if args.up else
                 (ADVANCE_L, JUMP_L) if args.left else (ADVANCE_R, JUMP_R))
+    if args.advance:
+        adv = jmp = frozenset(args.advance.split(","))
     # A vertical camera may count either way; the agreement test below is
     # sign-blind, so only the monotone filter needs to know, and it is
     # tried both ways for --up.
@@ -65,6 +73,8 @@ def main() -> int:
     env = StableRetroAdapter(args.game, include_debug=True, state=None,
                              integration_dir=integ)
     obs = boot(env)
+    if args.load_state:
+        env.load_state(Path(args.load_state).read_bytes())
     idle = []
     for _ in range(200):
         obs = env.step_buttons([frozenset()])

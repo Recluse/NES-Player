@@ -5952,3 +5952,109 @@ cannot be "what moves when I move", because everything moves when you do
 nothing. The signal is on the screen — the HUD says STAGE 1-1, and this project
 already reads counters off the picture rather than out of memory. For once the
 honest track has something the privileged one lacks.
+
+**Correction (2026-09-24).** Two of the measurements above were not taken on
+the road. `begin_any` treated a positive lives counter as "the game has
+started", and Vice reads 2 lives from its first second, so:
+
+- from power-on (`--state none`, which `find_camera.py` and the probes use) the
+  boot stopped on the intro cutscene, and byte 39 at 0.13 was agreement with
+  typing text, not with a road;
+- from the `Level1` savestate (`--state default`) the boot kept pulsing START
+  on the road — START is pause — and the clone's two 20000-frame traces are one
+  frozen picture each: one scene hash and one luminance value over all 40000
+  frames, while the RAM kept moving.
+
+The first sign was that frozen trace, and the tell had been there before it:
+`best_x 29812` on both seeds, because `game_pos` fell back to Contra's formula
+for any game it did not know. It now raises instead.
+
+The boot now trusts lives only when they read zero on the title, asks the d-pad
+alone whether the game answers (A and B advance a cutscene's text, so they
+cannot tell it from play), and taps START once if the pad-found start is
+paused. Contra boots bit-identically — the planner's golden test holds.
+
+The conclusion survives the correction. Rerun on the real road, `find_camera`
+refuses again (0.10 driving with B+UP, 0.07 with A+UP), and a direct
+measurement says why: the road changes about 7800 pixels per frame when idle and
+about 8300 holding UP. UP drives faster, but everything moves either way, and
+no 16-bit counter whose low byte wraps as its high byte ticks runs
+faster under UP than under DOWN.
+
+## Vice to stage 3, and a clone that drives the road (2026-09-23 to 09-28)
+
+Everything in this entry up to the clone is the privileged track: the planner
+and the searches read RAM and rewind the console. The route to stage 3 is a
+chain of them, with the owner's hints at two places, and it is stated as such.
+
+**The road (stage 1).** A death costs a life only 140-260 frames after the hit
+— the game timer stops at the crash and the lives byte follows much later. With
+no tail the planner's 48-frame lookahead saw every crash as free: 0 of 8 seeds
+left the road. With a 160-frame continuation (`--tail 160`) and steer-and-fire
+candidates, 4 of 4 did, confirmed on frames (the HUD switches STAGE 1-1 → 2-1).
+Score stood in for position, since the road scrolls by itself.
+
+**The bridge (2-1).** Position came from the camera pair 12/11 (lo correlates
+1.0 with the picture) plus the hero's x. Two readings were wrong first and are
+kept here:
+
+- *Byte 51 is not the stage.* It reads 2 on the bridge and changed 1 → 2 at
+  the road's end, but reads 3 and 1 under the bridge on STAGE 2-1, 3 for ten
+  frames on the READY screen after a death, and 23-24 between stages. Scored as
+  a level it told the clone it had reached stage 23 by dying. The level key is
+  now room byte 168, which steps by 25 per room (9 road; 34, 59 bridge; 84 and
+  109 under it; 134 = 2-2; 159 = 3-1) and holds through deaths.
+- *Byte 496 is the low byte of the hero's world x, not his screen x.* At camera
+  111 it read 238 with him drawn at 127; added raw it counted the camera twice,
+  and a cutoff at 240 meant for "off screen" blocked every 256-px boundary.
+  Byte 196, briefly used as a room index, is a counter (246…255…0 as he walks).
+
+Also: the bridge camera sweeps forward 15 px/frame on the READY screen after a
+death, so `best_x` now ignores 200 frames after each death (a clone that walked
+457 px was credited 1832).
+
+The planner then walked into the second room and died to the collapse: the
+bridge falls behind the hero and the TAS crosses it without touching down.
+Candidates that hop continuously changed nothing (4 of 4 seeds, same distance).
+Go-Explore (`vice_explore.py`) crossed it — once a place counted as reached
+only if the run went on 260 frames past it alive; the earlier test, "the timer
+ticked after it", filed falling heroes as alive because the timer ticks while
+he drops. It found the ladder down (DOWN held ~80 frames; the ladder runs to
+y 207, so a "falling" cutoff at 200 had cut every descent off).
+
+**Room 109** is a single screen joined by ladders; the search sat against its
+right wall. The owner's hint — kill the ghost on the left, jump the pit, take
+the left ladder down — plus a search biased to left/jump/katana/down found it
+in 2 of 1500 tries. That is a human hint, recorded as one.
+
+**The 2-2 boss.** The manual (Rx2.0 scan, OCR layer) names the HUD bars: P is
+the player's lifeline (RAM 640, r = 0.993 against the drawn bar), E the enemy's
+(RAM 644, r = 0.977). Byte 640 had been dismissed earlier as "not health"
+because the car died at its maximum — the road's deaths were crashes, not
+attrition. With E as a cell dimension and a tapped-B action (a held B swings
+once; the owner's advice was to spam the whip and back off), Go-Explore took
+the boss from 20 to 0 inside 2000 iterations from Hart's arrival on 4 of 20.
+After the bonus tally and the cinema the HUD reads STAGE 3-1; the replay is
+deterministic and ends in room 159 with the boss at 0.
+
+**The clone (honest track).** `bc_stage2_vice` was trained with the same recipe
+as `bc_ladder_59` (3 epochs, audio, attention 1.0) on 71 episodes: 8 planner
+runs of the road (`datasets/vice_road`, all 8 reach the bridge), 4 search
+stretches cut to the parts that led to a new best within 120 frames
+(`search_to_episodes.py`: bridge 1506 of 1925 frames, room 109 all 424 since
+its route goes left, the boss 819 of 846), and the same 59 Contra clears. Clone
+alone, pixels and audio:
+
+| | `bc_ladder_59` | `bc_stage2_vice` | paired difference |
+|---|---|---|---|
+| Contra, 32 seeds, 4500 frames | mean 1764, 1/32 clear | mean 1655, 0/32 | −109 [−429, +198], 15/32 |
+| Vice road, 16 seeds, 7000 frames | 0/16 reach the bridge | 14/16 | +2448 [+1941, +2802], 16/16 |
+
+Contra is unchanged within noise; the Vice road goes from never to 14 of 16.
+The road clears are real: TIME reads 000 at the switch because the remaining
+time is being tallied into the score — 200 frames earlier it reads 107-114 in
+every run.
+
+Not done: 3-1 climbs a ladder and doubles back along the top, which neither
+x-weighted nor novelty-only selection has found yet; the explorer's rooms and
+hero bytes are Vice's, found by hand, not by a scan.

@@ -173,6 +173,7 @@ def prior_value(ram) -> int:
 
 
 SCAN_POS: dict = {}  # game -> position bytes from controllability.py, opt-in
+_LAST_POS: dict = {}  # game -> last position read at a listed level
 _UNWRAP: dict = {}  # game -> [last raw, turns] for an 8-bit scroll byte
 # Contra object tables (found 2026-09-03 from a RAM dump under point-blank
 # fire): type per slot at 0x530, HP per slot at 0x580, 16 slots. The wall
@@ -211,7 +212,7 @@ def _unwrap(game: str, raw: int) -> int:
 def anchor_pos(env, game: str, pos0: int) -> None:
     """Pin the unwrap counter so this process agrees with the caller's x0."""
     sp = SCAN_POS.get(game)
-    if isinstance(sp, dict) and sp.get("hi") is None:
+    if isinstance(sp, dict) and "lo" in sp and sp.get("hi") is None:
         raw = int(env._env.get_ram()[sp["lo"]])
         _UNWRAP[game] = [raw, (sp["sign"] * pos0 - raw) // 256]
 DEATH = -1e9        # a plan that dies is not compared on distance
@@ -236,6 +237,9 @@ def templates(h: int):
 
 FIRE_DIAG = frozenset({"UP", "RIGHT", "B"})
 MIRROR_FIRE = False   # --mirror-fire: also aim left, see the base's second room
+STEER_FIRE = False    # --steer-fire: hold forward, steer, and fire at once
+HEALTH = {}           # --health ADDR:PX: price each unit of a health bar
+HOP = False           # --hop: run right while jumping again and again
 
 
 def game_templates(h: int, game: str):
@@ -247,6 +251,24 @@ def game_templates(h: int, game: str):
     six-plus-what-the-weapon-needs.
     """
     cands = templates(h)
+    if STEER_FIRE:
+        # Vice's road kills by attrition: whatever touches the car costs a
+        # unit of health, so it has to dodge and shoot in the same frames.
+        # Every template above does one or the other.
+        for side, name in ((frozenset(), "straight"), (frozenset({"LEFT"}), "left"),
+                           (frozenset({"RIGHT"}), "right")):
+            move = frozenset({"UP"}) | side
+            cands.append((f"steer {name} fire",
+                          [move | {"B"} if k % 4 < 2 else move
+                           for k in range(h)]))
+    if HOP:
+        # Vice's bridge collapses behind the hero: every template here stops
+        # somewhere, and the TAS crosses it without touching down. Held A is
+        # a high jump, a release re-arms it.
+        for hold, period in ((16, 24), (24, 32), (10, 14)):
+            cands.append((f"hop {hold}/{period}",
+                          [frozenset({"RIGHT", "A"}) if k % period < hold
+                           else frozenset({"RIGHT"}) for k in range(h)]))
     if game.startswith("Contra") or game.startswith("SuperC"):
         # The wall fight needs three things Mario never did: the diagonal
         # itself, going prone under the bullet stream, and firing the
@@ -413,6 +435,39 @@ def game_pos(env, game: str) -> int:
         # no RAM map, no hand rule: the camera pair find_camera.py caught
         # if it exists, else A0's LEFT/RIGHT-responsive bytes summed
         sp = SCAN_POS[game]
+        if isinstance(sp, dict) and "by_level" in sp:
+            # A game whose stages are different games (Vice: a road, then
+            # a bridge) has a different position on each; the level byte
+            # folds them into one increasing number, as Contra's does.
+            lvl = int(ram[sp["level"]])
+            inner = sp["by_level"].get(str(lvl), sp["by_level"].get("*"))
+            if inner is None:
+                # Vice's byte 51 is the stage number only during play: it
+                # reads 3 for ten frames on the READY screen after a death on
+                # stage 2 and 24 between stages. Scored at face value, the
+                # clone "reached" stage 23 by dying. Unlisted values hold
+                # the last real position instead.
+                return _LAST_POS.get(game, 0)
+            SCAN_POS[game] = inner
+            try:
+                pos = lvl * int(sp["stride"]) + game_pos(env, game)
+            finally:
+                SCAN_POS[game] = sp
+            if "room" in inner:
+                # Vice's bridge is rooms: walking off the right edge of one
+                # blanks the screen and restarts the camera at 0, so without
+                # a room term the crossing reads as losing 768 px and all
+                # four planner seeds stood at the edge for 3000 frames.
+                pos += int(ram[inner["room"]]) * int(inner["room_px"])
+            if "hero_x" in inner:
+                # Vice's byte 496 is the low byte of the hero's WORLD x, not
+                # his screen x: at camera 111 it read 238 with him drawn at
+                # 127. Added raw it counted the camera twice. His screen x is
+                # the difference, and that is what goes on top of the camera.
+                cam = int(ram[inner["lo"]])
+                pos += (int(ram[inner["hero_x"]]) - cam) & 0xFF
+            _LAST_POS[game] = pos
+            return pos
         if isinstance(sp, dict):
             if sp.get("hi") is None:
                 # a byte that never wrapped in the scan is a counter, not
@@ -432,6 +487,11 @@ def game_pos(env, game: str) -> int:
         # found empirically: lo wraps at 0x6B, hi ticks at 0x6C, monotone
         # through two wraps under a scripted run to x=704
         return int(ram[108]) * 256 + int(ram[107])
+    if not game.startswith("Contra"):
+        # Contra's formula read on Vice gave best_x 29812 on both seeds of a
+        # run that never left the intro — a number, not a position.
+        raise ValueError(f"no position for {game}: pass --pos-from-scan or "
+                         f"--pos-scan-file")
     return int(ram[48]) * 4000 + int(ram[100]) * 256 + int(ram[101])
 
 
@@ -475,6 +535,10 @@ def game_value(env, game: str) -> int:
     wall still stood. The metric stays pure position.
     """
     pos = game_pos(env, game)
+    if HEALTH:
+        # A life is lost only when the bar is empty, hundreds of frames after
+        # the hits that emptied it, so a death price alone never sees one.
+        pos += HEALTH["px"] * int(env._env.get_ram()[HEALTH["addr"]])
     if PRIOR:
         # priced against the same slots every candidate sees this decision,
         # so it is a difference within a decision, never a run metric
@@ -522,7 +586,13 @@ def game_progress(d: dict, progress_of) -> int:
     return progress_of(d)
 
 
-def answers_the_pad(env, frames: int = 20, min_px: float = 40.0) -> bool:
+MOVE_CHORDS = (frozenset({"RIGHT"}), frozenset({"LEFT"}),
+               frozenset({"UP"}), frozenset({"DOWN"}))
+
+
+def answers_the_pad(env, frames: int = 20, min_px: float = 40.0,
+                    chords=(frozenset({"RIGHT"}), frozenset({"UP"}),
+                            frozenset({"A"}), frozenset({"B"}))) -> bool:
     """Is this a running game or a picture? Ask the pad, as A0 does.
 
     A title screen ignores a direction; a level does not. Two synchronous
@@ -541,8 +611,7 @@ def answers_the_pad(env, frames: int = 20, min_px: float = 40.0) -> bool:
     # Several chords, not just RIGHT: a game that answers only UP or only
     # A — a climb, a menu-less shooter — would otherwise read as a title
     # screen and the boot loop would keep pressing START at a live game.
-    for chord in (frozenset({"RIGHT"}), frozenset({"UP"}),
-                  frozenset({"A"}), frozenset({"B"})):
+    for chord in chords:
         env.load_state(here)
         for _ in range(frames):
             o = env.step_buttons([chord])
@@ -566,10 +635,18 @@ def begin_any(env, game: str):
     if game.startswith("SuperMario"):
         return _begin(env)
     obs = env.reset(seed=0)
+    # Lives turning positive means the game began only if they read zero on
+    # the title: Vice reads 2 from its first second through its whole
+    # intro. And A/B advance a cutscene's text, so only the d-pad tells a
+    # cutscene from play.
+    lives_tell = True
     for i in range(3000):
         d = obs.debug or {}
-        if i > 120 and (int(d.get("lives", 0) or 0) > 0
-                        or (i % 120 == 0 and answers_the_pad(env))):
+        if i == 120:
+            lives_tell = int(d.get("lives", 0) or 0) == 0
+        by_lives = lives_tell and int(d.get("lives", 0) or 0) > 0
+        if i > 120 and (by_lives or (i % 120 == 0 and answers_the_pad(
+                env, chords=MOVE_CHORDS))):
             break
         pulse = i % 60 in (0, 1)
         obs = env.step_buttons([frozenset({"START"}) if pulse
@@ -579,6 +656,16 @@ def begin_any(env, game: str):
     # runs itself out in well under six hundred frames.
     for _ in range(600):
         obs = env.step_buttons([frozenset()])
+    # Found by the pad rather than by lives, play may have begun between two
+    # checks and a START pulse since then paused it — Vice's road does. One
+    # tap undoes that. (Contra's hero ignores the d-pad here, so a lives
+    # boot must not be second-guessed this way.)
+    for _ in range(0 if by_lives else 2):
+        if answers_the_pad(env, chords=MOVE_CHORDS):
+            break
+        env.step_buttons([frozenset({"START"})])
+        for _ in range(30):
+            obs = env.step_buttons([frozenset()])
     return obs
 
 
@@ -655,7 +742,8 @@ def _worker_init(game: str, checkpoint: str, integ: str | None,
                  scan_pos=None, wall_clip: bool = True,
                  weapon_main: int = 400, prior: dict | None = None,
                  hero_tiles: dict | None = None, room_px: float = 0.0,
-                 mirror_fire: bool = False):
+                 mirror_fire: bool = False, steer_fire: bool = False,
+                 health: dict | None = None, hop: bool = False):
     """One emulator and one policy per worker process, loaded once.
 
     A spawned worker re-imports this module, so anything main set after
@@ -671,6 +759,10 @@ def _worker_init(game: str, checkpoint: str, integ: str | None,
     global ROOM_PX, MIRROR_FIRE
     WALL_CLIP, WEAPON_MAIN, ROOM_PX = wall_clip, weapon_main, room_px
     MIRROR_FIRE = mirror_fire
+    global STEER_FIRE, HOP
+    STEER_FIRE, HOP = steer_fire, hop
+    if health:
+        HEALTH.update(health)
     if prior:
         PRIOR.update(prior)
     if hero_tiles:
@@ -866,7 +958,8 @@ def run(checkpoint: str, game: str, state: str | None, frames: int, seed: int,
             workers, initializer=_worker_init,
             initargs=(game, checkpoint, integ, SCAN_POS.get(game),
                       WALL_CLIP, WEAPON_MAIN, dict(PRIOR),
-                      dict(HERO_TILES), ROOM_PX, MIRROR_FIRE))
+                      dict(HERO_TILES), ROOM_PX, MIRROR_FIRE,
+                      STEER_FIRE, dict(HEALTH), HOP))
     policy = BCPolicy(checkpoint)
     obs = begin_any(env, game)
     # the boot/title screens may have spun an 8-bit scroll byte: the run's
@@ -976,6 +1069,7 @@ def run(checkpoint: str, game: str, state: str | None, frames: int, seed: int,
         # run+jump family — a finer jump-timing grid, not one pair.
         cands += [(f"{a}+{b}", t[a] + t[b]) for a, b in pairs]
     best_x, deaths, lives = 0, 0, (obs.debug or {}).get("lives")
+    dead_until = 0
     chosen: Counter = Counter()
     held: list = []
     last_choice, last_score = "bc", 0.0
@@ -1514,14 +1608,19 @@ def run(checkpoint: str, game: str, state: str | None, frames: int, seed: int,
         now = d.get("lives")
         if lives is not None and now is not None and now < lives:
             deaths += 1
+            # Vice's bridge camera sweeps forward at 15 px/frame on the
+            # READY screen after a death, then snaps back to the checkpoint:
+            # the clone "reached" 1832 px of a stage it had walked 457 of.
+            dead_until = gt + 200
         lives = now
         # Folded across levels. While no arm ever finished 1-1 the camera's x
         # was enough; now 26 of 32 runs do, and their counter resets to zero on
         # the next level, so the metric was quietly capping every good run at
         # about 3120 and hiding whatever happened afterwards.
-        best_x = max(best_x, progress_of(d)
-                     if game.startswith("SuperMario")
-                     else game_pos(env, game))
+        if gt >= dead_until:
+            best_x = max(best_x, progress_of(d)
+                         if game.startswith("SuperMario")
+                         else game_pos(env, game))
         # Contra-family: after the last life the game sits on the continue
         # screen with the camera back at zero. A human presses START; so
         # does the runner, and the credit is counted. The level restarts
@@ -1735,6 +1834,15 @@ def main() -> int:
                     help="add the three rescue compositions the two-step "
                          "search actually used to the plain template set; "
                          "use with --horizons 96")
+    ap.add_argument("--hop", action="store_true",
+                    help="add candidates that run right jumping again and "
+                         "again (a floor that collapses behind the hero)")
+    ap.add_argument("--steer-fire", action="store_true",
+                    help="add candidates that hold UP, steer left/right/"
+                         "straight and tap B together (a vehicle stage)")
+    ap.add_argument("--health", default="",
+                    help="ADDR:PX — add PX per unit of the health byte at "
+                         "ADDR to the planner's value (never to best_x)")
     ap.add_argument("--death-price", type=float, default=0.0,
                     help="px subtracted from a draw that dies, instead of "
                          "the majority-death veto; prices P(death) into the "
@@ -1807,6 +1915,11 @@ def main() -> int:
     args = ap.parse_args()
     global WEAPON_MAIN, WALL_CLIP, ROOM_PX, MIRROR_FIRE
     MIRROR_FIRE = args.mirror_fire
+    global STEER_FIRE, HOP
+    STEER_FIRE, HOP = args.steer_fire, args.hop
+    if args.health:
+        a, px = args.health.split(":")
+        HEALTH.update(addr=int(a), px=float(px))
     ROOM_PX = args.room_px
     if args.prior:
         PRIOR.update(json.loads(Path(args.prior).read_text()))
@@ -1910,7 +2023,13 @@ def main() -> int:
                       args.auto_templates,
                       rollback=args.rollback if horizon else 0,
                       novelty=args.novelty if horizon else 0.0,
-                      trace=args.trace if horizon else "",
+                      # The arm is in the file name because every arm can be
+                      # traced now. It used to trace only arms with a horizon,
+                      # so asking for a trace of the clone silently produced
+                      # nothing at all — and on a game with no known progress
+                      # byte, the clone is the only arm worth tracing.
+                      trace=(f"{args.trace}_{name.split()[0]}"
+                             if args.trace else ""),
                       record=args.record if horizon else "",
                       record_if=args.record_if, dagger=args.dagger,
                       dagger_frames=args.dagger_frames, lives=args.lives)
