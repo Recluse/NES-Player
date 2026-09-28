@@ -81,8 +81,10 @@ play — see below — but it is not what the planner is measured against); the 
 these two days, each caught by a frame or a scripted check rather than by
 thought (a "hits" count that was a savestate's constant, a vertical term that
 was measuring enemy fire, a "horizon problem" and an "arithmetic problem"
-that were one term returning zero); and the base result is one room, not
-the stage — in the next room the soldier parks in a corner again.
+that were one term returning zero); and the base result is not the stage:
+it is six rooms (found 15 September); with a room priced, 32 of 32 seeds
+enter the next room from the stage start, but the whole base is not
+cleared.
 
 ## What learning could and could not take over
 
