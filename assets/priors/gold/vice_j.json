@@ -1,0 +1,78 @@
+{
+  "game": "ViceProjectDoom-Nes-v0",
+  "scan_id": "archive.org/download/rx2MRPnes1250pxPDF/VICE%20-%20Project%20Doom.pdf",
+  "language": "en",
+  "note": "Gold for the parse pipeline's dev metric on Vice. Source of truth is runs/knowledge/manual_ViceProjectDoom-Nes-v0.json (OCR layer + human collate), not an independent re-read. Rows marked us_manual are from the English release's own text. Pages were not pinned in the source json; scoring does not check the page number for these rows.",
+  "facts": [
+    {
+      "id": "select-cycles-weapons",
+      "kind": "controls",
+      "page": null,
+      "statement_key": "select-weapon",
+      "provenance": "us_manual",
+      "quote_hint": "SELECT"
+    },
+    {
+      "id": "b-uses-weapon",
+      "kind": "controls",
+      "page": null,
+      "statement_key": "fire-weapon",
+      "provenance": "us_manual",
+      "quote_hint": "laser whip"
+    },
+    {
+      "id": "start-is-pause",
+      "kind": "controls",
+      "page": null,
+      "statement_key": "start-pause",
+      "provenance": "us_manual",
+      "quote_hint": "pause"
+    },
+    {
+      "id": "coins-buy-lives",
+      "kind": "economy",
+      "page": null,
+      "statement_key": "extra-man",
+      "provenance": "us_manual",
+      "quote_hint": "extra man"
+    },
+    {
+      "id": "grenades-for-boss-2",
+      "kind": "goal",
+      "page": null,
+      "statement_key": "grenades-boss",
+      "provenance": "us_manual",
+      "quote_hint": "grenade"
+    },
+    {
+      "id": "pickups-heal",
+      "kind": "target",
+      "page": null,
+      "statement_key": "heal-item",
+      "provenance": "us_manual",
+      "quote_hint": "lifeline"
+    },
+    {
+      "id": "lifeline-hud",
+      "kind": "hud",
+      "page": null,
+      "statement_key": "lifeline",
+      "provenance": "us_manual",
+      "quote_hint": "lifeline"
+    }
+  ],
+  "statement_keys": {
+    "select-weapon": "SELECT selects weapon: laser whip, .44 Magnum, hand grenade.",
+    "fire-weapon": "B uses the selected weapon; the laser whip is close range.",
+    "start-pause": "START is pause / skip cinema.",
+    "extra-man": "100 coins grant an extra man.",
+    "grenades-boss": "Hand grenades are long range and limited; keep them for the stage-2 boss.",
+    "heal-item": "Pickups: bullets +10, grenades +5, heal-aid +2, meat +10 lifeline.",
+    "lifeline": "P and E are the player and enemy lifeline bars on the HUD."
+  },
+  "not_in_gold": [
+    "road-gears",
+    "time-zero-is-over"
+  ],
+  "not_in_gold_note": "Present in the source json but not scored here: road gears are a scope-specific control, and 'time 0 = over' is a HUD reading rather than a manual fact to extract."
+}

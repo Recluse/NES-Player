@@ -1,0 +1,145 @@
+{
+  "schema_version": 1,
+  "game": "Galaga-Nes-v0",
+  "source": "assembled by scripts/ground_concepts.py from prior_Galaga-Nes-v0.json and runs/knowledge/*Galaga-Nes-v0*",
+  "links": [
+    {
+      "concept": "menu",
+      "fact_ids": [
+        "press-start-to-begin"
+      ],
+      "entity": {
+        "kind": "screen_text",
+        "reader": "nes_player.perception.text.find_prompt",
+        "watch": "nes_player.perception.title.TitleWatch",
+        "measured": "scripts/menu_polygon.py -> runs/knowledge/menu_Galaga-Nes-v0.jsonl"
+      },
+      "evidence": {
+        "scan": "menu_polygon.py + find_prompt",
+        "artifact": "runs/knowledge/menu_Galaga-Nes-v0.jsonl",
+        "verify": "answers_the_pad is the play signal; see the jsonl for which arm reached it and when"
+      },
+      "status": "scan_confirmed",
+      "frame_illustration": null
+    },
+    {
+      "concept": "player",
+      "fact_ids": [],
+      "entity": null,
+      "evidence": {
+        "scan": "hero_tiles.py",
+        "artifact": "runs/knowledge/hero_Galaga-Nes-v0.json",
+        "verify": "tiles that move with the buttons"
+      },
+      "status": "proposed",
+      "frame_illustration": null
+    },
+    {
+      "concept": "sensor",
+      "fact_ids": [],
+      "entity": {
+        "kind": "hp_bytes",
+        "hp_base": 656,
+        "witness": [
+          {
+            "addr": 658,
+            "from": 103,
+            "to": 55,
+            "chord": "B/tap"
+          },
+          {
+            "addr": 659,
+            "from": 101,
+            "to": 73,
+            "chord": "B/tap"
+          },
+          {
+            "addr": 1172,
+            "from": 40,
+            "to": 21,
+            "chord": "B/tap"
+          }
+        ]
+      },
+      "evidence": {
+        "scan": "object_tables.py",
+        "artifact": "runs/knowledge/objects_Galaga-Nes-v0.json",
+        "verify": "HP bytes fall under fire; room/zone transition must follow before this becomes scan_confirmed"
+      },
+      "status": "proposed",
+      "frame_illustration": null
+    },
+    {
+      "concept": "wall",
+      "fact_ids": [],
+      "entity": null,
+      "evidence": {
+        "scan": "verify_wall_zone_end.py",
+        "artifact": null,
+        "verify": "wall_hp -> 0 and screen fades"
+      },
+      "status": "proposed",
+      "frame_illustration": null
+    },
+    {
+      "concept": "door",
+      "fact_ids": [],
+      "entity": null,
+      "evidence": {
+        "scan": null,
+        "artifact": null,
+        "verify": "not linked yet"
+      },
+      "status": "proposed",
+      "frame_illustration": null
+    },
+    {
+      "concept": "capsule",
+      "fact_ids": [],
+      "entity": null,
+      "evidence": {
+        "scan": null,
+        "artifact": null,
+        "verify": "not linked yet"
+      },
+      "status": "proposed",
+      "frame_illustration": null
+    },
+    {
+      "concept": "hazard",
+      "fact_ids": [],
+      "entity": null,
+      "evidence": {
+        "scan": null,
+        "artifact": null,
+        "verify": "not linked yet"
+      },
+      "status": "proposed",
+      "frame_illustration": null
+    },
+    {
+      "concept": "terrain-solid",
+      "fact_ids": [],
+      "entity": null,
+      "evidence": {
+        "scan": null,
+        "artifact": null,
+        "verify": "not linked yet"
+      },
+      "status": "proposed",
+      "frame_illustration": null
+    },
+    {
+      "concept": "hud",
+      "fact_ids": [],
+      "entity": null,
+      "evidence": {
+        "scan": null,
+        "artifact": null,
+        "verify": "not linked yet"
+      },
+      "status": "proposed",
+      "frame_illustration": null
+    }
+  ]
+}

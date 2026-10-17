@@ -3,7 +3,14 @@
 import numpy as np
 import pytest
 
-from nes_player.perception.text import TILE, find_prompt, font_atlas, read_lines
+from nes_player.perception.text import (
+    TILE,
+    _fuzzy_button,
+    _is_ask,
+    find_prompt,
+    font_atlas,
+    read_lines,
+)
 
 ATLAS = font_atlas()
 pytestmark = pytest.mark.skipif(not ATLAS, reason="assets/nes_font.json is missing")
@@ -44,3 +51,18 @@ def test_reads_select_prompt():
 
 def test_no_prompt_on_plain_text():
     assert find_prompt(_render("GAME")) is None
+
+
+def test_fuzzy_reads_a_half_decoded_title():
+    # Contra's title comes back as "P??? SE?E??" — the atlas lacks glyphs,
+    # but the known letters line up with PRESS SELECT.
+    assert _is_ask("P???") is True
+    assert _fuzzy_button("SE?E??") == "SELECT"
+    assert _fuzzy_button("ST?RT") == "START"
+
+
+def test_fuzzy_refuses_contradictions_and_all_unknowns():
+    assert _fuzzy_button("HELLO?") is None
+    assert _fuzzy_button("?????") is None
+    assert _is_ask("???") is False
+    assert _is_ask("HELLO") is False

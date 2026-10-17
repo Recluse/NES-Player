@@ -1,0 +1,407 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/local/NES_Player/assets/priors/schema/prior.schema.json",
+  "title": "Manual prior",
+  "description": "A game prior derived from the boxed manual and from on-screen scans. Manual facts carry page citations and name concepts; scan facts name realisations (types, hit points, addresses). The two layers stay separate so a concept is never confused with its implementation.",
+  "type": "object",
+  "required": ["schema_version", "game", "source"],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "type": "integer",
+      "enum": [1, 2],
+      "description": "1 = legacy flat file (notes/templates/target_types/...). 2 = concept layer plus realisation layer. Both are readable by the planner; 2 is what the parse pipeline emits."
+    },
+    "game": {
+      "type": "string",
+      "minLength": 1,
+      "description": "stable-retro integration id, e.g. ContraJ-Nes-v0"
+    },
+    "source": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Where the manual comes from: scan id / archive.org id / file name. Must name a scan a person can open, not a recollection."
+    },
+    "notes": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Free-text route notes kept for humans and for the planner's log. Legacy field."
+    },
+
+    "manual": {
+      "type": "object",
+      "required": ["language"],
+      "additionalProperties": false,
+      "description": "Provenance of the document the facts were read from.",
+      "properties": {
+        "scan_id": {
+          "type": "string",
+          "description": "Archive item or file name of the PDF, as in docs/manuals.md."
+        },
+        "language": {
+          "type": "string",
+          "enum": ["en", "ja", "other"],
+          "description": "Language of the scan actually parsed."
+        },
+        "pages_used": {
+          "type": "array",
+          "items": { "type": "integer", "minimum": 1 },
+          "description": "Pages the parse read. Empty is honest; it means the whole document was fed without page selection."
+        },
+        "parse": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "How the PDF became facts. Filled by the pipeline, not by hand.",
+          "properties": {
+            "method": {
+              "type": "string",
+              "description": "e.g. text-layer, ocr-tesseract, vlm-page-structured"
+            },
+            "pipeline_version": { "type": "string" },
+            "judge": {
+              "type": "string",
+              "description": "Who corrected the machine output, if anyone. Corrections are logged; the judge does not invent facts."
+            },
+            "judge_log": {
+              "type": "string",
+              "description": "Path to the correction log, relative to the repository root."
+            }
+          }
+        }
+      }
+    },
+
+    "facts": {
+      "type": "array",
+      "description": "Concept-layer statements from the manual. Every fact needs a citation. Realisation values do not belong here.",
+      "items": {
+        "type": "object",
+        "required": ["id", "kind", "statement", "citation"],
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9_-]*$",
+            "description": "Stable slug, e.g. destroy-sensor, fire-left, door-up."
+          },
+          "kind": {
+            "type": "string",
+            "enum": ["goal", "target", "controls", "exit", "hazard", "player", "economy", "hud", "menu", "collectible", "ability", "other"],
+            "description": "Ontology slot. game-agnostic: collectible=thing to pick up, ability=jump/duck/throw/pick, target=thing to destroy, goal=win condition, exit=way on, health/lives go under hud or hazard as fits."
+          },
+          "statement": {
+            "type": "string",
+            "minLength": 1,
+            "description": "What the manual says, in one sentence. No numbers that come from RAM."
+          },
+          "scope": {
+            "type": "object",
+            "additionalProperties": false,
+            "description": "When the fact applies. Prefer the manual's own axes (scroll mode, area) over invented splits.",
+            "properties": {
+              "axis": {
+                "type": "string",
+                "description": "e.g. scroll_mode, area, screen, menu, any"
+              },
+              "value": {
+                "type": "string",
+                "description": "e.g. horizontal, vertical, 3d, underwater, base, jungle, title"
+              },
+              "why": {
+                "type": "string",
+                "description": "Why this scope, citing the page that scopes it."
+              }
+            }
+          },
+          "citation": {
+            "type": "object",
+            "required": ["page"],
+            "additionalProperties": false,
+            "properties": {
+              "page": {
+                "type": "integer",
+                "minimum": 1,
+                "description": "Page in the scan. Required: a fact without a page is not a fact."
+              },
+              "quote": {
+                "type": "string",
+                "description": "Short quote or caption from the page. Original language is fine; translation goes in statement."
+              },
+              "figure": {
+                "type": "string",
+                "description": "Figure or illustration id if the fact comes from a picture rather than text."
+              }
+            }
+          },
+          "status": {
+            "type": "string",
+            "enum": ["extracted", "human_confirmed", "rejected"],
+            "default": "extracted",
+            "description": "extracted = machine only; human_confirmed = a judge agreed; rejected = a judge struck it (keep the row, do not delete)."
+          }
+        }
+      }
+    },
+
+    "goal": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "What the game wants done, in manual words.",
+      "properties": {
+        "statement": { "type": "string" },
+        "citations": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/citation" }
+        }
+      }
+    },
+
+    "player": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Who the player is and what they can do.",
+      "properties": {
+        "role": { "type": "string", "description": "e.g. soldier, ship, car" },
+        "can": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "e.g. fire-in-8-directions, jump, strafe"
+        },
+        "citations": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/citation" }
+        }
+      }
+    },
+
+    "controls": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "The manual's control table. Button meanings as words; whether fire is tap or hold is a scan question, not a manual one.",
+      "properties": {
+        "buttons": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["button", "does"],
+            "additionalProperties": false,
+            "properties": {
+              "button": {
+                "type": "string",
+                "enum": ["A", "B", "START", "SELECT", "UP", "DOWN", "LEFT", "RIGHT"]
+              },
+              "does": { "type": "string" },
+              "citation": { "$ref": "#/$defs/citation" }
+            }
+          }
+        },
+        "notes": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "e.g. on 3D screens the gun points forward only"
+        },
+        "citations": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/citation" }
+        }
+      }
+    },
+
+    "targets": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Split layer: what the manual calls a target, and how the scan realises it. Keep them apart.",
+      "properties": {
+        "concepts": {
+          "type": "array",
+          "description": "Manual words for things worth destroying or collecting.",
+          "items": {
+            "type": "object",
+            "required": ["name"],
+            "additionalProperties": false,
+            "properties": {
+              "name": {
+                "type": "string",
+                "description": "e.g. sensor, wall, capsule"
+              },
+              "statement": { "type": "string" },
+              "citation": { "$ref": "#/$defs/citation" }
+            }
+          }
+        },
+        "realisation": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "SCAN-DERIVED. Object type ids, hit points, pricing. Never hand-written from the manual; the manual only names concepts.",
+          "properties": {
+            "types": {
+              "type": "array",
+              "items": { "type": "integer", "minimum": 0 },
+              "description": "Object type ids from object_tables.py for the concepts above."
+            },
+            "types_why": { "type": "string" },
+            "target_px": {
+              "type": "number",
+              "description": "Pixels of progress per hit point. From the stage stride arithmetic, or the generic floor rule."
+            },
+            "target_px_why": { "type": "string" },
+            "found_by": {
+              "type": "string",
+              "description": "Which scan produced this, e.g. object_tables.py at commit …"
+            }
+          }
+        }
+      }
+    },
+
+    "exit": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Where the way on is, in manual words. Coordinates are realisation and go in realisation.",
+      "properties": {
+        "way_on": {
+          "type": "string",
+          "description": "e.g. upward through the door in the middle of the far wall"
+        },
+        "statement": { "type": "string" },
+        "citations": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/citation" }
+        },
+        "realisation": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "SCAN-DERIVED route numbers the planner prices, e.g. exit_up_px, exit_at_x.",
+          "properties": {
+            "exit_up_px": { "type": "integer" },
+            "exit_at_x": { "type": "integer" },
+            "found_by": { "type": "string" }
+          }
+        }
+      }
+    },
+
+    "hazards": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name"],
+        "additionalProperties": false,
+        "properties": {
+          "name": { "type": "string" },
+          "statement": { "type": "string" },
+          "citation": { "$ref": "#/$defs/citation" }
+        }
+      }
+    },
+
+    "economy": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["statement"],
+        "additionalProperties": false,
+        "properties": {
+          "statement": {
+            "type": "string",
+            "description": "e.g. a cleared stage grants an extra life"
+          },
+          "citation": { "$ref": "#/$defs/citation" }
+        }
+      }
+    },
+
+    "templates": {
+      "type": "array",
+      "description": "Button sequences the planner may try. Those that come from the manual's control table need a citation; those from controllability.py name found_by.",
+      "items": {
+        "type": "object",
+        "required": ["name", "frames"],
+        "additionalProperties": false,
+        "properties": {
+          "name": { "type": "string" },
+          "hold": {
+            "type": "array",
+            "items": { "$ref": "#/$defs/button" }
+          },
+          "tap": {
+            "type": "array",
+            "items": { "$ref": "#/$defs/button" }
+          },
+          "rest": {
+            "type": "array",
+            "items": { "$ref": "#/$defs/button" }
+          },
+          "frames": { "type": "integer", "minimum": 1 },
+          "citation": { "$ref": "#/$defs/citation" },
+          "found_by": { "type": "string" }
+        }
+      }
+    },
+
+    "tables": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "SCAN-DERIVED RAM layout for object types and hit points. Forbidden in a held-out prior unless produced by object_tables.py.",
+      "properties": {
+        "type_base": { "type": "integer" },
+        "hp_base": { "type": "integer" },
+        "found_by": { "type": "string" }
+      }
+    },
+
+    "scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Legacy planner scope: when the stage-specific half of the prior applies. Prefer facts[].scope; this stays while oracle_mpc.py reads it.",
+      "properties": {
+        "ram": { "type": "integer" },
+        "equals": { "type": "integer" },
+        "why": { "type": "string" },
+        "target_px": { "type": "number" },
+        "target_px_why": { "type": "string" },
+        "target_types": {
+          "type": "array",
+          "items": { "type": "integer", "minimum": 0 }
+        },
+        "target_types_why": { "type": "string" }
+      }
+    },
+
+    "target_types": {
+      "type": "array",
+      "items": { "type": "integer", "minimum": 0 },
+      "description": "Legacy flat realisation of targets.concepts. Kept so oracle_mpc.py runs unchanged; prefer targets.realisation.types."
+    },
+    "target_px": {
+      "type": "number",
+      "description": "Legacy flat realisation. Prefer targets.realisation.target_px."
+    },
+    "target_px_why": { "type": "string" },
+    "exit_up_px": {
+      "type": "integer",
+      "description": "Legacy flat realisation. Prefer exit.realisation.exit_up_px."
+    },
+    "exit_at_x": {
+      "type": "integer",
+      "description": "Legacy flat realisation. Prefer exit.realisation.exit_at_x."
+    }
+  },
+
+  "$defs": {
+    "citation": {
+      "type": "object",
+      "required": ["page"],
+      "additionalProperties": false,
+      "properties": {
+        "page": { "type": "integer", "minimum": 1 },
+        "quote": { "type": "string" },
+        "figure": { "type": "string" }
+      }
+    },
+    "button": {
+      "type": "string",
+      "enum": ["A", "B", "START", "SELECT", "UP", "DOWN", "LEFT", "RIGHT"]
+    }
+  }
+}

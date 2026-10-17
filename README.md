@@ -16,25 +16,35 @@ is the most interesting thing here.
 
 ## What it is all for
 
-Both of those are means. The end, written down here before it is reached: the
-model has never seen the game, and before it starts it is handed the
-documentation that shipped in the box. **Manual-assisted zero-shot play.** Not
-a prior tuned by whoever is running the experiment, not addresses read out of
-the emulator's memory — the manual, the way a person gets it, in the box with
-the cartridge.
+Both of those are means. The end: the model has never seen the game, and
+before it starts it is handed the documentation that shipped in the box.
+**Manual-assisted zero-shot play.** Not a prior tuned by whoever is running
+the experiment, not addresses read out of the emulator's memory — the manual,
+the way a person gets it, in the box with the cartridge.
 
-That is a fair description of how anyone meets a game they have not played, and
-it is a harder test than anything below. Every number in this file was measured
-on a game that had already been watched for weeks.
+That is a fair description of how anyone meets a game they have not played,
+and it is a harder test than anything below.
 
-Where that stands, so the target is not mistaken for a result: the mechanism
-exists and is worth something measurable — `assets/priors/` is read by the
-planner, and the base's first room opens 17 times in 32 with it. Since
-16 September the prior's `source` names a scan of the actual manual rather than
-recollection of it, and the scope of each fact came from the manual's own
-control pages rather than from a guess (`docs/manuals.md`). What has **not**
-happened is the test itself: a game nobody here has tuned for, its manual, and
-a number. Until that runs, this is a direction, not an achievement.
+**The test has now been run** (2026-10-16, `docs/zero_shot_protocol.md`).
+Two games nobody had tuned, their manuals, and a number. Chip 'n Dale -
+Rescue Rangers and Galaga. The pipeline that reads a manual is three layers:
+an ontology of game-agnostic concepts, a lexicon (an LLM reads the page and
+emits facts with citations; regex does not generalise — held-out recall 0.1
+and 0.0 against raw OCR 1.0), and grounding (scans find the buttons, the
+object tables, the position — never the manual's numbers).
+
+| held-out game | planner + manual | planner alone | paired difference |
+|---|---|---|---|
+| **Chip 'n Dale (A)** | **median 239** | median 92 | **+144 px [109, 145], 19/20 seeds** |
+| Galaga (B) | median 81 | median 81 | 0 px [0, 2] — no effect |
+
+On Chip 'n Dale the manual contributes the crate combat: "Press B to pick up
+objects; pressing B while holding them throws them right or left" becomes
+composed templates (`pick and throw right`), and the planner goes from 92 to
+239 — the same as the policy alone. On Galaga the manual's facts (boss takes
+two hits, challenge every third level) do not translate into in-horizon
+score, and the claim fails. Both results are published, the negative beside
+the positive (`docs/measurements.jsonl`).
 
 ## What plays today
 
@@ -295,14 +305,18 @@ Everything is in [`docs/`](docs/README.md): the
 [models](docs/models.md),
 [ROMs](docs/roms.md),
 [where the manuals come from](docs/manuals.md),
+[the manual-assisted zero-shot protocol](docs/zero_shot_protocol.md),
 [what a comparison of this size can resolve](docs/preregistration.md) and the
 [experiment log](docs/experiments.md).
 
 Every published number lives in [`docs/claims.jsonl`](docs/claims.jsonl) as one
 machine-readable line, and `recheck_claims.py` recomputes all of them from the
-logs in about a tenth of a second. Four claims on the experiment log have been
-retracted, each caught by somebody noticing in time; the registry is so the
-fifth does not depend on that.
+logs in about a tenth of a second. Pipeline measurements that are not paired
+seed effects — parse scores, HUD gold, menu polygons — live in
+[`docs/measurements.jsonl`](docs/measurements.jsonl) with their artefacts and
+recheck commands. Four claims on the experiment log have been retracted, each
+caught by somebody noticing in time; the registries are so the fifth does not
+depend on that.
 
 ## Licence
 

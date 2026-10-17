@@ -1,0 +1,138 @@
+{
+ "schema_version": 2,
+ "game": "ViceProjectDoom-Nes-v0",
+ "source": "Rx2.0 Manual Restoration Project, 'VICE - Project Doom.pdf' (https://archive.org/download/rx2MRPnes1250pxPDF/VICE%20-%20Project%20Doom.pdf), OCR layer VICE - Project Doom_djvu.txt; controls/HUD diagram and item list pages. Derived from runs/knowledge/manual_ViceProjectDoom-Nes-v0.json (facts only, no RAM values in the concept layer).",
+ "manual": {
+  "scan_id": "archive.org/download/rx2MRPnes1250pxPDF/VICE%20-%20Project%20Doom.pdf",
+  "language": "en",
+  "pages_used": [],
+  "parse": {
+   "method": "ocr-djvu+human-collate",
+   "pipeline_version": "pre-pipeline",
+   "judge": "author, runs/knowledge/manual_ViceProjectDoom-Nes-v0.json",
+   "judge_log": "runs/knowledge/manual_ViceProjectDoom-Nes-v0.json"
+  }
+ },
+ "notes": [
+  "SELECT cycles weapons: laser whip -> .44 Magnum -> hand grenade.",
+  "START pauses and skips cinemas — it is NOT a play button here.",
+  "100 coins buy an extra man; time reaching 0 is over.",
+  "Grenades are scarce and the stage-2 boss's second phase cannot be killed without them."
+ ],
+ "facts": [
+  {
+   "id": "select-cycles-weapons",
+   "kind": "controls",
+   "statement": "SELECT cycles the weapon: laser whip, then .44 Magnum, then hand grenade.",
+   "citation": {"page": 1, "figure": "controls diagram; page not yet pinned in the scan"},
+   "status": "extracted"
+  },
+  {
+   "id": "b-uses-weapon",
+   "kind": "controls",
+   "statement": "B uses the currently selected weapon.",
+   "citation": {"page": 1, "figure": "controls diagram; page not yet pinned in the scan"},
+   "status": "extracted"
+  },
+  {
+   "id": "start-is-pause",
+   "kind": "controls",
+   "statement": "START pauses and skips cinemas; during play it must not be pressed as if it were 'go'.",
+   "citation": {"page": 1, "figure": "controls diagram; page not yet pinned in the scan"},
+   "status": "extracted"
+  },
+  {
+   "id": "road-gears",
+   "kind": "controls",
+   "statement": "On the road, gears go 1 (slow) to 3 (fast) with multi-directional steering.",
+   "citation": {"page": 1, "figure": "road controls; page not yet pinned"},
+   "status": "extracted"
+  },
+  {
+   "id": "coins-buy-lives",
+   "kind": "economy",
+   "statement": "100 coins grant an extra man.",
+   "citation": {"page": 1, "figure": "item list; page not yet pinned"},
+   "status": "extracted"
+  },
+  {
+   "id": "time-zero-is-over",
+   "kind": "hazard",
+   "statement": "The time counter reaching 0 is game over for the run.",
+   "citation": {"page": 1, "figure": "HUD diagram; page not yet pinned"},
+   "status": "extracted"
+  },
+  {
+   "id": "grenades-for-boss-2",
+   "kind": "goal",
+   "statement": "Keep hand grenades for the stage-2 final boss; its second phase cannot be killed without them.",
+   "citation": {"page": 1, "figure": "weapons / items page; page not yet pinned"},
+   "status": "extracted"
+  },
+  {
+   "id": "whip-vs-bosses",
+   "kind": "goal",
+   "statement": "Bosses are best spammed with the laser whip at close range; back off before they move.",
+   "citation": {"page": 1, "figure": "weapons page; page not yet pinned"},
+   "status": "extracted"
+  },
+  {
+   "id": "lifeline-hud",
+   "kind": "hud",
+   "statement": "P is the player's lifeline bar, E the enemy's (shown for bosses); counters show bullets, grenades, men, time and coins.",
+   "citation": {"page": 1, "figure": "HUD diagram; page not yet pinned"},
+   "status": "extracted"
+  },
+  {
+   "id": "pickups-heal",
+   "kind": "target",
+   "statement": "Pickups: bullets +10, grenades +5, heal-aid +2 lifeline, meat +10 lifeline, coin toward an extra man.",
+   "citation": {"page": 1, "figure": "item list; page not yet pinned"},
+   "status": "extracted"
+  },
+  {
+   "id": "press-start-to-begin",
+   "kind": "menu",
+   "statement": "Press START to begin play from the title screen.",
+   "citation": {"page": 1, "figure": "title screen; page not yet pinned"},
+   "status": "extracted"
+  }
+ ],
+ "goal": {
+  "statement": "Advance through the stages using the right weapon for the situation; survive the road and the bosses.",
+  "citations": [{"page": 1, "figure": "weapons / stages; page not yet pinned"}]
+ },
+ "player": {
+  "role": "agent with a laser whip and guns",
+  "can": ["select-weapon", "fire", "drive-road", "jump"],
+  "citations": [{"page": 1, "figure": "controls diagram"}]
+ },
+ "controls": {
+  "notes": [
+   "SELECT selects weapon: laser whip -> .44 Magnum -> hand grenade.",
+   "B uses the selected weapon.",
+   "START is pause / skip cinema.",
+   "Road: gears 1 (slow) to 3 (fast), multi-directional steering."
+  ],
+  "citations": [{"page": 1, "figure": "controls diagram; page not yet pinned"}]
+ },
+ "targets": {
+  "concepts": [
+   {"name": "boss", "statement": "bosses are best spammed with the laser whip", "citation": {"page": 1, "figure": "weapons page"}},
+   {"name": "stage-2-boss", "statement": "stage-2 final boss second phase needs grenades", "citation": {"page": 1, "figure": "weapons page"}},
+   {"name": "pickup", "statement": "bullets +10, grenades +5, heal-aid +2, meat +10 lifeline, coin toward extra man", "citation": {"page": 1, "figure": "item list"}}
+  ],
+  "realisation": {
+   "found_by": "runs/knowledge/manual_ViceProjectDoom-Nes-v0.json (lifeline RAM 640/644 are evaluator facts, kept out of this layer)"
+  }
+ },
+ "economy": [
+  {"statement": "100 coins = extra man; time 0 = over; P/E are lifeline bars.", "citation": {"page": 1, "figure": "HUD diagram"}}
+ ],
+ "templates": [
+  {"name": "fire B", "tap": ["B"], "rest": [], "frames": 24,
+   "citation": {"page": 1, "quote": "B: use the selected weapon"}},
+  {"name": "cycle weapon", "tap": ["SELECT"], "rest": [], "frames": 8,
+   "citation": {"page": 1, "quote": "SELECT: select weapon"}}
+ ]
+}

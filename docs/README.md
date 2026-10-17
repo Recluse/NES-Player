@@ -21,14 +21,16 @@ to prove, then pick a document below.
 | [roms.md](roms.md) | Which ROMs the tests expect, by checksum. None are distributed |
 | [experiments.md](experiments.md) | The experiment log, negative results included |
 | [manuals.md](manuals.md) | Where the game manuals come from, and the target they set up |
+| [zero_shot_protocol.md](zero_shot_protocol.md) | The manual-assisted zero-shot test: what is handed over, what is forbidden, and what counts as success |
 | [preregistration.md](preregistration.md) | What is frozen before confirmatory seeds, and what a comparison of a given size can resolve |
 | [claims.jsonl](claims.jsonl) | Every published number as one machine-readable line, recomputed from the logs by `recheck_claims.py` |
+| [measurements.jsonl](measurements.jsonl) | Pipeline measurements that are not paired-seed effects (HUD gold, menu polygon, prior parse) with their artefacts |
 
 ## Implementation status
 
 | Stage | State |
 |---|---|
-| 0. Repository and infrastructure | done — uv, Python 3.14, ruff, pytest (251 tests including regression) |
+| 0. Repository and infrastructure | done — uv, Python 3.14, ruff, pytest (275 tests including regression) |
 | 1. Emulator harness | done — stable-retro/fceumm headless, determinism, savestates |
 | 2. Dataset builder | done — FM2 replay to Zarr; desynchronising movies contribute a verified prefix |
 | 3. Behavioural cloning baseline | done — plus self-imitation |

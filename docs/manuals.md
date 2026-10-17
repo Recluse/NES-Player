@@ -95,6 +95,60 @@ Where it actually stands today, so the goal is not mistaken for a result:
 
 Two practical notes. Recordings for the site are made from the **English**
 release, so the screen is readable to more people than the Japanese one is.
-And a manual is text and pictures in two languages, which the agent cannot yet
-read — teaching it to is the next piece of work, and the menus are the first
-place it pays off.
+And a manual is text and pictures in two languages. The agent now reads both
+— the text layer through OCR, the control tables by vision — into a structured
+prior with page citations. Menus were the first place it paid off, and the
+crate combat in Chip 'n Dale was the second: a sequence of buttons a scan
+cannot discover.
+
+## Reading them with a machine
+
+The pipeline that does that reading lives beside this file, and the protocol
+it feeds is [zero_shot_protocol.md](zero_shot_protocol.md):
+
+| piece | what |
+|---|---|
+| `scripts/fetch_manual.py` | pulls a named scan into `manuals/` (gitignored) and dumps one text file per page with `pdftotext -layout` |
+| `scripts/parse_manual.py` | page text → schema-v2 facts with page citations; `score` compares against gold with the two protocol baselines |
+| `assets/priors/schema/prior.schema.json` | the contract: concept layer (`facts`, every row cited) separate from scan realisations (`targets.realisation`, every number `found_by`) |
+| `assets/priors/gold/contra_j.json` | the gold set for Contra's control pages — read off the scan by a person, not invented |
+| `scripts/validate_prior.py` | structural check and honesty warnings: fact without a page, realisation without a concept, `target_px` without its arithmetic |
+| `scripts/ground_concepts.py` | the grounding table: manual concept → on-screen entity, each link naming the scan artefact that witnessed it |
+| `scripts/menu_polygon.py` | the menu measurement: blind / prompt / manual arms, `answers_the_pad` as the play signal |
+| `scripts/hero_tiles_episode.py` | hero tiles from a recorded episode when a live scan cannot reach the fight (Battletoads' intro) |
+| `scripts/episode_state.py` | savestate at a frame of an episode, so `object_tables.py` has something to shoot at |
+| `scripts/verify_wall_zone_end.py` | wall_hp → 0 and the screen fades: the witness that promoting the wall needs |
+| `assets/priors/grounding/grounding_*.json` | Contra 5/9 confirmed, Vice and Battletoads 2/9 (menu + player) |
+
+The shipped `prior_ContraJ-Nes-v0.json` is schema v2 with the legacy flat
+fields kept, so `oracle_mpc.py` runs unchanged. Of its eight facts, six name a
+page a person can open; the door position and the capsule note are still route
+notes and are marked `extracted` rather than `human_confirmed` until their
+pages are pinned.
+
+Numbers from the parse go in `docs/claims.jsonl` only when measured on real
+scans. The fixture self-check (`parse_manual.py score --fixture`) is a
+pipeline test on synthetic pages and is not a measurement.
+
+### HUD reading (Battletoads, 2026-10-10)
+
+The owner's screenshot settles the layout: score, then a 6-segment yellow
+bar, then hearts, top-left. Two hits leave 4 filled and 2 empty slots still
+drawn. `scripts/hud_hearts.py` reads `bar_filled` / `bar_slots` / `hearts`
+from that photo (4/6/5, gold in `runs/knowledge/hud_gold_battletoads.json`).
+
+Live polling is **not** yet measured: the explore episodes never reach the
+jungle screen with that HUD (intro/story wall), and a single yellow threshold
+does not span the JPEG screenshot and the NES palette. Auto-palette by frame
+brightness is in place; the missing artefact is a savestate on that screen.
+Do not quote live HUD numbers until that state exists.
+
+### Scope by level type (Battletoads, 2026-10-15)
+
+Battletoads changes the *gameplay* per level — about ten kinds across the
+game (owner). That is the same axis Contra's manual uses to scope its facts
+(`scroll_mode`: vertical / horizontal / 3D / underwater). A prior entry or a
+trained policy that works on one level type can be inert on the next; the
+`scope` field of the prior schema is where that goes. Level 1 so far:
+platformer + falling intro, white hearts, blue bar, hearts and bar drop
+independently.

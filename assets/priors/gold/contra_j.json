@@ -1,0 +1,70 @@
+{
+  "game": "ContraJ-Nes-v0",
+  "scan_id": "archive.org/details/rx2MRPnes1250pxPDF — Contra (Re-Translation).pdf",
+  "language": "ja",
+  "note": "Gold set for the parse pipeline's dev metric. Every row was read off the scan by a person (docs/manuals.md, 2026-09-16), not invented. Rows marked provenance=us_manual come from the English release's text and are tagged so the Japanese parse is not scored against them by accident. Page numbers in this file are PRINTED pages; PDF pages from pdftoppm/tesseract are printed+1 (cover pages).",
+  "facts": [
+    {
+      "id": "fire-all-directions",
+      "kind": "controls",
+      "page": 9,
+      "statement_key": "eight-directions",
+      "provenance": "ja_manual",
+      "quote_hint": "左に発砲"
+    },
+    {
+      "id": "fire-left-listed",
+      "kind": "controls",
+      "page": 10,
+      "statement_key": "fire-left",
+      "provenance": "ja_manual",
+      "quote_hint": "左"
+    },
+    {
+      "id": "3d-gun-forward-only",
+      "kind": "controls",
+      "page": 11,
+      "statement_key": "3d-forward-only",
+      "provenance": "ja_manual",
+      "quote_hint": "3D画面では前方にのみ攻撃発砲します"
+    },
+    {
+      "id": "scroll-mode-by-area",
+      "kind": "other",
+      "page": 12,
+      "statement_key": "scroll-modes",
+      "provenance": "ja_manual",
+      "quote_hint": "スクロールが縦、横、3D"
+    },
+    {
+      "id": "destroy-sensor-to-advance",
+      "kind": "goal",
+      "page": 12,
+      "statement_key": "sensor-advance",
+      "provenance": "us_manual",
+      "quote_hint": "detection sensor"
+    },
+    {
+      "id": "extra-life-on-clear",
+      "kind": "economy",
+      "page": 12,
+      "statement_key": "extra-life",
+      "provenance": "us_manual",
+      "quote_hint": "extra man"
+    }
+  ],
+  "statement_keys": {
+    "eight-directions": "The gun fires in eight directions, including left and up-left 45°.",
+    "fire-left": "Firing left is a printed control.",
+    "3d-forward-only": "On 3D screens the gun points forward only; UP advances, LEFT/RIGHT strafe, DOWN goes prone.",
+    "scroll-modes": "Scroll is vertical, horizontal or 3D by area; underwater is a further mode.",
+    "sensor-advance": "Destroying the zone's detection sensor is the advance condition.",
+    "extra-life": "A cleared stage grants an extra life."
+  },
+  "not_in_gold": [
+    "door-position-in-far-wall",
+    "capsule-carries-weapons"
+  ],
+  "not_in_gold_note": "Present as route notes in the prior but the page is not yet pinned in the scan. They must NOT be scored as misses against the Japanese parse; they are open extraction tasks.",
+  "page_offset": 1
+}

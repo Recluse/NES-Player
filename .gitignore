@@ -14,5 +14,8 @@ tas/*.fm2
 tas/*.fcm
 recordings/
 
+# Manual scans are the rights holders'; only derived facts go in git
+manuals/
+
 # The website lives in its own repository now
 # (recluse-internal/nes-player/web), so nothing of it is here.

@@ -1,0 +1,196 @@
+{
+  "schema_version": 1,
+  "game": "ContraJ-Nes-v0",
+  "source": "assembled from runs/knowledge/* by scripts/ground_concepts.py; manual concepts are from assets/priors/prior_ContraJ-Nes-v0.json",
+  "links": [
+    {
+      "concept": "player",
+      "fact_ids": [
+        "3d-gun-forward-only",
+        "fire-all-directions"
+      ],
+      "entity": {
+        "kind": "sprite_tiles",
+        "tiles": [
+          14,
+          68,
+          70,
+          72,
+          74,
+          112,
+          114,
+          116,
+          118,
+          120,
+          122
+        ]
+      },
+      "evidence": {
+        "scan": "hero_tiles.py",
+        "artifact": "runs/knowledge/hero_ContraJ-Nes-v0.json",
+        "verify": "tiles whose sprites displace between a held direction and idle from the same savestate; enemies cancel"
+      },
+      "status": "scan_confirmed",
+      "frame_illustration": null
+    },
+    {
+      "concept": "sensor",
+      "fact_ids": [
+        "destroy-sensor-to-advance",
+        "door-up-after-clear"
+      ],
+      "entity": {
+        "kind": "object_type",
+        "object_types": [
+          20
+        ],
+        "table": {
+          "type_base": 1328,
+          "hp_base": 1408
+        }
+      },
+      "evidence": {
+        "scan": "base room script (object_tables layout)",
+        "artifact": "runs/knowledge/base_rooms_ContraJ.json",
+        "verify": "type-20 HP reaches 0 under alternating fire; then hero at byte 820 == 112 and hold UP fades the room — the manual's 'destroy the sensor to advance' is this same event"
+      },
+      "status": "scan_confirmed",
+      "frame_illustration": null
+    },
+    {
+      "concept": "wall",
+      "fact_ids": [],
+      "entity": {
+        "kind": "object_type",
+        "object_types": [
+          4,
+          16,
+          17
+        ],
+        "table": {
+          "type_base": 1328,
+          "hp_base": 1408,
+          "slots": 16
+        },
+        "wall_slots": [
+          {
+            "slot": 2,
+            "type": 17,
+            "hp": 30
+          },
+          {
+            "slot": 5,
+            "type": 16,
+            "hp": 16
+          },
+          {
+            "slot": 6,
+            "type": 4,
+            "hp": 8
+          },
+          {
+            "slot": 7,
+            "type": 16,
+            "hp": 13
+          }
+        ]
+      },
+      "evidence": {
+        "scan": "object_tables.py + verify_wall_zone_end.py",
+        "artifact": "runs/knowledge/objects_ContraJ-Nes-v0.json, runs/knowledge/wall_zone_end_ContraJ-Nes-v0.json",
+        "verify": "wall_hp 67->0 under ['B', 'RIGHT', 'UP'] in 141 frames; screen index 12->0; brightness 50.83->0.0 (fade below 40.0)"
+      },
+      "status": "scan_confirmed",
+      "frame_illustration": null
+    },
+    {
+      "concept": "door",
+      "fact_ids": [
+        "door-up-after-clear"
+      ],
+      "entity": {
+        "kind": "screen_region",
+        "approx_x": 112,
+        "approx_y": "far wall, top of room",
+        "note": "x≈112 is a watched value from docs/manuals.md, not a RAM address. A scan that finds the door tile would replace it."
+      },
+      "evidence": {
+        "scan": "manuals.md route note + base_rooms how_to_reach_room_2",
+        "artifact": "runs/knowledge/base_rooms_ContraJ.json",
+        "verify": "hold UP with hero at x≈112 after sensor dies → room fade; hold UP elsewhere does not"
+      },
+      "status": "human_confirmed",
+      "frame_illustration": null
+    },
+    {
+      "concept": "menu",
+      "fact_ids": [
+        "press-start-to-begin",
+        "player-select"
+      ],
+      "entity": {
+        "kind": "screen_text",
+        "reader": "nes_player.perception.text.find_prompt",
+        "watch": "nes_player.perception.title.TitleWatch",
+        "measured": "scripts/menu_polygon.py on ContraJ: manual arm (START from the prior) entered at frame 480; prompt-only arm obeyed a half-read SELECT and never entered; blind_sparse (the old pulse schedule) entered at 840; blind_dense at 480"
+      },
+      "evidence": {
+        "scan": "menu_polygon.py + find_prompt",
+        "artifact": "runs/knowledge/menu_ContraJ-Nes-v0.jsonl",
+        "verify": "answers_the_pad is the play signal; START from the manual's menu facts reaches it, SELECT from the screen alone does not on this title"
+      },
+      "status": "scan_confirmed",
+      "frame_illustration": null
+    },
+    {
+      "concept": "hud",
+      "fact_ids": [],
+      "entity": null,
+      "evidence": {
+        "scan": "HudReader",
+        "artifact": "assets/nes_font.json",
+        "verify": "digits from counter dynamics; letters from the font atlas"
+      },
+      "status": "proposed",
+      "frame_illustration": null
+    },
+    {
+      "concept": "capsule",
+      "fact_ids": [
+        "capsule-weapons"
+      ],
+      "entity": null,
+      "evidence": {
+        "scan": null,
+        "artifact": null,
+        "verify": "not linked yet"
+      },
+      "status": "proposed",
+      "frame_illustration": null
+    },
+    {
+      "concept": "hazard",
+      "fact_ids": [],
+      "entity": null,
+      "evidence": {
+        "scan": null,
+        "artifact": null,
+        "verify": "not linked yet"
+      },
+      "status": "proposed",
+      "frame_illustration": null
+    },
+    {
+      "concept": "terrain-solid",
+      "fact_ids": [],
+      "entity": null,
+      "evidence": {
+        "scan": "contact_map.py",
+        "artifact": null,
+        "verify": "not linked yet"
+      },
+      "status": "proposed",
+      "frame_illustration": null
+    }
+  ]
+}

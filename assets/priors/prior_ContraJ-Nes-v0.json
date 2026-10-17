@@ -1,6 +1,23 @@
 {
+ "schema_version": 2,
  "game": "ContraJ-Nes-v0",
  "source": "the game manual, read rather than recalled: Contra (Re-Translation).pdf in archive.org/details/rx2MRPnes1250pxPDF — the Japanese Famicom manual, which is the one matching this ROM. See docs/manuals.md. Entries below name the page they come from.",
+ "manual": {
+  "scan_id": "archive.org/details/rx2MRPnes1250pxPDF — Contra (Re-Translation).pdf",
+  "language": "ja",
+  "pages_used": [
+   9,
+   10,
+   11,
+   12
+  ],
+  "parse": {
+   "method": "human-read-scan",
+   "pipeline_version": "pre-pipeline",
+   "judge": "author, 2026-09-16",
+   "judge_log": "docs/manuals.md"
+  }
+ },
  "notes": [
   "The wall at the end of the jungle is destroyed by its cannons and the sensor between them; point-blank diagonal fire is what reaches them.",
   "A base stage does not scroll. Its exit opens when the room's sensor is destroyed, and the way on is upward through the door.",
@@ -8,13 +25,298 @@
   "Once a room's sensor is destroyed the way on is upward through the door, so a cleared room rewards moving up the screen.",
   "The door out of a base room is in the middle of the far wall, near screen x=112; walking up anywhere else does nothing."
  ],
+ "facts": [
+  {
+   "id": "press-start-to-begin",
+   "kind": "menu",
+   "statement": "Press START to begin play from the title screen.",
+   "citation": {
+    "page": 2,
+    "figure": "title screen prompt; page not yet pinned in the scan"
+   },
+   "status": "extracted"
+  },
+  {
+   "id": "player-select",
+   "kind": "menu",
+   "statement": "The title offers a 1 PLAYER / 2 PLAYER choice; START or A confirms.",
+   "citation": {
+    "page": 2,
+    "figure": "player-select screen; page not yet pinned in the scan"
+   },
+   "status": "extracted"
+  },
+  {
+   "id": "fire-all-directions",
+   "kind": "controls",
+   "statement": "The gun fires in eight directions, including left and up-left 45°, not only rightward.",
+   "citation": {
+    "page": 9,
+    "quote": "左に発砲 / 左斜め上45°に発砲 in the control table"
+   },
+   "status": "human_confirmed"
+  },
+  {
+   "id": "fire-left-listed",
+   "kind": "controls",
+   "statement": "Firing left is a printed control, so mirrored templates are in the game and not a symmetry invented by the candidate set.",
+   "citation": {
+    "page": 10,
+    "quote": "control table, all eight directions"
+   },
+   "status": "human_confirmed"
+  },
+  {
+   "id": "3d-gun-forward-only",
+   "kind": "controls",
+   "statement": "On 3D screens the gun points forward only: UP advances, LEFT and RIGHT strafe, DOWN goes prone. The base sensor is reached by stepping sideways until the shot lines up, not by aiming left.",
+   "scope": {
+    "axis": "scroll_mode",
+    "value": "3d",
+    "why": "the manual scopes this to 3D screens"
+   },
+   "citation": {
+    "page": 11,
+    "quote": "3D画面では前方にのみ攻撃発砲します"
+   },
+   "status": "human_confirmed"
+  },
+  {
+   "id": "scroll-mode-by-area",
+   "kind": "other",
+   "statement": "Scroll is vertical, horizontal or 3D depending on the area; underwater is a further mode of its own (no jumping, no firing downward). The prior's scope should follow this axis.",
+   "citation": {
+    "page": 12,
+    "quote": "AREAによって画面のスクロールが縦、横、3Dと切り替わります"
+   },
+   "status": "human_confirmed"
+  },
+  {
+   "id": "destroy-sensor-to-advance",
+   "kind": "goal",
+   "statement": "Destroying the zone's detection sensor is the advance condition. Base 1 is a maze of sensors around an evil core at its centre.",
+   "citation": {
+    "page": 12,
+    "quote": "US manual text: detection sensor is the advance condition in every zone"
+   },
+   "status": "human_confirmed"
+  },
+  {
+   "id": "door-up-after-clear",
+   "kind": "exit",
+   "statement": "Once the room's sensor is destroyed the way on is upward through the door in the middle of the far wall.",
+   "citation": {
+    "page": 12,
+    "figure": "route note; the door's central position is from the base-room picture, page not yet pinned in the scan"
+   },
+   "status": "extracted"
+  },
+  {
+   "id": "capsule-weapons",
+   "kind": "target",
+   "statement": "Flying capsules carry weapons; shooting one and walking into what it drops is worth a detour.",
+   "citation": {
+    "page": 12,
+    "figure": "power-up / capsule figure; page not yet pinned in the scan"
+   },
+   "status": "extracted"
+  },
+  {
+   "id": "extra-life-on-clear",
+   "kind": "economy",
+   "statement": "A cleared stage grants an extra life. The death price does not currently know this.",
+   "citation": {
+    "page": 12,
+    "quote": "US manual: cleared stage grants an extra life"
+   },
+   "status": "extracted"
+  },
+  {
+   "id": "fire-left-or-right",
+   "kind": "controls",
+   "statement": "B button: fire left or right (左又は右に発砲).",
+   "citation": {
+    "page": 10,
+    "figure": "control table, scan-11.png (read visually 2026-10-16)"
+   },
+   "status": "human_confirmed"
+  },
+  {
+   "id": "fire-lower-left-45",
+   "kind": "controls",
+   "statement": "B + down + left: fire lower-left 45° (左斜め下45°に発砲).",
+   "citation": {
+    "page": 10,
+    "figure": "control table, scan-11.png"
+   },
+   "status": "human_confirmed"
+  },
+  {
+   "id": "fire-left",
+   "kind": "controls",
+   "statement": "B + left: fire left (左に発砲).",
+   "citation": {
+    "page": 10,
+    "figure": "control table, scan-11.png"
+   },
+   "status": "human_confirmed"
+  },
+  {
+   "id": "fire-upper-left-45",
+   "kind": "controls",
+   "statement": "B + up + left: fire upper-left 45° (左斜め上45°に発砲).",
+   "citation": {
+    "page": 10,
+    "figure": "control table, scan-11.png"
+   },
+   "status": "human_confirmed"
+  },
+  {
+   "id": "fire-right-or-left",
+   "kind": "controls",
+   "statement": "B alone or with pad: fire right or left (右又は左に発砲).",
+   "citation": {
+    "page": 10,
+    "figure": "control table, scan-11.png"
+   },
+   "status": "human_confirmed"
+  },
+  {
+   "id": "eight-directions",
+   "kind": "controls",
+   "statement": "Firing covers eight directions: left, right, up-left 45°, down-left 45°, and the mirrored pair.",
+   "citation": {
+    "page": 10,
+    "figure": "control table rows, scan-11.png"
+   },
+   "status": "human_confirmed"
+  },
+  {
+   "id": "pad-down-prone",
+   "kind": "controls",
+   "statement": "Pad down: lie prone (伏せる). A: climb down (下に降りる) or jump.",
+   "citation": {
+    "page": 10,
+    "figure": "control table, scan-11.png"
+   },
+   "status": "human_confirmed"
+  }
+ ],
+ "goal": {
+  "statement": "Destroy the zone's detection sensor to open the way on; in a base, work through the sensor maze toward the core.",
+  "citations": [
+   {
+    "page": 12,
+    "quote": "advance condition in every zone"
+   }
+  ]
+ },
+ "player": {
+  "role": "soldier",
+  "can": [
+   "fire-in-8-directions",
+   "jump",
+   "strafe-in-3d",
+   "go-prone-in-3d"
+  ],
+  "citations": [
+   {
+    "page": 9,
+    "quote": "control table"
+   }
+  ]
+ },
+ "controls": {
+  "notes": [
+   "On 3D screens the gun points forward only.",
+   "Underwater: no jumping, no firing downward."
+  ],
+  "citations": [
+   {
+    "page": 11,
+    "quote": "3D画面では前方にのみ攻撃発砲します"
+   },
+   {
+    "page": 12,
+    "quote": "scroll modes by area"
+   }
+  ]
+ },
+ "targets": {
+  "concepts": [
+   {
+    "name": "sensor",
+    "statement": "the room's detection sensor; destroying it opens the room",
+    "citation": {
+     "page": 12,
+     "quote": "detection sensor is the advance condition"
+    }
+   },
+   {
+    "name": "wall",
+    "statement": "the wall at the end of a zone, with cannons",
+    "citation": {
+     "page": 12,
+     "quote": "zone wall description"
+    }
+   },
+   {
+    "name": "capsule",
+    "statement": "flying weapons capsule",
+    "citation": {
+     "page": 12,
+     "quote": "capsule description"
+    }
+   }
+  ],
+  "realisation": {
+   "types": [
+    20,
+    17,
+    16,
+    4
+   ],
+   "types_why": "object_tables.py scan: type 20 is the room sensor (base), 17/16/4 the jungle wall and cannon family. The manual only names sensor/wall/capsule; these numbers are the scan's answer to those words.",
+   "target_px": 13,
+   "target_px_why": "scrolling stages: wall 72 HP, destroying it ends the stage, worth ~928 px of the 4000 stride; 928/72 = 13 px per hit point.",
+   "found_by": "object_tables.py / WALL_HP0 scan; recorded in docs/experiments.md A5"
+  }
+ },
+ "exit": {
+  "way_on": "upward through the door in the middle of the far wall",
+  "statement": "In a base room the exit opens when the sensor dies and is up; the door sits near the centre of the far wall.",
+  "citations": [
+   {
+    "page": 12,
+    "quote": "route after sensor destroyed"
+   }
+  ],
+  "realisation": {
+   "exit_up_px": 300,
+   "exit_at_x": 112,
+   "found_by": "manuals.md (door near screen x=112) + prior_exit_value in oracle_mpc.py; x=112 is from watching, not from RAM"
+  }
+ },
+ "economy": [
+  {
+   "statement": "A cleared stage grants an extra life.",
+   "citation": {
+    "page": 12,
+    "quote": "US manual"
+   }
+  }
+ ],
  "templates": [
   {
    "name": "advance up",
    "hold": [
     "UP"
    ],
-   "frames": 48
+   "frames": 48,
+   "citation": {
+    "page": 11,
+    "quote": "上 advances on 3D; upward is the way on in a base"
+   }
   },
   {
    "name": "fire up",
@@ -25,7 +327,11 @@
    "rest": [
     "UP"
    ],
-   "frames": 48
+   "frames": 48,
+   "citation": {
+    "page": 9,
+    "quote": "control table: fire + direction"
+   }
   },
   {
    "name": "fire standing",
@@ -33,7 +339,11 @@
     "B"
    ],
    "rest": [],
-   "frames": 48
+   "frames": 48,
+   "citation": {
+    "page": 9,
+    "quote": "control table: fire"
+   }
   }
  ],
  "target_types": [

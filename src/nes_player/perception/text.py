@@ -244,11 +244,55 @@ def read_lines(frame_rgb: np.ndarray, gap: int = 2,
 # The button the screen is asking for: read the prompt instead of pressing blind.
 _BUTTON_WORDS = ("START", "SELECT", "BUTTON")
 _ASK_WORDS = ("PRESS", "PUSH", "HIT")
+# A title screen is often only half-readable: the font atlas covers the
+# glyphs a known bootstrap screen used, and everything else comes back "?".
+# "P??? SE?E??" is still a request to press SELECT. Match a known button
+# when at most one letter in it is missing and the rest align.
+_FUZZY_BUTTONS = ("START", "SELECT")
+
+
+def _fuzzy_button(word: str) -> str | None:
+    """word like SE?E?? or ST?RT against START/SELECT. None if no match.
+
+    `?` is whatever the font atlas failed to read. A word matches when every
+    *known* letter lines up and at least one cell was unknown.
+    """
+    up = word.upper()
+    if not up:
+        return None
+    if up in ("START", "SELECT"):
+        return up
+    for name in _FUZZY_BUTTONS:
+        if len(up) != len(name):
+            continue
+        mismatches = sum(1 for a, b in zip(up, name, strict=True)
+                         if a != b and a != "?")
+        unknown = up.count("?")
+        if mismatches == 0 and unknown >= 1 and unknown < len(up):
+            return name
+    return None
+
+
+def _is_ask(word: str) -> bool:
+    up = word.upper()
+    if up in _ASK_WORDS:
+        return True
+    if "?" not in up:
+        return False
+    for name in _ASK_WORDS:
+        if len(up) != len(name):
+            continue
+        mismatches = sum(1 for a, b in zip(up, name, strict=True)
+                         if a != b and a != "?")
+        # at least one known letter, no contradicted letter
+        if mismatches == 0 and up.count("?") < len(up):
+            return True
+    return False
 
 
 def find_prompt(frame_rgb: np.ndarray, reader: HudReader | None = None) -> str | None:
     """Returns 'START', 'SELECT' or None. Understands "PRESS START" and
-    "PUSH START BUTTON".
+    "PUSH START BUTTON", including a half-read title.
 
     Prompts addressed to the SECOND player are ignored. In a two-player game
     "PLAYER 2 PRESS START" sits on screen throughout the level, and obeying it
@@ -256,13 +300,17 @@ def find_prompt(frame_rgb: np.ndarray, reader: HudReader | None = None) -> str |
     """
     for line in read_lines(frame_rgb, reader=reader):
         words = line.replace("-", " ").split()
-        if not any(w in _ASK_WORDS for w in words):
+        if not any(_is_ask(w) for w in words):
             continue
         if "2" in words or "2P" in words or "II" in words:
             continue   # that is aimed at player two, not at us
         for w in words:
             if w in ("START", "SELECT"):
                 return w
+        for w in words:
+            hit = _fuzzy_button(w)
+            if hit:
+                return hit
         if "BUTTON" in words:   # "PUSH BUTTON" unnamed: START is the likeliest
             return "START"
     return None

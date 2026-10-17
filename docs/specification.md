@@ -41,14 +41,20 @@ than one particular game. It should be able to:
 - plan inside its own world model;
 - carry skills across games of different genres.
 
-**The target these add up to, added 2026-09-16 and not yet reached:**
+**The target these add up to** (added 2026-09-16, first test run 2026-10-16):
 *manual-assisted zero-shot play* — a game the model has never trained on, and,
 before it starts, the documentation that shipped in the box with the cartridge.
 Not a prior written by whoever runs the experiment, not addresses read out of
-the emulator's memory. A person meeting a new game gets exactly that much, and
-this is the test that says whether the agent can use it. The mechanism is in
-place and is measurably worth something; the test itself has not been run. See
-[manuals.md](manuals.md).
+the emulator's memory. A person meeting a new game gets exactly that much.
+
+**The test has been run** on two held-out games, Chip 'n Dale - Rescue Rangers
+and Galaga (`docs/zero_shot_protocol.md`). On Chip 'n Dale the manual's crate
+combat (composed templates) takes the planner from 92 to 239 px, +144
+[109, 145] over 19 of 20 paired seeds. On Galaga the manual's world facts
+produce no effect (0 px [0, 2]) — the action-to-result window is longer than
+the planner's horizon. Both results are published; the negative beside the
+positive. See [manuals.md](manuals.md) and
+[measurements.jsonl](measurements.jsonl).
 
 ## 3. Hypothesis
 

@@ -1,0 +1,26 @@
+{
+  "game": "Galaga-Nes-v0",
+  "scan_id": "gamesdatabase.org Galaga_-_1985_-_Bandai.pdf",
+  "language": "en",
+  "note": "Gold for Galaga, held-out B. Written 2026-10-16 from the OCR of the gamesdatabase scan. Pages are PDF pages from pdftoppm.",
+  "facts": [
+    {"id": "ab-fire", "kind": "controls", "page": 5, "statement_key": "ab-fire", "provenance": "us_manual", "quote_hint": "fire the"},
+    {"id": "start-pause", "kind": "controls", "page": 6, "statement_key": "start-pause", "provenance": "us_manual", "quote_hint": "Pause"},
+    {"id": "player-select", "kind": "menu", "page": 6, "statement_key": "player-select", "provenance": "us_manual", "quote_hint": "one player or two"},
+    {"id": "challenge-every-3", "kind": "goal", "page": 3, "statement_key": "challenge-every-3", "provenance": "us_manual", "quote_hint": "every third level"},
+    {"id": "retrieve-fighters", "kind": "goal", "page": 3, "statement_key": "retrieve-fighters", "provenance": "us_manual", "quote_hint": "Retrieve captured fighters"},
+    {"id": "double-fire-power", "kind": "goal", "page": 3, "statement_key": "double-fire-power", "provenance": "us_manual", "quote_hint": "double your fire power"},
+    {"id": "boss-two-hits", "kind": "target", "page": 7, "statement_key": "boss-two-hits", "provenance": "us_manual", "quote_hint": "two hits"},
+    {"id": "score-defeat-galaga", "kind": "hud", "page": 7, "statement_key": "score-defeat-galaga", "provenance": "us_manual", "quote_hint": "points by defeating"}
+  ],
+  "statement_keys": {
+    "ab-fire": "A and B fire the fighter's missiles.",
+    "start-pause": "START starts/stops the game and pauses play.",
+    "player-select": "SELECT chooses one or two players.",
+    "challenge-every-3": "Every third level has a challenging stage.",
+    "retrieve-fighters": "Retrieve captured fighters from the Commander tractor-beam.",
+    "double-fire-power": "Retrieving a captured fighter doubles your fire power.",
+    "boss-two-hits": "It takes two hits to destroy the boss Galaga.",
+    "score-defeat-galaga": "The player gets points by defeating Galaga."
+  }
+}

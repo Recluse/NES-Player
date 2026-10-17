@@ -1,0 +1,389 @@
+{
+  "schema_version": 1,
+  "game": "Battletoads-Nes-v0",
+  "source": "assembled by scripts/ground_concepts.py from prior_Battletoads-Nes-v0.json and runs/knowledge/*Battletoads-Nes-v0*",
+  "links": [
+    {
+      "concept": "menu",
+      "fact_ids": [
+        "press-start-to-begin"
+      ],
+      "entity": {
+        "kind": "screen_text",
+        "reader": "nes_player.perception.text.find_prompt",
+        "watch": "nes_player.perception.title.TitleWatch",
+        "measured": "scripts/menu_polygon.py -> runs/knowledge/menu_Battletoads-Nes-v0.jsonl"
+      },
+      "evidence": {
+        "scan": "menu_polygon.py + find_prompt",
+        "artifact": "runs/knowledge/menu_Battletoads-Nes-v0.jsonl",
+        "verify": "answers_the_pad is the play signal; see the jsonl for which arm reached it and when"
+      },
+      "status": "scan_confirmed",
+      "frame_illustration": null
+    },
+    {
+      "concept": "player",
+      "fact_ids": [],
+      "entity": {
+        "kind": "sprite_tiles",
+        "tiles": [
+          114,
+          120,
+          128,
+          129,
+          132,
+          133,
+          138,
+          144,
+          147,
+          155,
+          163,
+          168,
+          171
+        ]
+      },
+      "evidence": {
+        "scan": "hero_tiles.py",
+        "artifact": "runs/knowledge/hero_Battletoads-Nes-v0.json",
+        "verify": "tiles that move with the buttons"
+      },
+      "status": "scan_confirmed",
+      "frame_illustration": null
+    },
+    {
+      "concept": "sensor",
+      "fact_ids": [],
+      "entity": null,
+      "evidence": {
+        "scan": "object_tables.py",
+        "artifact": "runs/knowledge/objects_Battletoads-Nes-v0.json",
+        "verify": "HP falls under fire; if the scan found 0 bytes the boot never reached a fight (see menu jsonl for how long this game's intro is)"
+      },
+      "status": "proposed",
+      "frame_illustration": null
+    },
+    {
+      "concept": "wall",
+      "fact_ids": [],
+      "entity": null,
+      "evidence": {
+        "scan": "verify_wall_zone_end.py",
+        "artifact": null,
+        "verify": "wall_hp -> 0 and screen fades"
+      },
+      "status": "proposed",
+      "frame_illustration": null
+    },
+    {
+      "concept": "door",
+      "fact_ids": [],
+      "entity": null,
+      "evidence": {
+        "scan": null,
+        "artifact": null,
+        "verify": "not linked yet"
+      },
+      "status": "proposed",
+      "frame_illustration": null
+    },
+    {
+      "concept": "capsule",
+      "fact_ids": [],
+      "entity": null,
+      "evidence": {
+        "scan": null,
+        "artifact": null,
+        "verify": "not linked yet"
+      },
+      "status": "proposed",
+      "frame_illustration": null
+    },
+    {
+      "concept": "hazard",
+      "fact_ids": [
+        "hearts-half-damage"
+      ],
+      "entity": {
+        "kind": "hp_bytes",
+        "witness": [
+          {
+            "addr": 0,
+            "hex": "0x0",
+            "start": 4,
+            "end": 0,
+            "drops": 2,
+            "rises": 0,
+            "seq": [
+              4,
+              4,
+              4,
+              4,
+              4,
+              4,
+              4,
+              4,
+              4,
+              4,
+              4,
+              4,
+              4,
+              4,
+              4,
+              4,
+              4,
+              4,
+              4,
+              4
+            ]
+          },
+          {
+            "addr": 278,
+            "hex": "0x116",
+            "start": 2,
+            "end": 0,
+            "drops": 2,
+            "rises": 0,
+            "seq": [
+              2,
+              2,
+              2,
+              2,
+              2,
+              2,
+              2,
+              2,
+              1,
+              1,
+              1,
+              1,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0
+            ]
+          },
+          {
+            "addr": 279,
+            "hex": "0x117",
+            "start": 2,
+            "end": 0,
+            "drops": 2,
+            "rises": 0,
+            "seq": [
+              2,
+              2,
+              2,
+              2,
+              2,
+              2,
+              2,
+              2,
+              2,
+              1,
+              1,
+              1,
+              1,
+              1,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0
+            ]
+          },
+          {
+            "addr": 280,
+            "hex": "0x118",
+            "start": 2,
+            "end": 0,
+            "drops": 3,
+            "rises": 1,
+            "seq": [
+              2,
+              2,
+              2,
+              2,
+              3,
+              2,
+              2,
+              2,
+              2,
+              2,
+              2,
+              1,
+              1,
+              1,
+              1,
+              1,
+              1,
+              0,
+              0,
+              0
+            ]
+          },
+          {
+            "addr": 281,
+            "hex": "0x119",
+            "start": 2,
+            "end": 0,
+            "drops": 3,
+            "rises": 1,
+            "seq": [
+              2,
+              2,
+              2,
+              3,
+              3,
+              2,
+              2,
+              2,
+              2,
+              2,
+              2,
+              2,
+              2,
+              2,
+              1,
+              1,
+              1,
+              1,
+              1,
+              1
+            ]
+          },
+          {
+            "addr": 282,
+            "hex": "0x11a",
+            "start": 3,
+            "end": 1,
+            "drops": 2,
+            "rises": 0,
+            "seq": [
+              3,
+              3,
+              3,
+              3,
+              3,
+              3,
+              3,
+              3,
+              2,
+              2,
+              2,
+              2,
+              2,
+              2,
+              2,
+              2,
+              2,
+              2,
+              2,
+              2
+            ]
+          },
+          {
+            "addr": 283,
+            "hex": "0x11b",
+            "start": 3,
+            "end": 2,
+            "drops": 2,
+            "rises": 1,
+            "seq": [
+              3,
+              3,
+              3,
+              3,
+              3,
+              3,
+              3,
+              3,
+              3,
+              3,
+              3,
+              3,
+              3,
+              3,
+              2,
+              3,
+              2,
+              2,
+              2,
+              2
+            ]
+          },
+          {
+            "addr": 286,
+            "hex": "0x11e",
+            "start": 4,
+            "end": 5,
+            "drops": 1,
+            "rises": 2,
+            "seq": [
+              4,
+              4,
+              3,
+              3,
+              3,
+              3,
+              3,
+              4,
+              4,
+              4,
+              4,
+              4,
+              4,
+              4,
+              4,
+              4,
+              4,
+              4,
+              4,
+              5
+            ]
+          }
+        ],
+        "owner_fact": "one hit removes half a heart (Recluse, 2026-10-08)",
+        "note": "candidates are small counters that stepped down during this stretch; promotion needs a controlled hit vs no-hit pair"
+      },
+      "evidence": {
+        "scan": "health_probe.py",
+        "artifact": "runs/knowledge/health_Battletoads-Nes-v0.json",
+        "verify": "half-heart candidates stepped by 1; needs a controlled hit vs no-hit pair to promote"
+      },
+      "status": "proposed",
+      "frame_illustration": null
+    },
+    {
+      "concept": "terrain-solid",
+      "fact_ids": [],
+      "entity": null,
+      "evidence": {
+        "scan": null,
+        "artifact": null,
+        "verify": "not linked yet"
+      },
+      "status": "proposed",
+      "frame_illustration": null
+    },
+    {
+      "concept": "hud",
+      "fact_ids": [
+        "hearts-and-bar-hud"
+      ],
+      "entity": null,
+      "evidence": {
+        "scan": null,
+        "artifact": null,
+        "verify": "named in the manual; entity still unlinked"
+      },
+      "status": "proposed",
+      "frame_illustration": null
+    }
+  ]
+}

@@ -1,0 +1,89 @@
+{
+ "schema_version": 2,
+ "game": "Battletoads-Nes-v0",
+ "source": "No manual parse yet. What is known is from play and from docs/experiments.md (START pulses pass character select). A real prior needs the boxed documentation — see docs/manuals.md and docs/zero_shot_protocol.md. Until then every fact here is either observed on screen or left out.",
+ "manual": {
+  "scan_id": null,
+  "language": "en",
+  "pages_used": [],
+  "parse": {
+   "method": "none",
+   "pipeline_version": "parse_manual.py/1",
+   "judge": null,
+   "judge_log": null
+  }
+ },
+ "notes": [
+  "START pulses get through character select (docs/experiments.md).",
+  "Battletoads is hard for humans: the pipeline is being exercised on it deliberately."
+ ],
+ "facts": [
+  {
+   "id": "press-start-to-begin",
+   "kind": "menu",
+   "statement": "Press START to begin play and to pass character select.",
+   "citation": {"page": 1, "figure": "observed on screen during explore runs; not yet traced to a manual page"},
+   "status": "extracted"
+  },
+  {
+   "id": "hearts-and-bar-hud",
+   "kind": "hud",
+   "statement": "The HUD shows a 6-segment energy BAR and five HEARTS together (top-left under the score). Layout and palette drift across levels: level 1 draws white hearts and a blue bar to the right of the score; other screens stack gold hearts under a gold bar.",
+   "citation": {"page": 1, "figure": "runs/knowledge/bt_video/f_00880.png (level 1) + owner photo 2026-10-10; both cited in runs/knowledge/hud_by_level/survey.json"},
+   "status": "human_confirmed"
+  },
+  {
+   "id": "bar-six-segments",
+   "kind": "hud",
+   "statement": "The bar has 6 segments. On the owner's screenshot two hits left 4 filled and 2 empty slots still drawn.",
+   "citation": {"page": 1, "figure": "owner correction 2026-10-10: 'bar is 6 segments, two hits, two unfilled'"},
+   "status": "human_confirmed"
+  },
+  {
+   "id": "hearts-can-drop-without-bar",
+   "kind": "hazard",
+   "statement": "On level 1 a hit emptied one heart (3 filled -> 2) while the bar stayed 6/6. Hearts and bar are not the same meter, or they drop on different damage; do not assume one implies the other.",
+   "citation": {"page": 1, "figure": "measured 2026-10-15 from bt_level1_0600.state -> bt_damaged_750.state, survey.json"},
+   "status": "human_confirmed"
+  },
+  {
+   "id": "hearts-half-damage",
+   "kind": "hazard",
+   "statement": "Damage granularity is half-unit (half a heart / half a bar segment) per the owner. Live half-heart steps are not yet measured on NES frames; heart fill density drops in discrete blobs (0.84 full / 0.26 empty on level 1).",
+   "citation": {"page": 1, "figure": "owner observation 2026-10-08, corrected 2026-10-10; not yet traced to a manual page"},
+   "status": "extracted"
+  },
+  {
+   "id": "gameplay-changes-by-level",
+   "kind": "other",
+   "statement": "Levels change the gameplay itself — about ten kinds across the game (vehicle, platformer, underwater, etc.). A policy or prior that works on one level type may be inert on the next. Scope every fact by level type, the way Contra's manual scopes by scroll mode.",
+   "citation": {"page": 1, "figure": "owner observation 2026-10-15: 'levels change the gameplay, about ten kinds across the game'"},
+   "status": "human_confirmed"
+  },
+  {
+   "id": "hud-drifts-by-level",
+   "kind": "hud",
+   "statement": "HUD layout and palette drift across levels: level 1 draws white hearts and a blue bar to the right of the score; other screens stack gold hearts under a gold bar. Do not hard-code one geometry.",
+   "citation": {"page": 1, "figure": "measured 2026-10-15, survey.json + owner photo"},
+   "status": "human_confirmed"
+  }
+ ],
+ "goal": {
+  "statement": null
+ },
+ "player": {
+  "role": "toad in a beat-em-up / obstacle course",
+  "can": ["jump", "strike"],
+  "citations": []
+ },
+ "controls": {
+  "notes": [],
+  "citations": []
+ },
+ "targets": {
+  "concepts": [],
+  "realisation": {}
+ },
+ "economy": [],
+ "templates": []
+}

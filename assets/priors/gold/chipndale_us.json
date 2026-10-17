@@ -1,0 +1,30 @@
+{
+  "game": "ChipnDale-Nes-v0",
+  "scan_id": "gamesdatabase.org Chip_-n_Dale_-_Rescue_Rangers_-_1990_-_Capcom.pdf",
+  "language": "en",
+  "note": "Gold for Chip 'n Dale - Rescue Rangers, held-out A. Written 2026-10-16 from the OCR of the gamesdatabase scan, one row per sentence a person can point at in manuals/pages/ChipnDale. Pages are PDF pages from pdftoppm.",
+  "facts": [
+    {"id": "player-select", "kind": "menu", "page": 7, "statement_key": "player-select", "provenance": "us_manual", "quote_hint": "one or two players"},
+    {"id": "start-pause", "kind": "controls", "page": 9, "statement_key": "start-pause", "provenance": "us_manual", "quote_hint": "START pauses"},
+    {"id": "a-jump", "kind": "controls", "page": 8, "statement_key": "a-jump", "provenance": "us_manual", "quote_hint": "A to jump"},
+    {"id": "b-pick-throw", "kind": "controls", "page": 8, "statement_key": "b-pick-throw", "provenance": "us_manual", "quote_hint": "B to pick"},
+    {"id": "pad-duck", "kind": "controls", "page": 8, "statement_key": "pad-duck", "provenance": "us_manual", "quote_hint": "duck down"},
+    {"id": "three-hearts", "kind": "hud", "page": 9, "statement_key": "three-hearts", "provenance": "us_manual", "quote_hint": "three hearts"},
+    {"id": "flowers-50", "kind": "economy", "page": 10, "statement_key": "flowers-50", "provenance": "us_manual", "quote_hint": "50 flowers"},
+    {"id": "stars-10", "kind": "economy", "page": 10, "statement_key": "stars-10", "provenance": "us_manual", "quote_hint": "10 stars"},
+    {"id": "acorn-heart", "kind": "target", "page": 11, "statement_key": "acorn-heart", "provenance": "us_manual", "quote_hint": "Acorns"},
+    {"id": "crate-hide", "kind": "target", "page": 11, "statement_key": "crate-hide", "provenance": "us_manual", "quote_hint": "Crates"}
+  ],
+  "statement_keys": {
+    "player-select": "Choose one or two players; Press START to make your selection.",
+    "start-pause": "Pressing START pauses the game.",
+    "a-jump": "Press A to jump. Press DOWN+A to jump down.",
+    "b-pick-throw": "Press B to pick up objects; press B while holding to throw right or left; UP+B throws upwards.",
+    "pad-duck": "Press DOWN to make the character duck down.",
+    "three-hearts": "Each player starts with three hearts per character.",
+    "flowers-50": "For every 50 flowers collected, a 1-up star appears.",
+    "stars-10": "For every 10 stars collected, a 1-up star appears.",
+    "acorn-heart": "Acorns give an extra heart to the player.",
+    "crate-hide": "Crates can be used to hide in or throw towards enemies."
+  }
+}

@@ -68,9 +68,27 @@ def prior_templates(h: int) -> list:
     and it supplies the one thing neither the causal scan nor the search
     can: what the game wants done. "The exit opens when the sensor is
     destroyed" is not discoverable by walking around.
+
+    A template is one of:
+      hold:   the same buttons for `frames`
+      tap:    act every 4 frames, rest between
+      phases: a list of {hold|tap, frames} steps, run in order and then
+              repeated to fill the horizon. Chip 'n Dale's "pick up a crate
+              and throw it" is two steps, not one.
     """
     out = []
     for t in PRIOR.get("templates", ()):
+        if "phases" in t:
+            plan = []
+            for ph in t["phases"]:
+                n = int(ph.get("frames", 8))
+                if "hold" in ph:
+                    plan += [frozenset(ph["hold"])] * n
+                else:
+                    act, rest = frozenset(ph.get("tap", ())), frozenset(ph.get("rest", ()))
+                    plan += [act if k % 4 < 2 else rest for k in range(n)]
+            out.append((t["name"], (plan * (h // max(1, len(plan)) + 1))[:h]))
+            continue
         n = t.get("frames", h)
         if "hold" in t:
             plan = [frozenset(t["hold"])] * n
@@ -487,6 +505,17 @@ def game_pos(env, game: str) -> int:
         # found empirically: lo wraps at 0x6B, hi ticks at 0x6C, monotone
         # through two wraps under a scripted run to x=704
         return int(ram[108]) * 256 + int(ram[107])
+    if game.startswith("Galaga"):
+        # Single-screen shooter: no camera. Score is the progress metric.
+        # The player's score is white digits at the LOWER right (y64-75,
+        # x220-240) — not the HIGH SCORE block at the top right.
+        try:
+            f = np.asarray(env._env.em.get_screen(), dtype=np.int16)
+        except Exception:
+            return 0
+        band = f[62:78, 215:240]
+        return int(((band[..., 0] > 180) & (band[..., 1] > 180)
+                    & (band[..., 2] > 180)).sum())
     if not game.startswith("Contra"):
         # Contra's formula read on Vice gave best_x 29812 on both seeds of a
         # run that never left the intro — a number, not a position.
@@ -640,7 +669,11 @@ def begin_any(env, game: str):
     # intro. And A/B advance a cutscene's text, so only the d-pad tells a
     # cutscene from play.
     lives_tell = True
-    for i in range(3000):
+    # 3000 was enough for Contra and Vice; Battletoads' intro (PRESENTS →
+    # LICENSED → story) does not answer the pad until ~5000. Budget, not
+    # a per-game special case: the scan asks every 120 frames and stops
+    # the moment the picture answers.
+    for i in range(6000):
         d = obs.debug or {}
         if i == 120:
             lives_tell = int(d.get("lives", 0) or 0) == 0
@@ -1618,9 +1651,21 @@ def run(checkpoint: str, game: str, state: str | None, frames: int, seed: int,
         # the next level, so the metric was quietly capping every good run at
         # about 3120 and hiding whatever happened afterwards.
         if gt >= dead_until:
-            best_x = max(best_x, progress_of(d)
-                         if game.startswith("SuperMario")
-                         else game_pos(env, game))
+            if game.startswith("SuperMario"):
+                best_x = max(best_x, progress_of(d))
+            elif game.startswith("Galaga"):
+                # Single-screen shooter: no camera, no scroll. Score is the
+                # progress metric. No RAM map for this ROM; the score lives
+                # in white digits at the top-right (y30-42, x195-240) and is
+                # read as a pixel signature — it changes when the digits do.
+                # Evaluator-only; the policy never sees it.
+                f = obs.frame_rgb.astype(np.int16)
+                band = f[62:78, 215:240]
+                sc = int(((band[..., 0] > 180) & (band[..., 1] > 180)
+                          & (band[..., 2] > 180)).sum())
+                best_x = max(best_x, sc)
+            else:
+                best_x = max(best_x, game_pos(env, game))
         # Contra-family: after the last life the game sits on the continue
         # screen with the camera back at zero. A human presses START; so
         # does the runner, and the credit is counted. The level restarts

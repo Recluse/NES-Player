@@ -1,0 +1,73 @@
+{
+  "game": "ContraJ-Nes-v0",
+  "scan_id": "gamesdatabase.org Contra_1988_Konami.pdf (US NES manual, OCR 2026-10-15)",
+  "language": "en",
+  "note": "Gold for the US Contra manual, pages as OCR'd by tesseract from the gamesdatabase scan. Every row is a sentence a person can point at in the OCR text (manuals/pages/Contra_US). This is NOT the Japanese manual — scores do not mix with contra_j.json.",
+  "facts": [
+    {
+      "id": "sensor-advance",
+      "kind": "goal",
+      "page": 4,
+      "statement_key": "sensor-advance",
+      "provenance": "us_manual",
+      "quote_hint": "detection sensors"
+    },
+    {
+      "id": "extra-life",
+      "kind": "economy",
+      "page": 5,
+      "statement_key": "extra-life",
+      "provenance": "us_manual",
+      "quote_hint": "extra life"
+    },
+    {
+      "id": "fire-left",
+      "kind": "controls",
+      "page": 6,
+      "statement_key": "fire-left",
+      "provenance": "us_manual",
+      "quote_hint": "either left"
+    },
+    {
+      "id": "3d-forward-only",
+      "kind": "controls",
+      "page": 7,
+      "statement_key": "3d-forward-only",
+      "provenance": "us_manual",
+      "quote_hint": "3-dimensionally"
+    },
+    {
+      "id": "eight-zones",
+      "kind": "goal",
+      "page": 8,
+      "statement_key": "eight-zones",
+      "provenance": "us_manual",
+      "quote_hint": "eight"
+    },
+    {
+      "id": "capsule-weapons",
+      "kind": "target",
+      "page": 9,
+      "statement_key": "capsule-weapons",
+      "provenance": "us_manual",
+      "quote_hint": "capsules"
+    },
+    {
+      "id": "start-pause",
+      "kind": "controls",
+      "page": 6,
+      "statement_key": "start-pause",
+      "provenance": "us_manual",
+      "quote_hint": "PAUSE"
+    }
+  ],
+  "statement_keys": {
+    "sensor-advance": "To advance, wipe out the detection sensors at the end of each zone.",
+    "extra-life": "Every stage successfully overcome grants one extra life.",
+    "fire-left": "B shoots either left or right.",
+    "3d-forward-only": "Defense Zones 2 and 4 are 3D: pad to move, B to fire, A to jump.",
+    "eight-zones": "There are eight defense zones; the last is Red Falcon's lair.",
+    "capsule-weapons": "Destroy flying capsules and pill-box sensors to release Falcon symbols.",
+    "start-pause": "START begins the mission and pauses the action."
+  }
+}

@@ -1,0 +1,335 @@
+{
+ "schema_version": 2,
+ "game": "ChipnDale-Nes-v0",
+ "source": "LLM lexicon from gamesdatabase.org Chip n Dale Rescue Rangers manual + object_tables.py scan. Written 2026-10-16 after the parse freeze. Concept layer from the manual; realisation layer from the scan. target_px uses the generic floor rule (1/16 screen per hit point) because no stage stride is known for this game.",
+ "manual": {
+  "scan_id": "gamesdatabase.org Chip_-n_Dale_-_Rescue_Rangers_-_1990_-_Capcom.pdf",
+  "language": "en",
+  "pages_used": [
+   7,
+   8,
+   9,
+   10,
+   11
+  ],
+  "parse": {
+   "method": "llm-lexicon",
+   "pipeline_version": "llm_lexicon.py/1",
+   "judge": "MiMo as model behind the prompt"
+  }
+ },
+ "notes": [
+  "Press A to jump; DOWN+A to jump down.",
+  "Press B to pick up and throw crates; UP+B throws upwards.",
+  "Three hearts per character; acorns add a heart.",
+  "50 flowers or 10 stars buy a 1-up; crates hide or damage enemies.",
+  "Crates: pick up with B, throw with B+RIGHT or B+UP; some enemies need more than one crate."
+ ],
+ "facts": [
+  {
+   "id": "a-jump",
+   "kind": "ability",
+   "statement": "Press A to jump; press DOWN+A to jump down.",
+   "citation": {
+    "page": 8,
+    "quote": "Press A to jump."
+   },
+   "status": "human_confirmed"
+  },
+  {
+   "id": "b-pick-throw",
+   "kind": "ability",
+   "statement": "Press B to pick up objects; press B while holding to throw right or left; UP+B throws upwards.",
+   "citation": {
+    "page": 8,
+    "quote": "Press B to pick up objects."
+   },
+   "status": "human_confirmed"
+  },
+  {
+   "id": "pad-duck",
+   "kind": "ability",
+   "statement": "Press DOWN to duck.",
+   "citation": {
+    "page": 8,
+    "quote": "Press DOWN to make character duck down."
+   },
+   "status": "human_confirmed"
+  },
+  {
+   "id": "start-pause",
+   "kind": "controls",
+   "statement": "Pressing START pauses the game.",
+   "citation": {
+    "page": 9,
+    "quote": "Pressing START pauses the game."
+   },
+   "status": "human_confirmed"
+  },
+  {
+   "id": "three-hearts",
+   "kind": "hud",
+   "statement": "Each player starts with three hearts per character.",
+   "citation": {
+    "page": 9,
+    "quote": "Each player starts with three hearts per character."
+   },
+   "status": "human_confirmed"
+  },
+  {
+   "id": "flowers-50",
+   "kind": "economy",
+   "statement": "For every 50 flowers collected, a 1-up star appears.",
+   "citation": {
+    "page": 10,
+    "quote": "For every 50 flowers you collect, a 1-up star appears."
+   },
+   "status": "human_confirmed"
+  },
+  {
+   "id": "acorn-heart",
+   "kind": "collectible",
+   "statement": "Acorns give an extra heart.",
+   "citation": {
+    "page": 11,
+    "quote": "Acorns- Gives an extra heart to the player."
+   },
+   "status": "human_confirmed"
+  }
+ ],
+ "goal": {
+  "statement": "Advance through levels, collect flowers and stars, rescue the kitten from Fat Cat.",
+  "citations": [
+   {
+    "page": 12,
+    "quote": "Mandy has lost her kitten"
+   }
+  ]
+ },
+ "player": {
+  "role": "Chip or Dale, a small rescue ranger",
+  "can": [
+   "jump",
+   "duck",
+   "pick-up",
+   "throw",
+   "hide-in-crate"
+  ],
+  "citations": [
+   {
+    "page": 8,
+    "quote": "Press A to jump. Press B to pick up objects."
+   }
+  ]
+ },
+ "controls": {
+  "notes": [
+   "A jump",
+   "B pick up / throw",
+   "DOWN duck",
+   "DOWN+A jump down",
+   "START pause"
+  ],
+  "citations": [
+   {
+    "page": 8,
+    "quote": "controls for the RESCUE RANGERS are quite simple"
+   }
+  ]
+ },
+ "targets": {
+  "concepts": [
+   {
+    "name": "enemy",
+    "statement": "mechanical bulldogs, robotic rats, Fat Cat's forces",
+    "citation": {
+     "page": 12,
+     "quote": "mechanical bulldogs and robotic rats"
+    }
+   },
+   {
+    "name": "crate",
+    "statement": "crates to throw at enemies or hide in",
+    "citation": {
+     "page": 11,
+     "quote": "Crates- Use these to hide in or throw towards enemies."
+    }
+   }
+  ],
+  "realisation": {
+   "types": [
+    208,
+    152,
+    144
+   ],
+   "types_why": "object_tables.py scan: type 208 (HP 25), 152 (HP 248), 144 (HP 232) are the busy slots under fire. Which of these is a collectible vs an enemy is not yet separated — the manual names crates/acorns/enemies, the scan names slots.",
+   "found_by": "object_tables.py, types 0x400 hp 0x450"
+  }
+ },
+ "economy": [
+  {
+   "statement": "50 flowers = 1-up; 10 stars = 1-up; acorn = extra heart.",
+   "citation": {
+    "page": 10,
+    "quote": "For every 50 flowers you collect, a 1-up star appears."
+   }
+  }
+ ],
+ "templates": [
+  {
+   "name": "run right",
+   "hold": [
+    "RIGHT"
+   ],
+   "frames": 24,
+   "citation": {
+    "page": 8,
+    "quote": "Pushing RIGHT and LEFT on the controller moves the character right or left."
+   }
+  },
+  {
+   "name": "jump",
+   "tap": [
+    "A"
+   ],
+   "rest": [
+    "RIGHT"
+   ],
+   "frames": 16,
+   "citation": {
+    "page": 8,
+    "quote": "Press A to jump."
+   }
+  },
+  {
+   "name": "pick up",
+   "tap": [
+    "B"
+   ],
+   "rest": [
+    "RIGHT"
+   ],
+   "frames": 12,
+   "citation": {
+    "page": 8,
+    "quote": "Press B to pick up objects."
+   }
+  },
+  {
+   "name": "pick and throw right",
+   "phases": [
+    {
+     "tap": [
+      "B"
+     ],
+     "frames": 8
+    },
+    {
+     "tap": [
+      "B",
+      "RIGHT"
+     ],
+     "rest": [
+      "RIGHT"
+     ],
+     "frames": 12
+    }
+   ],
+   "citation": {
+    "page": 8,
+    "quote": "Press B to pick up objects. Pressing B while holding objects allows you to throw them right or left."
+   }
+  },
+  {
+   "name": "pick and throw up",
+   "phases": [
+    {
+     "tap": [
+      "B"
+     ],
+     "frames": 8
+    },
+    {
+     "tap": [
+      "B",
+      "UP"
+     ],
+     "frames": 12
+    }
+   ],
+   "citation": {
+    "page": 8,
+    "quote": "throw objects upwards by pressing UP on the control pad when you press B."
+   }
+  },
+  {
+   "name": "throw right",
+   "tap": [
+    "B",
+    "RIGHT"
+   ],
+   "rest": [
+    "RIGHT"
+   ],
+   "frames": 16,
+   "citation": {
+    "page": 8,
+    "quote": "throw them right or left."
+   }
+  },
+  {
+   "name": "run jump throw",
+   "phases": [
+    {
+     "hold": [
+      "RIGHT"
+     ],
+     "frames": 12
+    },
+    {
+     "tap": [
+      "A"
+     ],
+     "rest": [
+      "RIGHT"
+     ],
+     "frames": 8
+    },
+    {
+     "tap": [
+      "B",
+      "RIGHT"
+     ],
+     "rest": [
+      "RIGHT"
+     ],
+     "frames": 12
+    }
+   ],
+   "citation": {
+    "page": 8,
+    "quote": "moves the character right or left ... throw them right or left."
+   }
+  },
+  {
+   "name": "duck",
+   "hold": [
+    "DOWN"
+   ],
+   "frames": 12,
+   "citation": {
+    "page": 8,
+    "quote": "Press DOWN to make character duck down."
+   }
+  }
+ ],
+ "target_types": [
+  208,
+  152,
+  144
+ ],
+ "target_px": 15.625,
+ "target_px_why": "generic floor rule from zero_shot_protocol.md §5.4: 1/16 screen per hit point (256 px screen = 16 px/hp). No stage stride known for Chip n Dale; this is the frozen floor, not a tuned value.",
+ "exit_up_px": 0,
+ "exit_at_x": 0
+}
