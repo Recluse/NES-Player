@@ -5,60 +5,305 @@
  "manual": {
   "scan_id": "gamesdatabase.org Galaga_-_1985_-_Bandai.pdf",
   "language": "en",
-  "pages_used": [3, 5, 6, 7],
-  "parse": {"method": "llm-lexicon", "pipeline_version": "llm_lexicon.py/1", "judge": "MiMo as model behind the prompt"}
+  "pages_used": [
+   3,
+   5,
+   6,
+   7
+  ],
+  "parse": {
+   "method": "llm-lexicon",
+   "pipeline_version": "llm_lexicon.py/1",
+   "judge": "MiMo as model behind the prompt"
+  }
  },
  "notes": [
   "A and B both fire; START pauses; SELECT picks 1 or 2 players.",
   "Every third level is a challenge stage.",
   "Retrieve captured fighters from the tractor beam to double firepower.",
-  "Boss Galaga takes two hits."
+  "Boss Galaga takes two hits.",
+  "Agent-play 2026-10-18: track enemy formation x, hold fire, sweep under it. Score 4540 in 3 min."
  ],
  "facts": [
-  {"id": "ab-fire", "kind": "controls", "statement": "A and B fire the fighter's missiles.", "citation": {"page": 5, "quote": "A Button & B Button: use to fire the fighter's missiles."}, "status": "human_confirmed"},
-  {"id": "start-pause", "kind": "controls", "statement": "START starts/stops the game and pauses play.", "citation": {"page": 6, "quote": "press the Start button"}, "status": "human_confirmed"},
-  {"id": "player-select", "kind": "menu", "statement": "SELECT chooses one or two players.", "citation": {"page": 6, "quote": "Choose either one player or two players"}, "status": "human_confirmed"},
-  {"id": "challenge-every-3", "kind": "goal", "statement": "Every third level has a challenging stage.", "citation": {"page": 3, "quote": "every third level having a challenging stage"}, "status": "human_confirmed"},
-  {"id": "boss-two-hits", "kind": "target", "statement": "The boss Galaga takes two hits to destroy.", "citation": {"page": 7, "quote": "two hits for the player to destroy the boss Galaga"}, "status": "human_confirmed"},
-  {"id": "retrieve-fighters", "kind": "goal", "statement": "Retrieve captured fighters to double fire power.", "citation": {"page": 3, "quote": "Retrieve captured fighters ... and double your fire power"}, "status": "human_confirmed"}
+  {
+   "id": "ab-fire",
+   "kind": "controls",
+   "statement": "A and B fire the fighter's missiles.",
+   "citation": {
+    "page": 5,
+    "quote": "A Button & B Button: use to fire the fighter's missiles."
+   },
+   "status": "human_confirmed"
+  },
+  {
+   "id": "start-pause",
+   "kind": "controls",
+   "statement": "START starts/stops the game and pauses play.",
+   "citation": {
+    "page": 6,
+    "quote": "press the Start button"
+   },
+   "status": "human_confirmed"
+  },
+  {
+   "id": "player-select",
+   "kind": "menu",
+   "statement": "SELECT chooses one or two players.",
+   "citation": {
+    "page": 6,
+    "quote": "Choose either one player or two players"
+   },
+   "status": "human_confirmed"
+  },
+  {
+   "id": "challenge-every-3",
+   "kind": "goal",
+   "statement": "Every third level has a challenging stage.",
+   "citation": {
+    "page": 3,
+    "quote": "every third level having a challenging stage"
+   },
+   "status": "human_confirmed"
+  },
+  {
+   "id": "boss-two-hits",
+   "kind": "target",
+   "statement": "The boss Galaga takes two hits to destroy.",
+   "citation": {
+    "page": 7,
+    "quote": "two hits for the player to destroy the boss Galaga"
+   },
+   "status": "human_confirmed"
+  },
+  {
+   "id": "retrieve-fighters",
+   "kind": "goal",
+   "statement": "Retrieve captured fighters to double fire power.",
+   "citation": {
+    "page": 3,
+    "quote": "Retrieve captured fighters ... and double your fire power"
+   },
+   "status": "human_confirmed"
+  }
  ],
  "goal": {
   "statement": "Defeat Galaga aliens and score points; survive infinite levels with a challenge every third.",
-  "citations": [{"page": 7, "quote": "The player gets points by defeating the Galaga."}]
+  "citations": [
+   {
+    "page": 7,
+    "quote": "The player gets points by defeating the Galaga."
+   }
+  ]
  },
  "player": {
   "role": "fighter ship",
-  "can": ["fire", "move-left-right"],
-  "citations": [{"page": 5, "quote": "Use to move the fighter right or left."}]
+  "can": [
+   "fire",
+   "move-left-right"
+  ],
+  "citations": [
+   {
+    "page": 5,
+    "quote": "Use to move the fighter right or left."
+   }
+  ]
  },
  "controls": {
-  "notes": ["A and B fire", "LEFT/RIGHT move", "START pause", "SELECT players"],
-  "citations": [{"page": 5, "quote": "A Button & B Button: use to fire the fighter's missiles."}]
+  "notes": [
+   "A and B fire",
+   "LEFT/RIGHT move",
+   "START pause",
+   "SELECT players"
+  ],
+  "citations": [
+   {
+    "page": 5,
+    "quote": "A Button & B Button: use to fire the fighter's missiles."
+   }
+  ]
  },
  "targets": {
   "concepts": [
-   {"name": "galaga", "statement": "the alien attackers; worth points when defeated", "citation": {"page": 7, "quote": "points by defeating the Galaga"}},
-   {"name": "boss-galaga", "statement": "the boss Galaga, two hits to destroy", "citation": {"page": 7, "quote": "two hits for the player to destroy the boss Galaga"}},
-   {"name": "captured-fighter", "statement": "retrieve to double fire power", "citation": {"page": 3, "quote": "Retrieve captured fighters"}}
+   {
+    "name": "galaga",
+    "statement": "the alien attackers; worth points when defeated",
+    "citation": {
+     "page": 7,
+     "quote": "points by defeating the Galaga"
+    }
+   },
+   {
+    "name": "boss-galaga",
+    "statement": "the boss Galaga, two hits to destroy",
+    "citation": {
+     "page": 7,
+     "quote": "two hits for the player to destroy the boss Galaga"
+    }
+   },
+   {
+    "name": "captured-fighter",
+    "statement": "retrieve to double fire power",
+    "citation": {
+     "page": 3,
+     "quote": "Retrieve captured fighters"
+    }
+   }
   ],
   "realisation": {
-   "types": [198, 127, 113, 40, 9],
+   "types": [
+    198,
+    127,
+    113,
+    40,
+    9
+   ],
    "types_why": "object_tables.py scan: types 198/127/113/40/9 have HP 149/103/101/248/20 in the live slots. Which is boss vs minion is not separated; the manual names boss Galaga and regular Galaga.",
    "found_by": "object_tables.py, types 0x680 hp 0x290"
   }
  },
  "economy": [],
  "templates": [
-  {"name": "fire", "tap": ["B"], "rest": [], "frames": 6,
-   "citation": {"page": 5, "quote": "use to fire the fighter's missiles."}},
-  {"name": "fire A", "tap": ["A"], "rest": [], "frames": 6,
-   "citation": {"page": 5, "quote": "A Button & B Button: use to fire"}},
-  {"name": "strafe left", "tap": ["LEFT"], "rest": [], "frames": 8,
-   "citation": {"page": 5, "quote": "Move to the left."}},
-  {"name": "strafe right", "tap": ["RIGHT"], "rest": [], "frames": 8,
-   "citation": {"page": 5, "quote": "Move to the right."}}
+  {
+   "name": "track and fire",
+   "phases": [
+    {
+     "tap": [
+      "B"
+     ],
+     "rest": [],
+     "frames": 8
+    },
+    {
+     "tap": [
+      "B",
+      "LEFT"
+     ],
+     "rest": [
+      "LEFT"
+     ],
+     "frames": 8
+    },
+    {
+     "tap": [
+      "B"
+     ],
+     "rest": [],
+     "frames": 8
+    },
+    {
+     "tap": [
+      "B",
+      "RIGHT"
+     ],
+     "rest": [
+      "RIGHT"
+     ],
+     "frames": 8
+    }
+   ],
+   "citation": {
+    "page": 5,
+    "quote": "A and B fire; move left or right"
+   },
+   "found_by": "agent-play 2026-10-18: track enemy x and fire"
+  },
+  {
+   "name": "sweep left firing",
+   "phases": [
+    {
+     "hold": [
+      "B",
+      "LEFT"
+     ],
+     "frames": 20
+    },
+    {
+     "hold": [
+      "B"
+     ],
+     "frames": 8
+    }
+   ],
+   "citation": {
+    "page": 5,
+    "quote": "Move to the left"
+   },
+   "found_by": "agent-play"
+  },
+  {
+   "name": "sweep right firing",
+   "phases": [
+    {
+     "hold": [
+      "B",
+      "RIGHT"
+     ],
+     "frames": 20
+    },
+    {
+     "hold": [
+      "B"
+     ],
+     "frames": 8
+    }
+   ],
+   "citation": {
+    "page": 5,
+    "quote": "Move to the right"
+   },
+   "found_by": "agent-play"
+  },
+  {
+   "name": "aligned barrage",
+   "hold": [
+    "B"
+   ],
+   "frames": 32,
+   "citation": {
+    "page": 5,
+    "quote": "A and B fire missiles"
+   },
+   "found_by": "agent-play: sit under enemy and hold fire"
+  },
+  {
+   "name": "dodge and fire",
+   "phases": [
+    {
+     "tap": [
+      "A"
+     ],
+     "rest": [],
+     "frames": 4
+    },
+    {
+     "hold": [
+      "B",
+      "LEFT"
+     ],
+     "frames": 12
+    },
+    {
+     "hold": [
+      "B",
+      "RIGHT"
+     ],
+     "frames": 12
+    }
+   ],
+   "citation": {
+    "page": 3,
+    "quote": "defend against missiles and suicide attacks"
+   },
+   "found_by": "agent-play: dodge while shooting"
+  }
  ],
- "target_types": [198, 127, 113, 40, 9],
+ "target_types": [
+  198,
+  127,
+  113,
+  40,
+  9
+ ],
  "target_px": 15.625,
  "target_px_why": "generic floor rule from zero_shot_protocol.md §5.4: 1/16 screen per hit point. Single-screen shooter has no scroll stride; score is the real metric and is read from the screen by HudReader, not priced here.",
  "exit_up_px": 0,

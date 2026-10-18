@@ -151,8 +151,8 @@ nothing.
 | 6. World model | done |
 | 7. Planner | done |
 | 8. Multi-game pretraining | done |
-| 9. Online adaptation during play | not started |
-| 10. Skill library | not started |
+| 9. Online adaptation during play | done — self-imitation on own rollouts |
+| 10. Skill library | done — 10 abilities, 4 compositions |
 
 ## 9. After the MVP
 

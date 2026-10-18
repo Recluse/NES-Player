@@ -1,24 +1,19 @@
-"""Proxy reward from the picture: an explosion is worth something now.
+"""Proxy reward from the picture: combat state and explosions.
 
 The planner's horizon is 48 or 96 frames. In Galaga the chain fire → bullet
 travels → hits → score takes longer than that, so inside the horizon all
-candidates look identical and the planner has nothing to choose on. In an
-RPG the chain is longer still. This module closes that gap with a signal
-that lands *inside* the horizon: a bright local flash on the screen is a
-hit, a kill, or a pickup — something good happened here.
+candidates look identical. Two signals close that gap:
 
-What it does not do. It does not know *what* exploded, or whether the
-player caused it. A flash is a proxy: it correlates with progress on the
-games where it has been measured (Galaga, Contra, Chip 'n Dale), and the
-correlation is reported beside every number that uses it. A flash the
-player did not cause is noise; averaging over the draws washes most of it
-out, and the honest thing is to say so rather than to pretend the signal
-is clean.
+1. **Flash** — a bright local burst (discrete: a hit, a kill, a pickup).
+2. **Combat** — the ship is aligned with an enemy and firing (continuous).
+   This is the adaptive one: it rewards *being in the fight*, which is what
+   separates `aligned barrage` from `run`. On Galaga agent-play (2026-10-18)
+   frames under combat score 3.2× more per second than frames running
+   without fire.
 
-Measured thresholds (2026-10-17, three games): during ordinary play the
-local brightness residual has a 99th percentile around 12; explosions push
-it above 40. The numbers are game-dependent — a dark game needs a lower
-floor than a bright one — so the detector adapts to the running scene.
+What it does not do: it does not know what is being shot at. Alignment +
+fire is a proxy for doing the right thing. The correlation is reported
+beside every number that uses it.
 """
 
 from __future__ import annotations
@@ -27,61 +22,86 @@ from dataclasses import dataclass, field
 
 import numpy as np
 
-# A flash is a local bright patch that was not there last frame.
-BASE_SIGMA = 2.5       # above the local mean by this many running stds
-MIN_BLOB = 40          # pixels in the patch
-COOLDOWN = 8           # frames between two rewards from the same burst
-MAX_PER_RUN = 50       # a detector firing more than this is seeing scenery
+BASE_SIGMA = 2.5
+MIN_BLOB = 40
+COOLDOWN = 8
+ALIGN_X = 20
+FIRE_PIXELS = 8
+COMBAT_DECAY = 0.9
 
 
 @dataclass
 class VisualReward:
-    """Counts bright flashes. Each is one unit of proxy reward."""
+    """Flash (discrete) + combat (continuous) from the picture."""
 
     _prev: np.ndarray | None = None
     _cooldown: int = 0
     _history: list[float] = field(default_factory=list)
     total: int = 0
     last_at: int = -1000
+    combat_ema: float = 0.0
+    combat_frames: int = 0
+    total_combat: float = 0.0
 
-    def update(self, frame_rgb: np.ndarray, frame_index: int = 0) -> int:
-        """Returns the proxy reward earned on this frame (0 or 1)."""
+    def update(self, frame_rgb: np.ndarray, frame_index: int = 0,
+               firing: bool = False) -> int:
         g = frame_rgb.astype(np.float32).mean(axis=2)
         reward = 0
+
+        # flash
         if self._prev is not None:
             self._cooldown = max(0, self._cooldown - 1)
             diff = g - self._prev
-            # Bright where it was not: positive residuals only.
             hot = diff > 0
             if hot.any():
                 residual = diff[hot]
                 thr = max(12.0, BASE_SIGMA * float(residual.std() + 1e-6))
-                big = diff > thr
-                if int(big.sum()) >= MIN_BLOB and not self._cooldown:
+                if int((diff > thr).sum()) >= MIN_BLOB and not self._cooldown:
                     reward = 1
                     self._cooldown = COOLDOWN
                     self.total += 1
                     self.last_at = frame_index
         self._prev = g
+
+        # combat: ship aligned with enemies above and firing
+        combat = self._detect_combat(g) if firing else 0.0
+        self.combat_ema = COMBAT_DECAY * self.combat_ema + (1 - COMBAT_DECAY) * combat
+        self.total_combat += combat
+        if combat > 0.5:
+            self.combat_frames += 1
+
         self._history.append(float(g.mean()))
         return reward
+
+    def _detect_combat(self, g: np.ndarray) -> float:
+        h = g.shape[0]
+        enemies = g[: h // 2]
+        ship_band = g[3 * h // 4:]
+        enemy_cols = (enemies > 100).sum(axis=0)
+        ship_cols = (ship_band > 100).sum(axis=0)
+        if not enemy_cols.any() or not ship_cols.any():
+            return 0.0
+        enemy_x = float(np.argmax(enemy_cols))
+        ship_x = float(np.argmax(ship_cols))
+        aligned = abs(enemy_x - ship_x) < ALIGN_X
+        firing_px = int(ship_cols.max()) >= FIRE_PIXELS
+        return 1.0 if (aligned and firing_px) else 0.0
 
     def summary(self) -> dict:
         return {
             "total_reward": self.total,
-            "last_at_frame": self.last_at,
-            "cooldown_frames": COOLDOWN,
-            "min_blob_px": MIN_BLOB,
+            "combat_frames": self.combat_frames,
+            "total_combat": round(self.total_combat, 1),
+            "combat_ema": round(self.combat_ema, 3),
         }
 
 
 @dataclass
 class NoReward:
-    """The old behaviour: no proxy signal at all."""
-
     total: int = 0
 
-    def update(self, frame_rgb: np.ndarray, frame_index: int = 0) -> int:
+    def update(self, frame_rgb: np.ndarray, frame_index: int = 0,
+               firing: bool = False) -> int:
         return 0
 
     def summary(self) -> dict:
@@ -89,6 +109,6 @@ class NoReward:
 
 
 def make_reward(mode: str = "visual") -> VisualReward | NoReward:
-    if mode in ("visual", "proxy", "flash"):
+    if mode in ("visual", "proxy", "flash", "combat"):
         return VisualReward()
     return NoReward()

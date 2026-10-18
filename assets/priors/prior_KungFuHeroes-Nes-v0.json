@@ -1,0 +1,66 @@
+{
+ "schema_version": 2,
+ "game": "KungFuHeroes-Nes-v0",
+ "source": "LLM lexicon from archive.org kung-fu-heroes-nes-hiresscans (searchable PDF) + controllability.py + object_tables.py. Written 2026-10-18 after the parse freeze for this pair.",
+ "manual": {
+  "scan_id": "archive.org kung-fu-heroes-nes-hiresscans",
+  "language": "en",
+  "pages_used": [4, 5, 6, 9],
+  "parse": {"method": "llm-lexicon", "pipeline_version": "llm_lexicon.py/1", "judge": "MiMo as model behind the prompt"}
+ },
+ "notes": [
+  "A punches; B + direction does the Moon Sault Kick.",
+  "8 castles × 4 rooms = 32 scenes; enter the open door for the next.",
+  "Avoid holes, ponds, enemy spears and guns."
+ ],
+ "facts": [
+  {"id": "a-punch", "kind": "ability", "statement": "A punches.", "citation": {"page": 5, "quote": "Press to punch."}, "status": "human_confirmed"},
+  {"id": "b-moon-sault", "kind": "ability", "statement": "B with a direction does the Moon Sault Kick.", "citation": {"page": 5, "quote": "Moon Sault Kick"}, "status": "human_confirmed"},
+  {"id": "pad-attack-direction", "kind": "controls", "statement": "Control pad moves and attacks in the chosen direction.", "citation": {"page": 5, "quote": "punch or kick"}, "status": "human_confirmed"},
+  {"id": "start-pause", "kind": "controls", "statement": "START begins and pauses the game.", "citation": {"page": 4, "quote": "press the START BUTTON"}, "status": "human_confirmed"},
+  {"id": "eight-castles", "kind": "goal", "statement": "8 castles with 4 rooms each (32 scenes).", "citation": {"page": 6, "quote": "8 different castles"}, "status": "human_confirmed"},
+  {"id": "enter-door", "kind": "exit", "statement": "Enter the open castle door for the next scene.", "citation": {"page": 6, "quote": "castle door opens"}, "status": "human_confirmed"},
+  {"id": "avoid-holes", "kind": "hazard", "statement": "Avoid falling into holes or ponds.", "citation": {"page": 9, "quote": "falling into the holes"}, "status": "human_confirmed"},
+  {"id": "enemy-weapons", "kind": "hazard", "statement": "Avoid enemy spears and guns.", "citation": {"page": 9, "quote": "spear and gun"}, "status": "human_confirmed"}
+ ],
+ "goal": {
+  "statement": "Fight through 8 castles, save Princess Min-Min, recover the 10 treasures.",
+  "citations": [{"page": 5, "quote": "Monsters have taken Princess Min-Min"}]
+ },
+ "player": {
+  "role": "Kung-Fu Master (Jacky or Lee)",
+  "can": ["punch", "moon-sault-kick", "move-and-attack"],
+  "citations": [{"page": 5, "quote": "BUTTON A: Press to punch"}]
+ },
+ "controls": {
+  "notes": ["A punch", "B+direction Moon Sault Kick", "pad moves and attacks in direction", "START pause"],
+  "citations": [{"page": 5, "quote": "CONTROLLING THE ACTION"}]
+ },
+ "targets": {
+  "concepts": [
+   {"name": "enemy", "statement": "monsters with spears and guns", "citation": {"page": 9, "quote": "spear and gun wielded by the enemies"}},
+   {"name": "door", "statement": "castle door opens to the next scene", "citation": {"page": 6, "quote": "castle door opens"}}
+  ],
+  "realisation": {
+   "types": [62, 10, 47, 194, 46, 130, 45, 173],
+   "types_why": "object_tables.py scan: types 0x080/HP 0x0e0, 16 slots. HP 26→8 under B+UP, 88→72 under B+DOWN.",
+   "found_by": "object_tables.py, types 0x080 hp 0x0e0"
+  }
+ },
+ "economy": [],
+ "templates": [
+  {"name": "punch", "tap": ["A"], "rest": [], "frames": 8,
+   "citation": {"page": 5, "quote": "Press to punch"}},
+  {"name": "moon sault", "tap": ["B", "RIGHT"], "rest": ["RIGHT"], "frames": 16,
+   "citation": {"page": 5, "quote": "Moon Sault Kick"}},
+  {"name": "run punch", "phases": [
+    {"hold": ["RIGHT"], "frames": 12},
+    {"tap": ["A"], "rest": ["RIGHT"], "frames": 8}
+  ], "citation": {"page": 5, "quote": "move... punch or kick to the right"}}
+ ],
+ "target_types": [62, 10, 47, 194, 46, 130, 45, 173],
+ "target_px": 15.625,
+ "target_px_why": "generic floor rule from zero_shot_protocol.md §5.4. Position byte 1779 found by controllability.py.",
+ "exit_up_px": 0,
+ "exit_at_x": 0
+}

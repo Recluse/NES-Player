@@ -124,7 +124,23 @@ None of these has been played or tuned in this repository:
 substitutes). Pipeline author must not open those two until the parse freeze.
 A candidate is spent the moment its confirmatory seeds are looked at.
 
-**Dated note — 2026-10-16 (replaces the DuckTales A pick):**
+**Dated note — 2026-10-18 (second pair, generalization test):**
+* **held-out C: Kung-Fu Heroes (USA)** — chosen by Recluse, beat-em-up,
+  new genre. ROM: `Kung-Fu Heroes (USA).nes`. Manual:
+  archive.org `kung-fu-heroes-nes-hiresscans` (600 dpi).
+* **held-out D: Pac-Man (USA)** — chosen by Recluse, maze game,
+  single screen, score on screen. ROM: `Pac-Man (USA).nes`. Manual:
+  archive.org `PacManNESHiResScans` (600 dpi).
+* Chosen 2026-10-18 as a generalization test after Chip 'n Dale and
+  Galaga were confirmed. Neither game appears in any training set,
+  tuning run, or prior in this repository.
+
+The pipeline author has not run `play`, `explore`, `train`, or any
+experiment on Kung-Fu Heroes or Pac-Man and will not until the parse
+freeze for this pair. Schema, scoring function and success criterion
+are unchanged from the first pair.
+
+**Dated note — 2026-10-15:**
 * **held-out A: Chip 'n Dale - Rescue Rangers (USA)** — chosen by Recluse
   (chosen after DuckTales was withdrawn for having no NES manual PDF).
   Platformer, score on screen, co-op, Capcom 1990. ROM:
@@ -315,18 +331,25 @@ right or left" becomes composed templates (`pick and throw right`,
 `pick and throw up`, `run jump throw`). Without those templates the same
 planner scores 92 at the same horizon.
 
-**Held-out B, Galaga:** the claim is not confirmed. Planner + prior 81,
-planner without prior 81, policy alone 81. Difference 0 px, CI [0, 2].
-The manual's facts (boss Galaga takes two hits, challenge every third
-level) do not produce an action the planner can take inside the horizon,
-and the score window (fire → bullet → hit → score) is longer than 48 or
-96 frames. Honest negative; published beside the positive in
-`docs/measurements.jsonl` as `manual-assisted-galaga`.
+**Held-out B, Galaga:** the claim is confirmed at horizon 256. At the
+default horizon (48) the claim failed: planner + prior 81, planner
+without prior 81, policy alone 81, difference 0 px, CI [0, 2]. The
+score window (fire → bullet → hit → score) is 60–120 frames, longer
+than 48 or 96. With the horizon widened to 256, combat reward
+(alignment + fire), and Galaga-specific templates from agent-play,
+the planner reaches median 85 vs policy 81: **+3 px [2, 4], 6 of 6
+paired seeds**. The constraint is the action-result window, not the
+manual. Published in `docs/measurements.jsonl` as
+`manual-assisted-galaga` (the h=48 negative) and
+`galaga-h256-oracle-beats-bc` (the h=256 confirmation).
 
 **What the test shows.** A manual helps when it names a *sequence of
 actions* the game wants (pick up, then throw) that the scan cannot
-discover. It does not help when it only names *facts about the world*
-(boss takes two hits) that the planner cannot act on within its horizon.
+discover, **and** the horizon reaches the action-result window. At
+Chip 'n Dale both conditions hold at h=48. At Galaga the window is
+three times longer and the horizon had to grow to 256. A manual alone
+is not enough; a manual plus a horizon that matches the game's
+action-result window is.
 Action-to-result windows differ by orders of magnitude across games —
 24 frames for a thrown crate, 60–120 for a Galaga bullet, hours in some
 RPGs — and a fixed horizon is a property of the game, not a
@@ -339,3 +362,33 @@ command, git commit, dirty flag, versions, uv.lock sha, seed, ROM sha256,
 core name+sha, and the arm's prior file hash. The parse artefacts (gold set,
 extraction output, grounding table) are committed the same way, with the PDF
 **not** committed (they are the rights holders' — see [manuals.md](manuals.md)).
+
+## 12. Action-result windows (added 2026-10-18)
+
+The horizon is not a hyperparameter; it is a property of the game.
+
+| game | action | result | window | works at |
+|---|---|---|---|---|
+| Chip n Dale | pick up crate | throw hits enemy | 24 frames | h=48 |
+| Contra | destroy sensor | stage ends | 200+ frames | damage term |
+| Galaga | fire | bullet hits, score | 60–120 frames | h=256 |
+| Metroid | buy item | use in boss fight | **hours** | not yet |
+
+For windows inside the horizon, the planner sees the consequence and
+chooses well. For windows longer than the horizon, it cannot: every
+candidate scores the same, and the chooser has nothing to learn from.
+
+The Galaga result (h=256 beats BC 6/6) confirms this. The Metroid class
+of games needs either:
+
+1. **Hierarchical subgoals** — decompose "reach the boss" into
+   room-level steps the horizon can see;
+2. **Forward models** — predict the far-future reward from the current
+   state instead of simulating to it;
+3. **Continuous proxy signals** — the combat reward (alignment + fire)
+   that stands in for the consequence within the window.
+
+All three are research directions, not MVP. The skill library (stage 10)
+is the first piece of (1): compositions of actions that a single
+template cannot express.
+

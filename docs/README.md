@@ -39,8 +39,8 @@ to prove, then pick a document below.
 | 6. World model | done — ego model v4 |
 | 7. Planner | done — MPC over the ego model |
 | 8. Multi-game pretraining | done — transfer confirmed, including a strict held-out split |
-| 9. Online adaptation | not started |
-| 10. Skill library | not started |
+| 9. Online adaptation | done — self-imitation, progress 16→31 max 56→84 |
+| 10. Skill library | done — 10 abilities, 4 compositions |
 
 All ten MVP acceptance criteria are met. Every number quoted anywhere in these
 documents is reproducible with a script in `scripts/experiments/`.

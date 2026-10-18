@@ -1,0 +1,82 @@
+{
+  "game": "PacMan-Nes-v0",
+  "scan_id": "archive.org PacManNESHiResScans, Manual (Searchable).pdf",
+  "language": "en",
+  "note": "Gold for Pac-Man, held-out D. Pages are PDF pages from pdftoppm. Written 2026-10-18 from the searchable PDF text layer.",
+  "facts": [
+    {
+      "id": "eat-dots",
+      "kind": "goal",
+      "page": 4,
+      "statement_key": "eat-dots",
+      "provenance": "us_manual",
+      "quote_hint": "eating everything in sight"
+    },
+    {
+      "id": "avoid-ghosts",
+      "kind": "hazard",
+      "page": 4,
+      "statement_key": "avoid-ghosts",
+      "provenance": "us_manual",
+      "quote_hint": "avoiding being gobbled"
+    },
+    {
+      "id": "energizer-ghosts",
+      "kind": "target",
+      "page": 5,
+      "statement_key": "energizer-ghosts",
+      "provenance": "us_manual",
+      "quote_hint": "energizer"
+    },
+    {
+      "id": "ghost-combo",
+      "kind": "economy",
+      "page": 6,
+      "statement_key": "ghost-combo",
+      "provenance": "us_manual",
+      "quote_hint": "200 points"
+    },
+    {
+      "id": "fruit-bonus",
+      "kind": "economy",
+      "page": 6,
+      "statement_key": "fruit-bonus",
+      "provenance": "us_manual",
+      "quote_hint": "cherry"
+    },
+    {
+      "id": "extra-life-10000",
+      "kind": "economy",
+      "page": 6,
+      "statement_key": "extra-life-10000",
+      "provenance": "us_manual",
+      "quote_hint": "10,000 points"
+    },
+    {
+      "id": "three-lives",
+      "kind": "hud",
+      "page": 5,
+      "statement_key": "three-lives",
+      "provenance": "us_manual",
+      "quote_hint": "three lives"
+    },
+    {
+      "id": "player-select",
+      "kind": "menu",
+      "page": 7,
+      "statement_key": "player-select",
+      "provenance": "us_manual",
+      "quote_hint": "one-player"
+    }
+  ],
+  "statement_keys": {
+    "eat-dots": "Eat everything in sight (dots) to clear the maze.",
+    "avoid-ghosts": "Avoid being caught by Blinky, Pinky, Inky and Clyde.",
+    "energizer-ghosts": "After eating an energizer, ghosts turn blue and can be eaten.",
+    "ghost-combo": "Ghosts are worth 200/400/800/1600 points in one energizer combo.",
+    "fruit-bonus": "Fruit bonuses increase per maze: cherry 100, strawberry 300, orange 500.",
+    "extra-life-10000": "Scoring 10,000 points awards an additional life.",
+    "three-lives": "Pac-Man starts with three lives.",
+    "player-select": "SELECT chooses one-player or two-player game."
+  }
+}

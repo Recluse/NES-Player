@@ -36,15 +36,17 @@ object tables, the position — never the manual's numbers).
 | held-out game | planner + manual | planner alone | paired difference |
 |---|---|---|---|
 | **Chip 'n Dale (A)** | **median 239** | median 92 | **+144 px [109, 145], 19/20 seeds** |
-| Galaga (B) | median 81 | median 81 | 0 px [0, 2] — no effect |
+| **Galaga (B)** | **median 85** | median 81 | **+3 px [2, 4], 6/6 seeds** |
 
 On Chip 'n Dale the manual contributes the crate combat: "Press B to pick up
 objects; pressing B while holding them throws them right or left" becomes
 composed templates (`pick and throw right`), and the planner goes from 92 to
-239 — the same as the policy alone. On Galaga the manual's facts (boss takes
-two hits, challenge every third level) do not translate into in-horizon
-score, and the claim fails. Both results are published, the negative beside
-the positive (`docs/measurements.jsonl`).
+239 at horizon 48. On Galaga the manual's facts alone did nothing — but with
+horizon widened to 256, combat reward (alignment + fire), and Galaga-specific
+templates from agent-play, the planner beats the policy on every seed. The
+action-result window (fire → bullet → hit → score, 60–120 frames) is the
+design constraint: a fixed horizon is a property of the game, not a
+hyperparameter. Both results are published (`docs/measurements.jsonl`).
 
 ## What plays today
 

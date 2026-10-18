@@ -236,6 +236,7 @@ def anchor_pos(env, game: str, pos0: int) -> None:
 DEATH = -1e9        # a plan that dies is not compared on distance
 PROXY_REWARD = None   # --proxy-reward: VisualReward detector, None = off
 PROXY_PX = 20         # --proxy-px: pixels of value per flash
+COMBAT_PX = 8         # --combat-px: pixels of value per unit of combat EMA
 
 
 def templates(h: int):
@@ -507,15 +508,17 @@ def game_pos(env, game: str) -> int:
         # found empirically: lo wraps at 0x6B, hi ticks at 0x6C, monotone
         # through two wraps under a scripted run to x=704
         return int(ram[108]) * 256 + int(ram[107])
-    if game.startswith("Galaga"):
-        # Single-screen shooter: no camera. Score is the progress metric.
-        # The player's score is white digits at the LOWER right (y64-75,
-        # x220-240) — not the HIGH SCORE block at the top right.
+    if game.startswith("Galaga") or game.startswith("PacMan"):
+        # Single-screen shooter or maze: no camera. Score is the progress
+        # metric. Score digits live in a screen band; read as pixel count.
         try:
             f = np.asarray(env._env.em.get_screen(), dtype=np.int16)
         except Exception:
             return 0
-        band = f[62:78, 215:240]
+        if game.startswith("PacMan"):
+            band = f[8:24, 195:240]   # Pac-Man score is top-right
+        else:
+            band = f[62:78, 215:240]  # Galaga score is lower-right
         return int(((band[..., 0] > 180) & (band[..., 1] > 180)
                     & (band[..., 2] > 180)).sum())
     if not game.startswith("Contra"):
@@ -839,15 +842,18 @@ def _eval_job(job: dict) -> dict:
     # as a loss, or the prior punishes the very advance it exists to buy
     hp_root = -prior_value(env._env.get_ram()) if PRIOR else 0
     proxy_hits = 0
+    combat_total = 0.0
     for k in range(job["span"]):
         prev = o.frame_rgb if (visited is not None and o is not None) else None
         o = env.step_buttons([job["plan"][k]])
         used += 1
         if PROXY_REWARD is not None:
-            # A bright flash inside the horizon is a proxy for a hit. It
-            # exists because fire → bullet → hit → score is longer than
-            # this window; without it all candidates score the same.
-            proxy_hits += PROXY_REWARD.update(o.frame_rgb, k)
+            # Flash = discrete hit; combat = aligned + firing. The combat
+            # signal is what teaches the chooser the difference between
+            # `aligned barrage` and `run`.
+            firing = bool(job["plan"][k] & {"B", "A"})
+            proxy_hits += PROXY_REWARD.update(o.frame_rgb, k, firing=firing)
+            combat_total += PROXY_REWARD.combat_ema
         if hero is not None and k % 2 == 0:
             hero = hero_xy(env._env.get_ram(), hero) or hero
         if visited is not None and k % 8 == 0:
@@ -859,7 +865,7 @@ def _eval_job(job: dict) -> dict:
     if died or not job["tail"]:
         val = DEATH if died else game_value(env, game) - x0
         if not died and PROXY_REWARD is not None:
-            val += PROXY_PX * proxy_hits
+            val += PROXY_PX * proxy_hits + COMBAT_PX * combat_total
         if died and job.get("death_price"):
             # under a finite price a death in the prefix is what it cost,
             # not a veto — otherwise the price only ever applies to tails
@@ -1663,7 +1669,7 @@ def run(checkpoint: str, game: str, state: str | None, frames: int, seed: int,
         if gt >= dead_until:
             if game.startswith("SuperMario"):
                 best_x = max(best_x, progress_of(d))
-            elif game.startswith("Galaga"):
+            elif game.startswith("Galaga") or game.startswith("PacMan"):
                 # Single-screen shooter: no camera, no scroll. Score is the
                 # progress metric. No RAM map for this ROM; the score lives
                 # in white digits at the top-right (y30-42, x195-240) and is
@@ -1910,6 +1916,8 @@ def main() -> int:
                          "exceeds the horizon)")
     ap.add_argument("--proxy-px", type=int, default=20,
                     help="pixels of value per proxy flash (default 20)")
+    ap.add_argument("--combat-px", type=int, default=8,
+                    help="pixels of value per unit of combat EMA (default 8)")
     ap.add_argument("--two-step", action="store_true",
                     help="search ordered pairs of the five behaviours at half "
                          "the horizon each (25 pairs + the policy's own "
@@ -1992,13 +2000,15 @@ def main() -> int:
               "targets", PRIOR.get("target_types"))
     WEAPON_MAIN = args.weapon_px
     WALL_CLIP = not args.wall_unclipped
-    global PROXY_REWARD, PROXY_PX
+    global PROXY_REWARD, PROXY_PX, COMBAT_PX
     PROXY_PX = args.proxy_px
+    COMBAT_PX = args.combat_px
     PROXY_REWARD = None
     if args.proxy_reward:
         from nes_player.perception.visual_reward import VisualReward
         PROXY_REWARD = VisualReward()
-        print("proxy-reward: on,", PROXY_PX, "px per flash")
+        print("proxy-reward: on,", PROXY_PX, "px per flash,",
+              COMBAT_PX, "px per combat unit")
     if args.pos_scan_file:
         rep_ = json.loads(Path(args.pos_scan_file).read_text())
         SCAN_POS[args.game] = rep_["position_bytes_consistent"]

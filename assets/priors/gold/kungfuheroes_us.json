@@ -1,0 +1,28 @@
+{
+  "game": "KungFuHeroes-Nes-v0",
+  "scan_id": "archive.org kung-fu-heroes-nes-hiresscans, Manual (Searchable).pdf",
+  "language": "en",
+  "note": "Gold for Kung-Fu Heroes, held-out C. Written 2026-10-18 from the searchable PDF text layer. Pages are PDF pages.",
+  "facts": [
+    {"id": "player-select", "kind": "menu", "page": 4, "statement_key": "player-select", "provenance": "us_manual", "quote_hint": "1 player or 2 player"},
+    {"id": "start-pause", "kind": "controls", "page": 4, "statement_key": "start-pause", "provenance": "us_manual", "quote_hint": "press the START BUTTON"},
+    {"id": "a-punch", "kind": "ability", "page": 5, "statement_key": "a-punch", "provenance": "us_manual", "quote_hint": "Press to punch"},
+    {"id": "b-moon-sault", "kind": "ability", "page": 5, "statement_key": "b-moon-sault", "provenance": "us_manual", "quote_hint": "Moon Sault Kick"},
+    {"id": "pad-attack-direction", "kind": "controls", "page": 5, "statement_key": "pad-attack-direction", "provenance": "us_manual", "quote_hint": "punch or kick"},
+    {"id": "eight-castles", "kind": "goal", "page": 6, "statement_key": "eight-castles", "provenance": "us_manual", "quote_hint": "8 different castles"},
+    {"id": "enter-door", "kind": "exit", "page": 6, "statement_key": "enter-door", "provenance": "us_manual", "quote_hint": "castle door opens"},
+    {"id": "avoid-holes", "kind": "hazard", "page": 9, "statement_key": "avoid-holes", "provenance": "us_manual", "quote_hint": "falling into the holes"},
+    {"id": "enemy-weapons", "kind": "hazard", "page": 9, "statement_key": "enemy-weapons", "provenance": "us_manual", "quote_hint": "spear and gun"}
+  ],
+  "statement_keys": {
+    "player-select": "SELECT chooses 1 or 2 player.",
+    "start-pause": "START begins and pauses the game.",
+    "a-punch": "A punches.",
+    "b-moon-sault": "B + direction does the Moon Sault Kick.",
+    "pad-attack-direction": "Control pad moves and attacks in the chosen direction.",
+    "eight-castles": "There are 8 castles with 4 rooms each (32 scenes).",
+    "enter-door": "Enter the open castle door to reach the next scene.",
+    "avoid-holes": "Avoid falling into holes or ponds.",
+    "enemy-weapons": "Avoid the spear and gun wielded by enemies."
+  }
+}

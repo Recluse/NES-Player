@@ -1,0 +1,69 @@
+{
+ "schema_version": 2,
+ "game": "PacMan-Nes-v0",
+ "source": "LLM lexicon from archive.org PacManNESHiResScans (searchable PDF) + controllability.py + object_tables.py. Written 2026-10-18 after the parse freeze for this pair. Single-screen maze: score is the metric.",
+ "manual": {
+  "scan_id": "archive.org PacManNESHiResScans",
+  "language": "en",
+  "pages_used": [4, 5, 6, 7],
+  "parse": {"method": "llm-lexicon", "pipeline_version": "llm_lexicon.py/1", "judge": "MiMo as model behind the prompt"}
+ },
+ "notes": [
+  "Eat dots, avoid ghosts, use energizers to eat them back.",
+  "Combo: 200/400/800/1600 per energizer run. Fruit: cherry 100 → orange 500.",
+  "10000 points = extra life. Start with 3 lives."
+ ],
+ "facts": [
+  {"id": "eat-dots", "kind": "goal", "statement": "Eat everything in sight (dots) to clear the maze.", "citation": {"page": 4, "quote": "eating everything in sight"}, "status": "human_confirmed"},
+  {"id": "avoid-ghosts", "kind": "hazard", "statement": "Avoid being caught by Blinky, Pinky, Inky and Clyde.", "citation": {"page": 4, "quote": "avoiding being gobbled"}, "status": "human_confirmed"},
+  {"id": "energizer-ghosts", "kind": "target", "statement": "After an energizer, ghosts turn blue and can be eaten.", "citation": {"page": 5, "quote": "energizer"}, "status": "human_confirmed"},
+  {"id": "ghost-combo", "kind": "economy", "statement": "Ghosts are worth 200/400/800/1600 points in one combo.", "citation": {"page": 6, "quote": "200 points"}, "status": "human_confirmed"},
+  {"id": "fruit-bonus", "kind": "economy", "statement": "Fruit bonuses: cherry 100, strawberry 300, orange 500.", "citation": {"page": 6, "quote": "cherry"}, "status": "human_confirmed"},
+  {"id": "extra-life-10000", "kind": "economy", "statement": "10,000 points awards an extra life.", "citation": {"page": 6, "quote": "10,000 points"}, "status": "human_confirmed"},
+  {"id": "three-lives", "kind": "hud", "statement": "Pac-Man starts with three lives.", "citation": {"page": 5, "quote": "three lives"}, "status": "human_confirmed"},
+  {"id": "player-select", "kind": "menu", "statement": "SELECT chooses one or two players.", "citation": {"page": 7, "quote": "one-player"}, "status": "human_confirmed"}
+ ],
+ "goal": {
+  "statement": "Eat all dots in the maze while avoiding (or eating, when energized) the four ghosts.",
+  "citations": [{"page": 4, "quote": "eating everything in sight"}]
+ },
+ "player": {
+  "role": "Pac-Man",
+  "can": ["move", "eat", "eat-energizer", "eat-blue-ghosts"],
+  "citations": [{"page": 4, "quote": "Pac-Man is intent on eating"}]
+ },
+ "controls": {
+  "notes": ["pad moves through the maze", "SELECT players", "START pause"],
+  "citations": [{"page": 7, "quote": "Control pad"}]
+ },
+ "targets": {
+  "concepts": [
+   {"name": "dot", "statement": "small pellets to eat for progress", "citation": {"page": 4, "quote": "eating everything in sight"}},
+   {"name": "energizer", "statement": "large pellet that turns ghosts blue", "citation": {"page": 5, "quote": "energizer"}},
+   {"name": "ghost", "statement": "Blinky, Pinky, Inky, Clyde — avoid or eat when blue", "citation": {"page": 4, "quote": "ghosts, Blinky, Pinky, Inky, and Clyde"}}
+  ],
+  "realisation": {
+   "types": [33, 86, 2, 82],
+   "types_why": "object_tables.py scan: types 0x1d60/HP 0x060. HP 187→182 under B+UP — ghost or fruit HP.",
+   "found_by": "object_tables.py, types 0x1d60 hp 0x060"
+  }
+ },
+ "economy": [
+  {"statement": "Ghost combo 200/400/800/1600; fruit 100-500; 10000 points = extra life.", "citation": {"page": 6, "quote": "200 points"}}
+ ],
+ "templates": [
+  {"name": "move", "tap": ["RIGHT"], "rest": [], "frames": 8,
+   "citation": {"page": 7, "quote": "Control pad"}},
+  {"name": "move left", "tap": ["LEFT"], "rest": [], "frames": 8,
+   "citation": {"page": 7, "quote": "Control pad"}},
+  {"name": "move up", "tap": ["UP"], "rest": [], "frames": 8,
+   "citation": {"page": 7, "quote": "Control pad"}},
+  {"name": "move down", "tap": ["DOWN"], "rest": [], "frames": 8,
+   "citation": {"page": 7, "quote": "Control pad"}}
+ ],
+ "target_types": [33, 86, 2, 82],
+ "target_px": 15.625,
+ "target_px_why": "generic floor rule. Single-screen maze: score is the metric, read from screen by HudReader. No scroll, no position byte.",
+ "exit_up_px": 0,
+ "exit_at_x": 0
+}
