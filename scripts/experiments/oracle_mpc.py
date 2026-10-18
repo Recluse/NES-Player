@@ -234,6 +234,8 @@ def anchor_pos(env, game: str, pos0: int) -> None:
         raw = int(env._env.get_ram()[sp["lo"]])
         _UNWRAP[game] = [raw, (sp["sign"] * pos0 - raw) // 256]
 DEATH = -1e9        # a plan that dies is not compared on distance
+PROXY_REWARD = None   # --proxy-reward: VisualReward detector, None = off
+PROXY_PX = 20         # --proxy-px: pixels of value per flash
 
 
 def templates(h: int):
@@ -836,10 +838,16 @@ def _eval_job(job: dict) -> dict:
     # appears when you walk forward (the next room's sensor) must not read
     # as a loss, or the prior punishes the very advance it exists to buy
     hp_root = -prior_value(env._env.get_ram()) if PRIOR else 0
+    proxy_hits = 0
     for k in range(job["span"]):
         prev = o.frame_rgb if (visited is not None and o is not None) else None
         o = env.step_buttons([job["plan"][k]])
         used += 1
+        if PROXY_REWARD is not None:
+            # A bright flash inside the horizon is a proxy for a hit. It
+            # exists because fire → bullet → hit → score is longer than
+            # this window; without it all candidates score the same.
+            proxy_hits += PROXY_REWARD.update(o.frame_rgb, k)
         if hero is not None and k % 2 == 0:
             hero = hero_xy(env._env.get_ram(), hero) or hero
         if visited is not None and k % 8 == 0:
@@ -850,6 +858,8 @@ def _eval_job(job: dict) -> dict:
             break
     if died or not job["tail"]:
         val = DEATH if died else game_value(env, game) - x0
+        if not died and PROXY_REWARD is not None:
+            val += PROXY_PX * proxy_hits
         if died and job.get("death_price"):
             # under a finite price a death in the prefix is what it cost,
             # not a veto — otherwise the price only ever applies to tails
@@ -1894,6 +1904,12 @@ def main() -> int:
                          "value where the veto makes minority deaths free. "
                          "-1 = auto: the level progress a game over would "
                          "forfeit, divided by the lives in hand")
+    ap.add_argument("--proxy-reward", action="store_true",
+                    help="count bright flashes as proxy reward inside "
+                         "rollouts (for games where fire→hit→score "
+                         "exceeds the horizon)")
+    ap.add_argument("--proxy-px", type=int, default=20,
+                    help="pixels of value per proxy flash (default 20)")
     ap.add_argument("--two-step", action="store_true",
                     help="search ordered pairs of the five behaviours at half "
                          "the horizon each (25 pairs + the policy's own "
@@ -1976,6 +1992,13 @@ def main() -> int:
               "targets", PRIOR.get("target_types"))
     WEAPON_MAIN = args.weapon_px
     WALL_CLIP = not args.wall_unclipped
+    global PROXY_REWARD, PROXY_PX
+    PROXY_PX = args.proxy_px
+    PROXY_REWARD = None
+    if args.proxy_reward:
+        from nes_player.perception.visual_reward import VisualReward
+        PROXY_REWARD = VisualReward()
+        print("proxy-reward: on,", PROXY_PX, "px per flash")
     if args.pos_scan_file:
         rep_ = json.loads(Path(args.pos_scan_file).read_text())
         SCAN_POS[args.game] = rep_["position_bytes_consistent"]

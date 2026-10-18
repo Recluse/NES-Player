@@ -229,8 +229,42 @@ class PixelFeedback:
         return Feedback(self._score, died)
 
 
+@dataclass
+class ProxyFeedback:
+    """Death from the screen (as VisualFeedback) plus proxy reward from
+    bright flashes.
+
+    The policy sees only `Feedback(score, died)` — it cannot tell whether
+    the score came from a real counter or from an explosion. That is the
+    point: the fence holds, and the signal is available where the window
+    (fire → bullet → hit → score) is longer than the planner's horizon.
+
+    A flash is a proxy, not a measurement of progress. On Galaga and Contra
+    it correlates with hits; on a quiet screen it should not fire at all.
+    `summary()` reports how often it did.
+    """
+    privileged = False
+
+    def __init__(self) -> None:
+        from nes_player.perception.visual_reward import VisualReward
+
+        self._death = VisualFeedback()
+        self._reward = VisualReward()
+        self._acc = 0
+
+    def update(self, frame_rgb: np.ndarray, debug: dict | None = None) -> Feedback:
+        base = self._death.update(frame_rgb, debug)
+        flash = self._reward.update(frame_rgb)
+        self._acc += flash
+        return Feedback(self._acc, base.died)
+
+    def summary(self) -> dict:
+        return self._reward.summary()
+
+
 SOURCES = {"strict": NoFeedback, "visual": VisualFeedback,
-           "privileged": PrivilegedFeedback, "pixel": PixelFeedback}
+           "privileged": PrivilegedFeedback, "pixel": PixelFeedback,
+           "proxy": ProxyFeedback}
 
 
 def make_feedback(mode: str = "visual"):

@@ -1,0 +1,101 @@
+{
+  "schema_version": 1,
+  "note": "Skill library: composed action templates that transfer across games. Each skill names an ontology ability, the button sequence that realises it, and the games where it has been measured. Written 2026-10-17. A new game's manual contributes abilities; the library supplies the button composition.",
+  "abilities": {
+    "jump": {
+      "description": "leave the ground; land on a platform or clear a gap",
+      "buttons": {"tap": ["A"], "rest": [], "frames": 12},
+      "games": ["ChipnDale-Nes-v0"],
+      "citation": "Chip n Dale manual p.8: Press A to jump"
+    },
+    "jump-down": {
+      "description": "drop through a platform or fall deliberately",
+      "buttons": {"tap": ["DOWN", "A"], "rest": [], "frames": 8},
+      "games": ["ChipnDale-Nes-v0"],
+      "citation": "Chip n Dale manual p.9: press DOWN and A together to jump down"
+    },
+    "duck": {
+      "description": "lower the body to avoid a high attack",
+      "buttons": {"hold": ["DOWN"], "frames": 12},
+      "games": ["ChipnDale-Nes-v0"],
+      "citation": "Chip n Dale manual p.8: Press DOWN to duck"
+    },
+    "pick-up": {
+      "description": "take hold of a nearby object",
+      "buttons": {"tap": ["B"], "rest": ["RIGHT"], "frames": 12},
+      "games": ["ChipnDale-Nes-v0"],
+      "citation": "Chip n Dale manual p.8: Press B to pick up objects"
+    },
+    "throw-side": {
+      "description": "hurl a held object horizontally",
+      "buttons": {"tap": ["B", "RIGHT"], "rest": ["RIGHT"], "frames": 16},
+      "games": ["ChipnDale-Nes-v0"],
+      "citation": "Chip n Dale manual p.8: throw them right or left"
+    },
+    "throw-up": {
+      "description": "hurl a held object upward",
+      "buttons": {"tap": ["B", "UP"], "rest": [], "frames": 12},
+      "games": ["ChipnDale-Nes-v0"],
+      "citation": "Chip n Dale manual p.8: throw objects upwards by pressing UP"
+    },
+    "fire": {
+      "description": "shoot in the facing direction",
+      "buttons": {"tap": ["B"], "rest": [], "frames": 6},
+      "games": ["ContraJ-Nes-v0", "Galaga-Nes-v0", "ViceProjectDoom-Nes-v0"],
+      "citation": "Contra manual p.9: B fires; Galaga p.5: A and B fire missiles"
+    },
+    "fire-eight": {
+      "description": "fire in one of eight directions, including left and diagonals",
+      "buttons": {"tap": ["B", "RIGHT"], "rest": ["RIGHT"], "frames": 16},
+      "games": ["ContraJ-Nes-v0"],
+      "citation": "Contra J manual p.10 control table: 左斜め下45°に発砲 etc."
+    },
+    "strafe": {
+      "description": "move sideways without turning",
+      "buttons": {"tap": ["LEFT"], "rest": [], "frames": 8},
+      "games": ["Galaga-Nes-v0"],
+      "citation": "Galaga manual p.5: Move to the left / right"
+    },
+    "pause": {
+      "description": "halt play without losing state",
+      "buttons": {"tap": ["START"], "rest": [], "frames": 4},
+      "games": ["*"],
+      "citation": "every manual: START pauses"
+    }
+  },
+  "compositions": {
+    "pick-and-throw-side": {
+      "steps": ["pick-up", "throw-side"],
+      "description": "pick up a crate and hurl it at an enemy",
+      "games": ["ChipnDale-Nes-v0"],
+      "measured": "+144 px over planner without it (2026-10-16)",
+      "citation": "Chip n Dale manual p.8: pick up, then throw right or left"
+    },
+    "pick-and-throw-up": {
+      "steps": ["pick-up", "throw-up"],
+      "description": "pick up and lob upward at a flying enemy",
+      "games": ["ChipnDale-Nes-v0"],
+      "citation": "Chip n Dale manual p.8"
+    },
+    "run-jump-throw": {
+      "steps": ["run-right", "jump", "throw-side"],
+      "description": "approach under cover of motion, then strike",
+      "games": ["ChipnDale-Nes-v0"],
+      "citation": "Chip n Dale manual p.8: move right, jump, throw"
+    },
+    "run-and-fire": {
+      "steps": ["strafe", "fire"],
+      "description": "reposition while shooting — the Galaga default",
+      "games": ["Galaga-Nes-v0", "ContraJ-Nes-v0"],
+      "citation": "Galaga manual p.5: move and fire"
+    }
+  },
+  "transfers": {
+    "note": "When a new game's manual names an ability that matches a skill, the button sequence transfers. What does not transfer is the button mapping — that comes from the game's own control scan.",
+    "rules": [
+      "ability named in the manual → look up the skill → get the phase structure",
+      "button assignment comes from controllability.py / the manual's control table",
+      "composition is game-specific: which skills chain depends on the level type"
+    ]
+  }
+}
