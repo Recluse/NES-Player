@@ -1,0 +1,216 @@
+{
+  "schema_version": 2,
+  "game": "DoubleDragonII-Nes-v0",
+  "source": "LLM lexicon from rx2MRPnes1250pxPDF Double Dragon II (OCR, no text layer) + controllability.py + hero_tiles.py. Written 2026-11-02 after the parse freeze for this pair.",
+  "manual": {
+    "scan_id": "rx2MRPnes1250pxPDF Double Dragon II - The Revenge.pdf",
+    "language": "en",
+    "pages_used": [
+      3,
+      7,
+      8,
+      9,
+      10,
+      17,
+      18,
+      19
+    ],
+    "parse": {
+      "method": "llm-lexicon",
+      "pipeline_version": "llm_lexicon.py/1",
+      "judge": "MiMo as model behind the prompt"
+    }
+  },
+  "notes": [
+    "Arcade-style controls: A attacks right, B attacks left; A+B jumps.",
+    "Punch = attack button in facing direction; Kick = attack button opposite.",
+    "Uppercut: chain several punches first; Jump kick: A+B then attack in air.",
+    "Weapons (knife, pipe, bomb): walk over to pick up; throw in facing direction.",
+    "8 missions in WARRIOR level; 3 lives, 8 energy units per life."
+  ],
+  "facts": [
+    {
+      "id": "a-attack-right",
+      "kind": "controls",
+      "statement": "A Button attacks to the right.",
+      "citation": {
+        "page": 8,
+        "quote": "To attack to the right, always press the A BUTTON"
+      },
+      "status": "extracted"
+    },
+    {
+      "id": "b-attack-left",
+      "kind": "controls",
+      "statement": "B Button attacks to the left.",
+      "citation": {
+        "page": 8,
+        "quote": "To attack to the left, always press the B BUTTON"
+      },
+      "status": "extracted"
+    },
+    {
+      "id": "ab-jump",
+      "kind": "ability",
+      "statement": "A and B simultaneously makes the character jump.",
+      "citation": {
+        "page": 9,
+        "quote": "TO JUMP—Press the A BUTTON and B BUTTON simultaneously"
+      },
+      "status": "extracted"
+    },
+    {
+      "id": "punch-same-direction",
+      "kind": "ability",
+      "statement": "Press the attack button in the same direction you face to punch.",
+      "citation": {
+        "page": 9,
+        "quote": "TO PUNCH—Press the A or B ATTACK BUTTON in the same direction you're facing"
+      },
+      "status": "extracted"
+    },
+    {
+      "id": "kick-opposite-direction",
+      "kind": "ability",
+      "statement": "Press the attack button in the opposite direction to kick (back kick).",
+      "citation": {
+        "page": 10,
+        "quote": "TO KICK (BACK KICK) —Press the ATTACK BUTTON in the opposite direction you're facing"
+      },
+      "status": "extracted"
+    },
+    {
+      "id": "ab-jump-attack-kick",
+      "kind": "ability",
+      "statement": "A+B to jump, then attack button in the air for a jump kick.",
+      "citation": {
+        "page": 10,
+        "quote": "press the A and B BUTTONS simultaneously to jump. Then—while in the air—Press the ATTACK BUTTON to kick"
+      },
+      "status": "extracted"
+    },
+    {
+      "id": "defeat-gang-revenge",
+      "kind": "goal",
+      "statement": "Defeat the Black Shadow Warriors and avenge Marion.",
+      "citation": {
+        "page": 3,
+        "quote": "they committed the ultimate crime: they gunned down your girl, Marion"
+      },
+      "status": "extracted"
+    },
+    {
+      "id": "lives-three",
+      "kind": "economy",
+      "statement": "3 lives per game.",
+      "citation": {
+        "page": 19,
+        "quote": "Both Billy and Jimmy begin each game with 3 lives"
+      },
+      "status": "extracted"
+    }
+  ],
+  "templates": [
+    {
+      "name": "punch-right",
+      "phases": [
+        {
+          "hold": [
+            "A"
+          ],
+          "rest": 0,
+          "frames": 10
+        }
+      ],
+      "note": "Attack right (A button in facing direction = punch)",
+      "citation": {
+        "page": 9,
+        "quote": "Press the A or B ATTACK BUTTON in the same direction you're facing"
+      }
+    },
+    {
+      "name": "punch-left",
+      "phases": [
+        {
+          "hold": [
+            "B"
+          ],
+          "rest": 0,
+          "frames": 10
+        }
+      ],
+      "note": "Attack left (B button in facing direction = punch)",
+      "citation": {
+        "page": 9,
+        "quote": "Press the A or B ATTACK BUTTON in the same direction you're facing"
+      }
+    },
+    {
+      "name": "jump",
+      "phases": [
+        {
+          "hold": [
+            "A",
+            "B"
+          ],
+          "rest": 0,
+          "frames": 6
+        }
+      ],
+      "note": "Jump: A and B simultaneously",
+      "citation": {
+        "page": 9,
+        "quote": "Press the A BUTTON and B BUTTON simultaneously"
+      }
+    },
+    {
+      "name": "jump-kick-right",
+      "phases": [
+        {
+          "hold": [
+            "A",
+            "B"
+          ],
+          "rest": 0,
+          "frames": 6
+        },
+        {
+          "hold": [
+            "A"
+          ],
+          "rest": 0,
+          "frames": 10
+        }
+      ],
+      "note": "Jump kick: A+B jump, then A attack in air",
+      "citation": {
+        "page": 10,
+        "quote": "press the A and B BUTTONS simultaneously to jump. Then in the air Press the ATTACK BUTTON"
+      }
+    },
+    {
+      "name": "walk-right-punch",
+      "phases": [
+        {
+          "hold": [
+            "RIGHT"
+          ],
+          "rest": 0,
+          "frames": 20
+        },
+        {
+          "hold": [
+            "A"
+          ],
+          "rest": 0,
+          "frames": 10
+        }
+      ],
+      "note": "Walk right then punch",
+      "citation": {
+        "page": 9,
+        "quote": "TO MOVE Press the CONTROL PAD ARROWS RIGHT"
+      }
+    }
+  ]
+}

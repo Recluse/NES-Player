@@ -1,0 +1,26 @@
+{
+  "game": "NinjaGaiden-Nes-v0",
+  "scan_id": "rx2MRPnes1250pxPDF, Ninja Gaiden I.pdf",
+  "language": "en",
+  "note": "Gold for Ninja Gaiden, held-out pair 3. Written 2026-11-02 from OCR of scanned PDF. Pages are PDF pages.",
+  "facts": [
+    {"id": "a-jump", "kind": "controls", "page": 5, "statement_key": "a-jump", "provenance": "us_manual", "quote_hint": "A BUTTON Jump button for Ninja"},
+    {"id": "b-attack", "kind": "controls", "page": 5, "statement_key": "b-attack", "provenance": "us_manual", "quote_hint": "B BUTTON Controls sword thrust"},
+    {"id": "dpad-move", "kind": "controls", "page": 5, "statement_key": "dpad-move", "provenance": "us_manual", "quote_hint": "CONTROL CROSS Controls the Ninja"},
+    {"id": "start-pause", "kind": "controls", "page": 5, "statement_key": "start-pause", "provenance": "us_manual", "quote_hint": "START BUTTON Press to start"},
+    {"id": "climb-ladder", "kind": "ability", "page": 5, "statement_key": "climb-ladder", "provenance": "us_manual", "quote_hint": "use the control cross to climb up or down"},
+    {"id": "wall-spring-jump", "kind": "ability", "page": 6, "statement_key": "wall-spring-jump", "provenance": "us_manual", "quote_hint": "jump and cling to walls"},
+    {"id": "wall-spring-climb", "kind": "ability", "page": 6, "statement_key": "wall-spring-climb", "provenance": "us_manual", "quote_hint": "alternate between the left and right directions on the Control Cross to easily scale the wall"},
+    {"id": "b-throw-weapon", "kind": "ability", "page": 10, "statement_key": "b-throw-weapon", "provenance": "us_manual", "quote_hint": "THROWING STAR"},
+    {"id": "a-b-jump-slash", "kind": "ability", "page": 10, "statement_key": "a-b-jump-slash", "provenance": "us_manual", "quote_hint": "Press jump and Button"},
+    {"id": "defeat-villain-revenge", "kind": "goal", "page": 3, "statement_key": "defeat-villain-revenge", "provenance": "us_manual", "quote_hint": "take the secret Dragon sword and go to America"},
+    {"id": "acts-areas", "kind": "goal", "page": 11, "statement_key": "acts-areas", "provenance": "us_manual", "quote_hint": "ACTS IN ALL, 20 AREAS"},
+    {"id": "boss-hp-bar", "kind": "hud", "page": 7, "statement_key": "boss-hp-bar", "provenance": "us_manual", "quote_hint": "Enemy Boss's Strength"},
+    {"id": "player-hp", "kind": "hud", "page": 7, "statement_key": "player-hp", "provenance": "us_manual", "quote_hint": "Physical Strength. You lose strength when wounded"},
+    {"id": "spiritual-strength", "kind": "economy", "page": 8, "statement_key": "spiritual-strength", "provenance": "us_manual", "quote_hint": "Red is worth 10 points and blue 5 points"},
+    {"id": "time-freeze-item", "kind": "collectible", "page": 8, "statement_key": "time-freeze-item", "provenance": "us_manual", "quote_hint": "frozen for 5 seconds"},
+    {"id": "one-up-item", "kind": "collectible", "page": 9, "statement_key": "one-up-item", "provenance": "us_manual", "quote_hint": "give you another life"},
+    {"id": "timer-death", "kind": "hazard", "page": 7, "statement_key": "timer-death", "provenance": "us_manual", "quote_hint": "When time runs down to"},
+    {"id": "start-continue", "kind": "economy", "page": 12, "statement_key": "start-continue", "provenance": "us_manual", "quote_hint": "press the start button and be on your way"}
+  ]
+}

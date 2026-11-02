@@ -1,0 +1,24 @@
+{
+  "test_game": "Galaga-Nes-v0",
+  "train_games": [
+    "Battletoads-Nes-v0",
+    "ChipnDale-Nes-v0",
+    "ViceProjectDoom-Nes-v0"
+  ],
+  "frames_per_episode": 5000,
+  "seeds": 3,
+  "dt_transfer_scores": [
+    48,
+    48,
+    48
+  ],
+  "bc_indomain_scores": [
+    87,
+    83,
+    85
+  ],
+  "dt_transfer_mean": 48.0,
+  "bc_indomain_mean": 85.0,
+  "diff": -37.0,
+  "train_time_s": 750.6
+}

@@ -1,0 +1,22 @@
+{
+  "game": "DoubleDragonII-Nes-v0",
+  "scan_id": "rx2MRPnes1250pxPDF, Double Dragon II - The Revenge.pdf",
+  "language": "en",
+  "note": "Gold for Double Dragon II, held-out pair 3. Written 2026-11-02 from OCR of scanned PDF. Pages are PDF pages.",
+  "facts": [
+    {"id": "a-attack-right", "kind": "controls", "page": 8, "statement_key": "a-attack-right", "provenance": "us_manual", "quote_hint": "To attack to the right, always press the A BUTTON"},
+    {"id": "b-attack-left", "kind": "controls", "page": 8, "statement_key": "b-attack-left", "provenance": "us_manual", "quote_hint": "To attack to the left, always press the B BUTTON"},
+    {"id": "ab-jump", "kind": "ability", "page": 9, "statement_key": "ab-jump", "provenance": "us_manual", "quote_hint": "Press the A BUTTON and B BUTTON simultaneously"},
+    {"id": "punch-same-direction", "kind": "ability", "page": 9, "statement_key": "punch-same-direction", "provenance": "us_manual", "quote_hint": "Press the A or B ATTACK BUTTON in the same direction"},
+    {"id": "kick-opposite-direction", "kind": "ability", "page": 10, "statement_key": "kick-opposite-direction", "provenance": "us_manual", "quote_hint": "Press the ATTACK BUTTON in the opposite direction"},
+    {"id": "punch-chain-uppercut", "kind": "ability", "page": 10, "statement_key": "punch-chain-uppercut", "provenance": "us_manual", "quote_hint": "deliver several PUNCHES in a row to weaken your opponent"},
+    {"id": "ab-jump-attack-kick", "kind": "ability", "page": 10, "statement_key": "ab-jump-attack-kick", "provenance": "us_manual", "quote_hint": "simultaneously to jump. Then while in the air Press the ATTACK BUTTON"},
+    {"id": "start-pause-restart", "kind": "controls", "page": 9, "statement_key": "start-pause-restart", "provenance": "us_manual", "quote_hint": "TO PAUSE Press the START BUTTON"},
+    {"id": "walk-over-weapon-pickup", "kind": "ability", "page": 18, "statement_key": "walk-over-weapon-pickup", "provenance": "us_manual", "quote_hint": "grab it by moving directly over it"},
+    {"id": "throw-weapon-same-direction", "kind": "ability", "page": 18, "statement_key": "throw-weapon-same-direction", "provenance": "us_manual", "quote_hint": "To throw a knife or bomb, press the ATTACK BUTTON in the same direction"},
+    {"id": "defeat-gang-revenge", "kind": "goal", "page": 3, "statement_key": "defeat-gang-revenge", "provenance": "us_manual", "quote_hint": "gunned down your girl, Marion"},
+    {"id": "eight-missions-boss", "kind": "goal", "page": 7, "statement_key": "eight-missions-boss", "provenance": "us_manual", "quote_hint": "eight missions in all you will confront the mysterious Double Illusion"},
+    {"id": "lives-three", "kind": "economy", "page": 19, "statement_key": "lives-three", "provenance": "us_manual", "quote_hint": "begin each game with 3 lives"},
+    {"id": "energy-units-per-life", "kind": "economy", "page": 19, "statement_key": "energy-units-per-life", "provenance": "us_manual", "quote_hint": "there are 8 Energy Units"}
+  ]
+}

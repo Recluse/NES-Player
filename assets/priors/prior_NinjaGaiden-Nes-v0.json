@@ -1,0 +1,216 @@
+{
+  "schema_version": 2,
+  "game": "NinjaGaiden-Nes-v0",
+  "source": "LLM lexicon from rx2MRPnes1250pxPDF Ninja Gaiden I (OCR, no text layer) + controllability.py + hero_tiles.py. Written 2026-11-02 after the parse freeze for this pair.",
+  "manual": {
+    "scan_id": "rx2MRPnes1250pxPDF Ninja Gaiden I.pdf",
+    "language": "en",
+    "pages_used": [
+      3,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12
+    ],
+    "parse": {
+      "method": "llm-lexicon",
+      "pipeline_version": "llm_lexicon.py/1",
+      "judge": "MiMo as model behind the prompt"
+    }
+  },
+  "notes": [
+    "A = jump, B = sword thrust; Control Cross = direction.",
+    "Wall-spring jump: cling to walls, press opposite direction + B to jump between walls.",
+    "Jump & Slash: press A and B during a jump (especially for enemies below).",
+    "Spiritual strength powers weapons: throwing star (B, 3 pts), fire wheel (B, 5 pts).",
+    "6 acts, 20 areas. Boss HP bar shown on screen. Timer runs out = lose a life."
+  ],
+  "facts": [
+    {
+      "id": "a-jump",
+      "kind": "controls",
+      "statement": "A Button makes the Ninja jump.",
+      "citation": {
+        "page": 5,
+        "quote": "A BUTTON Jump button for Ninja"
+      },
+      "status": "extracted"
+    },
+    {
+      "id": "b-attack",
+      "kind": "controls",
+      "statement": "B Button controls sword thrust.",
+      "citation": {
+        "page": 5,
+        "quote": "B BUTTON Controls sword thrust"
+      },
+      "status": "extracted"
+    },
+    {
+      "id": "wall-spring-jump",
+      "kind": "ability",
+      "statement": "Ryu can jump and cling to walls, then jump between walls by pressing the opposite direction and B.",
+      "citation": {
+        "page": 6,
+        "quote": "While clinging to the wall, Ryu can jump back and forth by pressing the opposite direction button on the Control Cross and Button"
+      },
+      "status": "extracted"
+    },
+    {
+      "id": "a-b-jump-slash",
+      "kind": "ability",
+      "statement": "Jump & Slash: press A and B during a jump to attack below.",
+      "citation": {
+        "page": 10,
+        "quote": "JUMP & SLASH TECHNIQUE Press jump and Button"
+      },
+      "status": "extracted"
+    },
+    {
+      "id": "defeat-villain-revenge",
+      "kind": "goal",
+      "statement": "Take revenge for father's defeat; defeat Jaquio and the Malice Four.",
+      "citation": {
+        "page": 3,
+        "quote": "take the secret Dragon sword and go to America"
+      },
+      "status": "extracted"
+    },
+    {
+      "id": "acts-areas",
+      "kind": "goal",
+      "statement": "6 acts, 20 areas to complete.",
+      "citation": {
+        "page": 11,
+        "quote": "ACTS IN ALL, 20 AREAS"
+      },
+      "status": "extracted"
+    },
+    {
+      "id": "boss-hp-bar",
+      "kind": "hud",
+      "statement": "Enemy Boss's Strength bar shown; when it reaches 0, the enemy is destroyed.",
+      "citation": {
+        "page": 7,
+        "quote": "Enemy Boss's Strength. He loses strength when injured"
+      },
+      "status": "extracted"
+    },
+    {
+      "id": "timer-death",
+      "kind": "hazard",
+      "statement": "When the timer runs down to 0, one life is lost.",
+      "citation": {
+        "page": 7,
+        "quote": "When time runs down to '0', one life is lost"
+      },
+      "status": "extracted"
+    }
+  ],
+  "templates": [
+    {
+      "name": "jump",
+      "phases": [
+        {
+          "hold": [
+            "A"
+          ],
+          "rest": 0,
+          "frames": 6
+        }
+      ],
+      "note": "Jump: A button",
+      "citation": {
+        "page": 5,
+        "quote": "A BUTTON Jump button for Ninja"
+      }
+    },
+    {
+      "name": "sword",
+      "phases": [
+        {
+          "hold": [
+            "B"
+          ],
+          "rest": 0,
+          "frames": 10
+        }
+      ],
+      "note": "Sword thrust: B button",
+      "citation": {
+        "page": 5,
+        "quote": "B BUTTON Controls sword thrust"
+      }
+    },
+    {
+      "name": "jump-slash",
+      "phases": [
+        {
+          "hold": [
+            "A"
+          ],
+          "rest": 0,
+          "frames": 6
+        },
+        {
+          "hold": [
+            "B"
+          ],
+          "rest": 0,
+          "frames": 10
+        }
+      ],
+      "note": "Jump & Slash: A to jump then B in air",
+      "citation": {
+        "page": 10,
+        "quote": "Press jump and Button"
+      }
+    },
+    {
+      "name": "run-slash",
+      "phases": [
+        {
+          "hold": [
+            "RIGHT"
+          ],
+          "rest": 0,
+          "frames": 20
+        },
+        {
+          "hold": [
+            "B"
+          ],
+          "rest": 0,
+          "frames": 10
+        }
+      ],
+      "note": "Run right and slash",
+      "citation": {
+        "page": 5,
+        "quote": "B BUTTON Controls sword thrust"
+      }
+    },
+    {
+      "name": "wall-climb",
+      "phases": [
+        {
+          "hold": [
+            "B",
+            "RIGHT"
+          ],
+          "rest": 0,
+          "frames": 30
+        }
+      ],
+      "note": "Wall-spring climb: keep B pressed, alternate left/right",
+      "citation": {
+        "page": 6,
+        "quote": "alternate between the left and right directions on the Control Cross to easily scale the wall"
+      }
+    }
+  ]
+}
