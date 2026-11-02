@@ -1,0 +1,42 @@
+{
+  "game": "Galaga-Nes-v0",
+  "n_windows": 100,
+  "rtg_range": [
+    -6,
+    79
+  ],
+  "results": {
+    "0": {
+      "accuracy": 0.1599999964237213,
+      "action_distribution": {
+        "8": 100
+      }
+    },
+    "20": {
+      "accuracy": 0.1599999964237213,
+      "action_distribution": {
+        "8": 100
+      }
+    },
+    "40": {
+      "accuracy": 0.1599999964237213,
+      "action_distribution": {
+        "8": 100
+      }
+    },
+    "60": {
+      "accuracy": 0.1599999964237213,
+      "action_distribution": {
+        "8": 100
+      }
+    },
+    "79": {
+      "accuracy": 0.1599999964237213,
+      "action_distribution": {
+        "8": 100
+      }
+    }
+  },
+  "fire_rate_low": 0.0,
+  "fire_rate_high": 0.0
+}

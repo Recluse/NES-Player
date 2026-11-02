@@ -1,0 +1,51 @@
+{
+  "experiment": "E4: DT + planner \u2014 return-conditioned vs BC",
+  "results": {
+    "Galaga-Nes-v0": {
+      "n_windows": 672,
+      "high_return_windows": 194,
+      "low_return_windows": 276,
+      "high_return_accs": {
+        "0": 0.5979,
+        "20": 0.5979,
+        "40": 0.5979,
+        "60": 0.5979,
+        "79": 0.5979
+      },
+      "low_return_accs": {
+        "0": 0.5254,
+        "20": 0.5254,
+        "40": 0.5254,
+        "60": 0.5254,
+        "79": 0.5254
+      },
+      "best_target": 0,
+      "best_high_acc": 0.5979,
+      "majority_acc": 0.5979,
+      "dt_minus_baseline": -0.0
+    },
+    "ChipnDale-Nes-v0": {
+      "n_windows": 672,
+      "high_return_windows": 638,
+      "low_return_windows": 672,
+      "high_return_accs": {
+        "0": 0.5172,
+        "20": 0.5172,
+        "40": 0.5172,
+        "60": 0.5172,
+        "79": 0.5172
+      },
+      "low_return_accs": {
+        "0": 0.5223,
+        "20": 0.5223,
+        "40": 0.5223,
+        "60": 0.5223,
+        "79": 0.5223
+      },
+      "best_target": 0,
+      "best_high_acc": 0.5172,
+      "majority_acc": 0.5172,
+      "dt_minus_baseline": -0.0
+    }
+  }
+}

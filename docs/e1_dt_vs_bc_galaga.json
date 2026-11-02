@@ -1,0 +1,63 @@
+{
+  "game": "Galaga-Nes-v0",
+  "episode": "datasets/agent_play/Galaga-Nes-v0_agent_long",
+  "n_windows": 6746,
+  "dt_acc": 0.8014,
+  "bc_acc": 0.8019845093388674,
+  "diff": -0.0006,
+  "dt_params": 10801544,
+  "dt_time_s": 1589.7,
+  "bc_time_s": 7.8,
+  "dt_log": [
+    {
+      "epoch": 0,
+      "loss": 0.5602,
+      "acc": 0.7907
+    },
+    {
+      "epoch": 1,
+      "loss": 0.5068,
+      "acc": 0.7998
+    },
+    {
+      "epoch": 2,
+      "loss": 0.499,
+      "acc": 0.8007
+    },
+    {
+      "epoch": 3,
+      "loss": 0.5028,
+      "acc": 0.8012
+    },
+    {
+      "epoch": 4,
+      "loss": 0.4979,
+      "acc": 0.8009
+    },
+    {
+      "epoch": 5,
+      "loss": 0.5159,
+      "acc": 0.7984
+    },
+    {
+      "epoch": 6,
+      "loss": 0.5039,
+      "acc": 0.8014
+    },
+    {
+      "epoch": 7,
+      "loss": 0.4988,
+      "acc": 0.8014
+    },
+    {
+      "epoch": 8,
+      "loss": 0.502,
+      "acc": 0.8014
+    },
+    {
+      "epoch": 9,
+      "loss": 0.5011,
+      "acc": 0.8014
+    }
+  ]
+}

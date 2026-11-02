@@ -1,0 +1,123 @@
+{
+  "game": "Galaga-Nes-v0",
+  "n_frames": 54000,
+  "rtg_original": [
+    -6.0,
+    79.0
+  ],
+  "rtg_relabelled": [
+    0.0,
+    164.80325317382812
+  ],
+  "rtg_consistent": [
+    0.0,
+    164.80325317382812
+  ],
+  "dt_original_acc": 1.0,
+  "qdt_acc": 1.0,
+  "qdt_minus_dt": 0.0,
+  "dt_log_original": [
+    {
+      "epoch": 0,
+      "loss": 0.0246,
+      "acc": 0.9924
+    },
+    {
+      "epoch": 1,
+      "loss": 0.0002,
+      "acc": 1.0
+    },
+    {
+      "epoch": 2,
+      "loss": 0.0001,
+      "acc": 1.0
+    },
+    {
+      "epoch": 3,
+      "loss": 0.0001,
+      "acc": 1.0
+    },
+    {
+      "epoch": 4,
+      "loss": 0.0001,
+      "acc": 1.0
+    },
+    {
+      "epoch": 5,
+      "loss": 0.0001,
+      "acc": 1.0
+    },
+    {
+      "epoch": 6,
+      "loss": 0.0,
+      "acc": 1.0
+    },
+    {
+      "epoch": 7,
+      "loss": 0.0,
+      "acc": 1.0
+    },
+    {
+      "epoch": 8,
+      "loss": 0.0,
+      "acc": 1.0
+    },
+    {
+      "epoch": 9,
+      "loss": 0.0,
+      "acc": 1.0
+    }
+  ],
+  "dt_log_qdt": [
+    {
+      "epoch": 0,
+      "loss": 0.0254,
+      "acc": 0.9916
+    },
+    {
+      "epoch": 1,
+      "loss": 0.0005,
+      "acc": 0.9999
+    },
+    {
+      "epoch": 2,
+      "loss": 0.0004,
+      "acc": 0.9999
+    },
+    {
+      "epoch": 3,
+      "loss": 0.0001,
+      "acc": 1.0
+    },
+    {
+      "epoch": 4,
+      "loss": 0.0001,
+      "acc": 1.0
+    },
+    {
+      "epoch": 5,
+      "loss": 0.0001,
+      "acc": 1.0
+    },
+    {
+      "epoch": 6,
+      "loss": 0.0,
+      "acc": 1.0
+    },
+    {
+      "epoch": 7,
+      "loss": 0.0,
+      "acc": 1.0
+    },
+    {
+      "epoch": 8,
+      "loss": 0.0,
+      "acc": 1.0
+    },
+    {
+      "epoch": 9,
+      "loss": 0.0,
+      "acc": 1.0
+    }
+  ]
+}

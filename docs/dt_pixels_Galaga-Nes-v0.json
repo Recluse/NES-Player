@@ -1,0 +1,33 @@
+{
+  "game": "Galaga-Nes-v0",
+  "n_windows": 1687,
+  "state_shape": [
+    1687,
+    32,
+    112,
+    120,
+    3
+  ],
+  "dt_params": 7722921,
+  "rtg_range": [
+    -6.0,
+    79.0
+  ],
+  "dt_log": [
+    {
+      "epoch": 0,
+      "loss": 0.0255,
+      "acc": 0.9917
+    },
+    {
+      "epoch": 1,
+      "loss": 0.0002,
+      "acc": 1.0
+    },
+    {
+      "epoch": 2,
+      "loss": 0.0002,
+      "acc": 1.0
+    }
+  ]
+}

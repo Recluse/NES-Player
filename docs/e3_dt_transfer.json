@@ -1,0 +1,31 @@
+{
+  "experiment": "E3: DT transfer across 4 games",
+  "leave_one_out": {
+    "Battletoads-Nes-v0": {
+      "test_acc": 1.0,
+      "baseline_acc": 0.6339,
+      "train_windows": 1008,
+      "train_time_s": 118.3
+    },
+    "ChipnDale-Nes-v0": {
+      "test_acc": 0.9854,
+      "baseline_acc": 0.7009,
+      "train_windows": 1008,
+      "train_time_s": 120.8
+    },
+    "Galaga-Nes-v0": {
+      "test_acc": 0.9869,
+      "baseline_acc": 0.5169,
+      "train_windows": 1008,
+      "train_time_s": 120.4
+    },
+    "ViceProjectDoom-Nes-v0": {
+      "test_acc": 1.0,
+      "baseline_acc": 0.6289,
+      "train_windows": 1008,
+      "train_time_s": 117.1
+    }
+  },
+  "mean_dt_acc": 0.993075,
+  "mean_baseline_acc": 0.62015
+}

@@ -1,0 +1,30 @@
+{
+  "game": "Galaga-Nes-v0",
+  "frames_per_episode": 5000,
+  "seeds": 3,
+  "bc_checkpoint": "runs/bc_galaga_shoot",
+  "dt_checkpoint": "runs/dt_galaga.pt",
+  "bc_scores": [
+    83,
+    84,
+    84
+  ],
+  "dt_scores": [
+    83,
+    82,
+    82
+  ],
+  "bc_deaths": [
+    0,
+    0,
+    0
+  ],
+  "dt_deaths": [
+    0,
+    0,
+    0
+  ],
+  "bc_mean_score": 83.66666666666667,
+  "dt_mean_score": 82.33333333333333,
+  "diff": -1.3333333333333428
+}
