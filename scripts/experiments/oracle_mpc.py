@@ -237,6 +237,8 @@ DEATH = -1e9        # a plan that dies is not compared on distance
 PROXY_REWARD = None   # --proxy-reward: VisualReward detector, None = off
 PROXY_PX = 20         # --proxy-px: pixels of value per flash
 COMBAT_PX = 8         # --combat-px: pixels of value per unit of combat EMA
+SUBGOAL_CHAIN = None  # --subgoals: SubgoalChain for long action-result windows
+SUBGOAL_PX = 50       # --subgoal-px: scale for the shaped subgoal value
 
 
 def templates(h: int):
@@ -781,7 +783,8 @@ def _worker_init(game: str, checkpoint: str, integ: str | None,
                  weapon_main: int = 400, prior: dict | None = None,
                  hero_tiles: dict | None = None, room_px: float = 0.0,
                  mirror_fire: bool = False, steer_fire: bool = False,
-                 health: dict | None = None, hop: bool = False):
+                 health: dict | None = None, hop: bool = False,
+                 subgoals: int = 0, subgoal_px: int = 50):
     """One emulator and one policy per worker process, loaded once.
 
     A spawned worker re-imports this module, so anything main set after
@@ -805,6 +808,12 @@ def _worker_init(game: str, checkpoint: str, integ: str | None,
         PRIOR.update(prior)
     if hero_tiles:
         HERO_TILES.update(hero_tiles)
+    global SUBGOAL_CHAIN, SUBGOAL_PX
+    if subgoals > 0:
+        from nes_player.policy.hierarchical import make_uniform_chain
+        SUBGOAL_CHAIN = make_uniform_chain(
+            max_position=20000, n_subgoals=subgoals)
+        SUBGOAL_PX = subgoal_px
 
     from nes_player.emulator.stable_retro import StableRetroAdapter
     from nes_player.policy.bc import BCPolicy
@@ -870,6 +879,10 @@ def _eval_job(job: dict) -> dict:
             # under a finite price a death in the prefix is what it cost,
             # not a veto — otherwise the price only ever applies to tails
             val = game_value(env, game) - x0 - job["death_price"]
+        if not died and SUBGOAL_CHAIN is not None:
+            end_pos = x0 + max(0, val)
+            val += SUBGOAL_PX * SUBGOAL_CHAIN.shaped_value(
+                end_pos, horizon_px=job.get("horizon_px", 256))
         if not died and visited is not None:
             val += job["novelty"] * len(visited - seen)
         return {"name": job["name"], "died": died, "outs": None,
@@ -891,6 +904,10 @@ def _eval_job(job: dict) -> dict:
                                 sink)
         used += extra
         gain = game_value(env, game) - x0
+        if SUBGOAL_CHAIN is not None:
+            end_pos = x0 + max(0, gain)
+            gain += SUBGOAL_PX * SUBGOAL_CHAIN.shaped_value(
+                end_pos, horizon_px=job.get("horizon_px", 256))
         if PRIOR:
             hp_end = -prior_value(env._env.get_ram())
             if hp_end > hp_root:
@@ -1008,7 +1025,9 @@ def run(checkpoint: str, game: str, state: str | None, frames: int, seed: int,
             initargs=(game, checkpoint, integ, SCAN_POS.get(game),
                       WALL_CLIP, WEAPON_MAIN, dict(PRIOR),
                       dict(HERO_TILES), ROOM_PX, MIRROR_FIRE,
-                      STEER_FIRE, dict(HEALTH), HOP))
+                      STEER_FIRE, dict(HEALTH), HOP,
+                      0 if SUBGOAL_CHAIN is None else len(SUBGOAL_CHAIN.thresholds),
+                      SUBGOAL_PX))
     policy = BCPolicy(checkpoint)
     obs = begin_any(env, game)
     # the boot/title screens may have spun an 8-bit scroll byte: the run's
@@ -1682,6 +1701,8 @@ def run(checkpoint: str, game: str, state: str | None, frames: int, seed: int,
                 best_x = max(best_x, sc)
             else:
                 best_x = max(best_x, game_pos(env, game))
+            if SUBGOAL_CHAIN is not None:
+                SUBGOAL_CHAIN.update(best_x)
         # Contra-family: after the last life the game sits on the continue
         # screen with the camera back at zero. A human presses START; so
         # does the runner, and the credit is counted. The level restarts
@@ -1910,6 +1931,13 @@ def main() -> int:
                          "value where the veto makes minority deaths free. "
                          "-1 = auto: the level progress a game over would "
                          "forfeit, divided by the lives in hand")
+    ap.add_argument("--subgoals", type=int, default=0,
+                    help="number of uniform subgoal thresholds for long\n"
+                         "action-result windows (Metroid class). When > 0\n"
+                         "the value function adds a shaped term toward the\n"
+                         "current subgoal instead of raw progress.")
+    ap.add_argument("--subgoal-px", type=int, default=50,
+                    help="scale of the shaped subgoal value (default 50)")
     ap.add_argument("--proxy-reward", action="store_true",
                     help="count bright flashes as proxy reward inside "
                          "rollouts (for games where fire→hit→score "
@@ -2000,7 +2028,14 @@ def main() -> int:
               "targets", PRIOR.get("target_types"))
     WEAPON_MAIN = args.weapon_px
     WALL_CLIP = not args.wall_unclipped
-    global PROXY_REWARD, PROXY_PX, COMBAT_PX
+    global PROXY_REWARD, PROXY_PX, COMBAT_PX, SUBGOAL_CHAIN, SUBGOAL_PX
+    if args.subgoals > 0:
+        from nes_player.policy.hierarchical import make_uniform_chain
+        SUBGOAL_CHAIN = make_uniform_chain(
+            max_position=20000, n_subgoals=args.subgoals)
+        SUBGOAL_PX = args.subgoal_px
+        print(f"subgoals: {args.subgoals} thresholds, "
+              f"scale {SUBGOAL_PX} px")
     PROXY_PX = args.proxy_px
     COMBAT_PX = args.combat_px
     PROXY_REWARD = None
