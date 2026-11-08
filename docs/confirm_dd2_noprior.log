@@ -1,0 +1,134 @@
+pos-from-scan: [27, 119, 474, 558, 559, 562, 563, 566, 567, 570, 574, 575, 578, 582]
+{"arm": "bc", "seed": 5000, "best_x": 1964, "deaths": 0, "branch_frames": 0, "chosen": {}}
+{"arm": "bc", "seed": 5001, "best_x": 2072, "deaths": 0, "branch_frames": 0, "chosen": {}}
+{"arm": "bc", "seed": 5002, "best_x": 1916, "deaths": 0, "branch_frames": 0, "chosen": {}}
+{"arm": "bc", "seed": 5003, "best_x": 2106, "deaths": 0, "branch_frames": 0, "chosen": {}}
+{"arm": "bc", "seed": 5004, "best_x": 2089, "deaths": 0, "branch_frames": 0, "chosen": {}}
+{"arm": "bc", "seed": 5005, "best_x": 2109, "deaths": 0, "branch_frames": 0, "chosen": {}}
+{"arm": "bc", "seed": 5006, "best_x": 1940, "deaths": 0, "branch_frames": 0, "chosen": {}}
+{"arm": "bc", "seed": 5007, "best_x": 1969, "deaths": 0, "branch_frames": 0, "chosen": {}}
+{"arm": "bc", "seed": 5008, "best_x": 2112, "deaths": 0, "branch_frames": 0, "chosen": {}}
+{"arm": "bc", "seed": 5009, "best_x": 2118, "deaths": 0, "branch_frames": 0, "chosen": {}}
+{"arm": "bc", "seed": 5010, "best_x": 2097, "deaths": 0, "branch_frames": 0, "chosen": {}}
+{"arm": "bc", "seed": 5011, "best_x": 1947, "deaths": 0, "branch_frames": 0, "chosen": {}}
+{"arm": "bc", "seed": 5012, "best_x": 1866, "deaths": 0, "branch_frames": 0, "chosen": {}}
+{"arm": "bc", "seed": 5013, "best_x": 1917, "deaths": 0, "branch_frames": 0, "chosen": {}}
+{"arm": "bc", "seed": 5014, "best_x": 1822, "deaths": 0, "branch_frames": 0, "chosen": {}}
+{"arm": "bc", "seed": 5015, "best_x": 2040, "deaths": 0, "branch_frames": 0, "chosen": {}}
+{"arm": "bc", "seed": 5016, "best_x": 1905, "deaths": 0, "branch_frames": 0, "chosen": {}}
+{"arm": "bc", "seed": 5017, "best_x": 2021, "deaths": 0, "branch_frames": 0, "chosen": {}}
+{"arm": "bc", "seed": 5018, "best_x": 2161, "deaths": 0, "branch_frames": 0, "chosen": {}}
+{"arm": "bc", "seed": 5019, "best_x": 2309, "deaths": 0, "branch_frames": 0, "chosen": {}}
+{"arm": "bc", "seed": 5020, "best_x": 2179, "deaths": 0, "branch_frames": 0, "chosen": {}}
+{"arm": "bc", "seed": 5021, "best_x": 2090, "deaths": 0, "branch_frames": 0, "chosen": {}}
+{"arm": "bc", "seed": 5022, "best_x": 2021, "deaths": 0, "branch_frames": 0, "chosen": {}}
+{"arm": "bc", "seed": 5023, "best_x": 2032, "deaths": 0, "branch_frames": 0, "chosen": {}}
+{"arm": "bc", "seed": 5024, "best_x": 1934, "deaths": 0, "branch_frames": 0, "chosen": {}}
+{"arm": "bc", "seed": 5025, "best_x": 1746, "deaths": 0, "branch_frames": 0, "chosen": {}}
+{"arm": "bc", "seed": 5026, "best_x": 2006, "deaths": 0, "branch_frames": 0, "chosen": {}}
+{"arm": "bc", "seed": 5027, "best_x": 2008, "deaths": 0, "branch_frames": 0, "chosen": {}}
+{"arm": "bc", "seed": 5028, "best_x": 1785, "deaths": 0, "branch_frames": 0, "chosen": {}}
+{"arm": "bc", "seed": 5029, "best_x": 2001, "deaths": 0, "branch_frames": 0, "chosen": {}}
+{"arm": "bc", "seed": 5030, "best_x": 1886, "deaths": 0, "branch_frames": 0, "chosen": {}}
+{"arm": "bc", "seed": 5031, "best_x": 2009, "deaths": 0, "branch_frames": 0, "chosen": {}}
+{"arm": "oracle h=48 scanpos", "seed": 5000, "best_x": 2028, "deaths": 0, "branch_frames": 54144, "chosen": {"bc": 56, "back off": 17, "wait": 16, "run": 68, "jump later": 18, "jump now": 13}}
+{"arm": "oracle h=48 scanpos", "seed": 5001, "best_x": 2289, "deaths": 0, "branch_frames": 54144, "chosen": {"bc": 90, "run": 43, "back off": 16, "jump later": 9, "wait": 25, "jump now": 5}}
+{"arm": "oracle h=48 scanpos", "seed": 5002, "best_x": 1939, "deaths": 0, "branch_frames": 54144, "chosen": {"back off": 12, "run": 55, "bc": 90, "jump later": 7, "wait": 19, "jump now": 5}}
+{"arm": "oracle h=48 scanpos", "seed": 5003, "best_x": 2701, "deaths": 0, "branch_frames": 54144, "chosen": {"bc": 48, "run": 34, "jump now": 5, "wait": 92, "jump later": 4, "back off": 5}}
+{"arm": "oracle h=48 scanpos", "seed": 5004, "best_x": 2116, "deaths": 0, "branch_frames": 54144, "chosen": {"bc": 68, "run": 54, "jump now": 13, "wait": 23, "jump later": 15, "back off": 15}}
+{"arm": "oracle h=48 scanpos", "seed": 5005, "best_x": 2099, "deaths": 0, "branch_frames": 54144, "chosen": {"run": 49, "jump now": 13, "bc": 70, "jump later": 22, "wait": 16, "back off": 18}}
+{"arm": "oracle h=48 scanpos", "seed": 5006, "best_x": 2327, "deaths": 0, "branch_frames": 54144, "chosen": {"run": 51, "back off": 19, "jump now": 11, "jump later": 15, "bc": 74, "wait": 18}}
+{"arm": "oracle h=48 scanpos", "seed": 5007, "best_x": 2275, "deaths": 0, "branch_frames": 54144, "chosen": {"jump later": 12, "run": 52, "wait": 20, "jump now": 13, "bc": 78, "back off": 13}}
+{"arm": "oracle h=48 scanpos", "seed": 5008, "best_x": 2836, "deaths": 0, "branch_frames": 54144, "chosen": {"bc": 84, "run": 54, "back off": 13, "jump now": 8, "jump later": 10, "wait": 19}}
+{"arm": "oracle h=48 scanpos", "seed": 5009, "best_x": 2038, "deaths": 0, "branch_frames": 54144, "chosen": {"run": 62, "jump now": 15, "bc": 76, "back off": 9, "jump later": 14, "wait": 12}}
+{"arm": "oracle h=48 scanpos", "seed": 5010, "best_x": 2056, "deaths": 0, "branch_frames": 54144, "chosen": {"jump now": 9, "run": 61, "bc": 86, "back off": 4, "jump later": 7, "wait": 21}}
+{"arm": "oracle h=48 scanpos", "seed": 5011, "best_x": 2279, "deaths": 0, "branch_frames": 54144, "chosen": {"jump now": 14, "run": 56, "jump later": 13, "bc": 47, "back off": 17, "wait": 41}}
+{"arm": "oracle h=48 scanpos", "seed": 5012, "best_x": 2108, "deaths": 0, "branch_frames": 54144, "chosen": {"back off": 4, "run": 62, "bc": 90, "jump now": 12, "jump later": 9, "wait": 11}}
+{"arm": "oracle h=48 scanpos", "seed": 5013, "best_x": 2137, "deaths": 0, "branch_frames": 54144, "chosen": {"run": 53, "jump now": 8, "jump later": 8, "bc": 89, "back off": 10, "wait": 20}}
+{"arm": "oracle h=48 scanpos", "seed": 5014, "best_x": 2067, "deaths": 0, "branch_frames": 54144, "chosen": {"run": 61, "jump now": 12, "jump later": 13, "wait": 17, "bc": 74, "back off": 11}}
+{"arm": "oracle h=48 scanpos", "seed": 5015, "best_x": 2151, "deaths": 0, "branch_frames": 54144, "chosen": {"bc": 74, "run": 80, "jump now": 8, "back off": 13, "jump later": 6, "wait": 7}}
+{"arm": "oracle h=48 scanpos", "seed": 5016, "best_x": 2087, "deaths": 0, "branch_frames": 54144, "chosen": {"run": 51, "jump later": 7, "jump now": 12, "bc": 101, "wait": 13, "back off": 4}}
+{"arm": "oracle h=48 scanpos", "seed": 5017, "best_x": 2135, "deaths": 0, "branch_frames": 54144, "chosen": {"jump now": 11, "bc": 68, "run": 58, "back off": 10, "wait": 35, "jump later": 6}}
+{"arm": "oracle h=48 scanpos", "seed": 5018, "best_x": 2141, "deaths": 0, "branch_frames": 54144, "chosen": {"bc": 89, "run": 50, "jump later": 9, "back off": 8, "jump now": 15, "wait": 17}}
+{"arm": "oracle h=48 scanpos", "seed": 5019, "best_x": 2774, "deaths": 0, "branch_frames": 54144, "chosen": {"run": 57, "jump now": 10, "bc": 88, "back off": 11, "jump later": 9, "wait": 13}}
+{"arm": "oracle h=48 scanpos", "seed": 5020, "best_x": 2863, "deaths": 0, "branch_frames": 54144, "chosen": {"jump now": 12, "jump later": 8, "run": 57, "bc": 88, "back off": 13, "wait": 10}}
+{"arm": "oracle h=48 scanpos", "seed": 5021, "best_x": 2147, "deaths": 0, "branch_frames": 54144, "chosen": {"run": 68, "jump now": 13, "bc": 75, "back off": 8, "jump later": 11, "wait": 13}}
+{"arm": "oracle h=48 scanpos", "seed": 5022, "best_x": 2135, "deaths": 0, "branch_frames": 54144, "chosen": {"run": 67, "bc": 70, "wait": 16, "back off": 11, "jump now": 15, "jump later": 9}}
+{"arm": "oracle h=48 scanpos", "seed": 5023, "best_x": 2137, "deaths": 0, "branch_frames": 54144, "chosen": {"bc": 51, "run": 85, "jump later": 11, "jump now": 15, "back off": 17, "wait": 9}}
+{"arm": "oracle h=48 scanpos", "seed": 5024, "best_x": 2101, "deaths": 0, "branch_frames": 54144, "chosen": {"run": 53, "jump now": 12, "wait": 19, "bc": 88, "jump later": 7, "back off": 9}}
+{"arm": "oracle h=48 scanpos", "seed": 5025, "best_x": 1630, "deaths": 0, "branch_frames": 54144, "chosen": {"jump now": 12, "bc": 96, "run": 40, "jump later": 5, "wait": 30, "back off": 5}}
+{"arm": "oracle h=48 scanpos", "seed": 5026, "best_x": 1989, "deaths": 0, "branch_frames": 54144, "chosen": {"bc": 64, "run": 32, "jump now": 13, "jump later": 7, "back off": 6, "wait": 66}}
+{"arm": "oracle h=48 scanpos", "seed": 5027, "best_x": 2093, "deaths": 0, "branch_frames": 54144, "chosen": {"run": 64, "bc": 65, "back off": 20, "wait": 14, "jump now": 11, "jump later": 14}}
+{"arm": "oracle h=48 scanpos", "seed": 5028, "best_x": 2144, "deaths": 0, "branch_frames": 54144, "chosen": {"jump now": 7, "bc": 71, "back off": 13, "run": 71, "jump later": 10, "wait": 16}}
+{"arm": "oracle h=48 scanpos", "seed": 5029, "best_x": 2146, "deaths": 0, "branch_frames": 54144, "chosen": {"run": 119, "bc": 37, "jump later": 13, "jump now": 6, "back off": 6, "wait": 7}}
+{"arm": "oracle h=48 scanpos", "seed": 5030, "best_x": 2038, "deaths": 0, "branch_frames": 54144, "chosen": {"bc": 83, "run": 57, "jump now": 16, "wait": 20, "jump later": 4, "back off": 8}}
+{"arm": "oracle h=48 scanpos", "seed": 5031, "best_x": 2772, "deaths": 0, "branch_frames": 54144, "chosen": {"run": 55, "jump later": 13, "wait": 25, "jump now": 9, "bc": 74, "back off": 12}}
+{"arm": "oracle h=96 scanpos", "seed": 5000, "best_x": 2088, "deaths": 0, "branch_frames": 108288, "chosen": {"run": 74, "bc": 80, "jump later": 5, "jump now": 10, "wait": 13, "back off": 6}}
+{"arm": "oracle h=96 scanpos", "seed": 5001, "best_x": 2722, "deaths": 0, "branch_frames": 108288, "chosen": {"run": 91, "wait": 39, "bc": 33, "back off": 11, "jump later": 8, "jump now": 6}}
+{"arm": "oracle h=96 scanpos", "seed": 5002, "best_x": 2013, "deaths": 0, "branch_frames": 108288, "chosen": {"back off": 7, "run": 27, "jump later": 9, "bc": 49, "wait": 85, "jump now": 11}}
+{"arm": "oracle h=96 scanpos", "seed": 5003, "best_x": 2103, "deaths": 0, "branch_frames": 108288, "chosen": {"jump now": 8, "run": 82, "bc": 43, "back off": 9, "wait": 40, "jump later": 6}}
+{"arm": "oracle h=96 scanpos", "seed": 5004, "best_x": 2086, "deaths": 0, "branch_frames": 108288, "chosen": {"run": 81, "jump later": 11, "bc": 49, "wait": 25, "back off": 12, "jump now": 10}}
+{"arm": "oracle h=96 scanpos", "seed": 5005, "best_x": 2099, "deaths": 0, "branch_frames": 108288, "chosen": {"run": 74, "jump later": 8, "back off": 7, "bc": 70, "jump now": 6, "wait": 23}}
+{"arm": "oracle h=96 scanpos", "seed": 5006, "best_x": 2011, "deaths": 0, "branch_frames": 108288, "chosen": {"run": 80, "back off": 14, "bc": 60, "jump later": 13, "wait": 16, "jump now": 5}}
+{"arm": "oracle h=96 scanpos", "seed": 5007, "best_x": 2238, "deaths": 0, "branch_frames": 108288, "chosen": {"jump later": 8, "run": 85, "bc": 63, "jump now": 10, "back off": 16, "wait": 6}}
+{"arm": "oracle h=96 scanpos", "seed": 5008, "best_x": 2001, "deaths": 0, "branch_frames": 108288, "chosen": {"run": 50, "jump now": 5, "jump later": 10, "bc": 50, "back off": 6, "wait": 67}}
+{"arm": "oracle h=96 scanpos", "seed": 5009, "best_x": 2067, "deaths": 0, "branch_frames": 108288, "chosen": {"run": 76, "jump later": 6, "bc": 65, "back off": 4, "jump now": 8, "wait": 29}}
+{"arm": "oracle h=96 scanpos", "seed": 5010, "best_x": 2851, "deaths": 0, "branch_frames": 108288, "chosen": {"run": 68, "jump later": 5, "bc": 44, "jump now": 4, "back off": 2, "wait": 65}}
+{"arm": "oracle h=96 scanpos", "seed": 5011, "best_x": 2754, "deaths": 0, "branch_frames": 108288, "chosen": {"jump now": 7, "run": 109, "back off": 10, "jump later": 7, "bc": 45, "wait": 10}}
+{"arm": "oracle h=96 scanpos", "seed": 5012, "best_x": 1955, "deaths": 0, "branch_frames": 108288, "chosen": {"back off": 8, "run": 68, "jump now": 10, "jump later": 4, "bc": 70, "wait": 28}}
+{"arm": "oracle h=96 scanpos", "seed": 5013, "best_x": 2463, "deaths": 0, "branch_frames": 108288, "chosen": {"jump later": 6, "run": 65, "jump now": 6, "bc": 77, "back off": 8, "wait": 26}}
+{"arm": "oracle h=96 scanpos", "seed": 5014, "best_x": 2137, "deaths": 0, "branch_frames": 108288, "chosen": {"run": 63, "jump later": 6, "jump now": 7, "bc": 78, "back off": 7, "wait": 27}}
+{"arm": "oracle h=96 scanpos", "seed": 5015, "best_x": 2151, "deaths": 0, "branch_frames": 108288, "chosen": {"run": 52, "jump now": 8, "jump later": 12, "bc": 51, "back off": 7, "wait": 58}}
+{"arm": "oracle h=96 scanpos", "seed": 5016, "best_x": 2479, "deaths": 0, "branch_frames": 108288, "chosen": {"run": 43, "jump later": 10, "bc": 35, "wait": 89, "back off": 7, "jump now": 4}}
+{"arm": "oracle h=96 scanpos", "seed": 5017, "best_x": 2245, "deaths": 0, "branch_frames": 108288, "chosen": {"jump now": 5, "run": 75, "bc": 90, "jump later": 8, "back off": 6, "wait": 4}}
+{"arm": "oracle h=96 scanpos", "seed": 5018, "best_x": 2151, "deaths": 0, "branch_frames": 108288, "chosen": {"run": 57, "jump later": 13, "back off": 11, "bc": 62, "jump now": 12, "wait": 33}}
+{"arm": "oracle h=96 scanpos", "seed": 5019, "best_x": 2107, "deaths": 0, "branch_frames": 108288, "chosen": {"run": 140, "jump later": 8, "bc": 26, "wait": 6, "back off": 5, "jump now": 3}}
+{"arm": "oracle h=96 scanpos", "seed": 5020, "best_x": 2152, "deaths": 0, "branch_frames": 108288, "chosen": {"jump now": 10, "jump later": 7, "run": 59, "wait": 38, "bc": 66, "back off": 8}}
+{"arm": "oracle h=96 scanpos", "seed": 5021, "best_x": 2317, "deaths": 0, "branch_frames": 108288, "chosen": {"run": 82, "jump now": 5, "jump later": 10, "wait": 44, "back off": 15, "bc": 32}}
+{"arm": "oracle h=96 scanpos", "seed": 5022, "best_x": 2134, "deaths": 0, "branch_frames": 108288, "chosen": {"run": 146, "jump later": 7, "wait": 3, "jump now": 4, "bc": 24, "back off": 4}}
+{"arm": "oracle h=96 scanpos", "seed": 5023, "best_x": 2689, "deaths": 0, "branch_frames": 108288, "chosen": {"run": 73, "bc": 73, "back off": 11, "jump later": 1, "jump now": 7, "wait": 23}}
+{"arm": "oracle h=96 scanpos", "seed": 5024, "best_x": 2097, "deaths": 0, "branch_frames": 108288, "chosen": {"wait": 95, "bc": 42, "jump now": 4, "run": 38, "back off": 3, "jump later": 6}}
+{"arm": "oracle h=96 scanpos", "seed": 5025, "best_x": 2445, "deaths": 0, "branch_frames": 108288, "chosen": {"jump now": 7, "run": 64, "back off": 9, "jump later": 7, "bc": 53, "wait": 48}}
+{"arm": "oracle h=96 scanpos", "seed": 5026, "best_x": 2845, "deaths": 0, "branch_frames": 108288, "chosen": {"run": 79, "jump later": 7, "bc": 42, "wait": 45, "back off": 10, "jump now": 5}}
+{"arm": "oracle h=96 scanpos", "seed": 5027, "best_x": 2137, "deaths": 0, "branch_frames": 108288, "chosen": {"run": 102, "jump now": 6, "jump later": 5, "bc": 47, "wait": 17, "back off": 11}}
+{"arm": "oracle h=96 scanpos", "seed": 5028, "best_x": 2151, "deaths": 0, "branch_frames": 108288, "chosen": {"run": 67, "jump later": 9, "jump now": 9, "bc": 72, "wait": 24, "back off": 7}}
+{"arm": "oracle h=96 scanpos", "seed": 5029, "best_x": 2013, "deaths": 0, "branch_frames": 108288, "chosen": {"run": 33, "bc": 29, "jump now": 4, "jump later": 4, "back off": 5, "wait": 113}}
+{"arm": "oracle h=96 scanpos", "seed": 5030, "best_x": 2523, "deaths": 0, "branch_frames": 108288, "chosen": {"bc": 25, "run": 30, "jump later": 6, "back off": 4, "wait": 122, "jump now": 1}}
+{"arm": "oracle h=96 scanpos", "seed": 5031, "best_x": 2444, "deaths": 0, "branch_frames": 108288, "chosen": {"run": 62, "bc": 83, "wait": 18, "jump now": 7, "jump later": 6, "back off": 12}}
+{"arm": "oracle h=128 scanpos", "seed": 5000, "best_x": 2450, "deaths": 0, "branch_frames": 144384, "chosen": {"run": 66, "bc": 53, "jump now": 14, "jump later": 9, "back off": 11, "wait": 35}}
+{"arm": "oracle h=128 scanpos", "seed": 5001, "best_x": 2813, "deaths": 0, "branch_frames": 144384, "chosen": {"run": 74, "jump later": 6, "bc": 37, "wait": 57, "back off": 8, "jump now": 6}}
+{"arm": "oracle h=128 scanpos", "seed": 5002, "best_x": 2036, "deaths": 0, "branch_frames": 144384, "chosen": {"back off": 6, "run": 106, "jump later": 7, "bc": 40, "wait": 25, "jump now": 4}}
+{"arm": "oracle h=128 scanpos", "seed": 5003, "best_x": 2125, "deaths": 0, "branch_frames": 144384, "chosen": {"back off": 11, "bc": 51, "run": 83, "wait": 28, "jump later": 10, "jump now": 5}}
+{"arm": "oracle h=128 scanpos", "seed": 5004, "best_x": 2108, "deaths": 0, "branch_frames": 144384, "chosen": {"run": 85, "back off": 9, "bc": 81, "jump now": 6, "jump later": 5, "wait": 2}}
+{"arm": "oracle h=128 scanpos", "seed": 5005, "best_x": 2098, "deaths": 0, "branch_frames": 144384, "chosen": {"run": 95, "jump later": 7, "bc": 61, "back off": 11, "wait": 13, "jump now": 1}}
+{"arm": "oracle h=128 scanpos", "seed": 5006, "best_x": 2111, "deaths": 0, "branch_frames": 144384, "chosen": {"run": 36, "jump now": 8, "bc": 92, "wait": 41, "jump later": 5, "back off": 6}}
+{"arm": "oracle h=128 scanpos", "seed": 5007, "best_x": 2336, "deaths": 0, "branch_frames": 144384, "chosen": {"jump later": 7, "run": 62, "back off": 5, "bc": 59, "wait": 49, "jump now": 6}}
+{"arm": "oracle h=128 scanpos", "seed": 5008, "best_x": 2474, "deaths": 0, "branch_frames": 144384, "chosen": {"run": 80, "bc": 73, "jump later": 5, "back off": 13, "wait": 12, "jump now": 5}}
+{"arm": "oracle h=128 scanpos", "seed": 5009, "best_x": 2052, "deaths": 0, "branch_frames": 144384, "chosen": {"run": 83, "jump later": 8, "jump now": 10, "bc": 61, "back off": 3, "wait": 23}}
+{"arm": "oracle h=128 scanpos", "seed": 5010, "best_x": 2293, "deaths": 0, "branch_frames": 144384, "chosen": {"back off": 5, "bc": 61, "run": 62, "jump later": 8, "jump now": 5, "wait": 47}}
+{"arm": "oracle h=128 scanpos", "seed": 5011, "best_x": 2134, "deaths": 0, "branch_frames": 144384, "chosen": {"jump now": 4, "run": 161, "jump later": 8, "wait": 4, "bc": 6, "back off": 5}}
+{"arm": "oracle h=128 scanpos", "seed": 5012, "best_x": 2151, "deaths": 0, "branch_frames": 144384, "chosen": {"back off": 9, "run": 75, "jump later": 9, "bc": 76, "wait": 16, "jump now": 3}}
+{"arm": "oracle h=128 scanpos", "seed": 5013, "best_x": 2147, "deaths": 0, "branch_frames": 144384, "chosen": {"run": 98, "jump later": 6, "jump now": 6, "back off": 7, "bc": 59, "wait": 12}}
+{"arm": "oracle h=128 scanpos", "seed": 5014, "best_x": 2131, "deaths": 0, "branch_frames": 144384, "chosen": {"run": 150, "jump later": 7, "bc": 15, "wait": 4, "jump now": 8, "back off": 4}}
+{"arm": "oracle h=128 scanpos", "seed": 5015, "best_x": 2151, "deaths": 0, "branch_frames": 144384, "chosen": {"run": 167, "jump now": 6, "jump later": 1, "bc": 9, "back off": 4, "wait": 1}}
+{"arm": "oracle h=128 scanpos", "seed": 5016, "best_x": 2137, "deaths": 0, "branch_frames": 144384, "chosen": {"bc": 37, "run": 60, "jump later": 14, "back off": 7, "wait": 63, "jump now": 7}}
+{"arm": "oracle h=128 scanpos", "seed": 5017, "best_x": 2148, "deaths": 0, "branch_frames": 144384, "chosen": {"jump now": 9, "bc": 61, "run": 93, "jump later": 8, "back off": 13, "wait": 4}}
+{"arm": "oracle h=128 scanpos", "seed": 5018, "best_x": 2153, "deaths": 0, "branch_frames": 144384, "chosen": {"run": 58, "jump later": 10, "bc": 77, "jump now": 8, "wait": 31, "back off": 4}}
+{"arm": "oracle h=128 scanpos", "seed": 5019, "best_x": 2040, "deaths": 0, "branch_frames": 144384, "chosen": {"run": 70, "back off": 6, "jump now": 8, "bc": 48, "jump later": 6, "wait": 50}}
+{"arm": "oracle h=128 scanpos", "seed": 5020, "best_x": 2039, "deaths": 0, "branch_frames": 144384, "chosen": {"run": 39, "back off": 8, "jump now": 5, "jump later": 8, "bc": 37, "wait": 91}}
+{"arm": "oracle h=128 scanpos", "seed": 5021, "best_x": 2151, "deaths": 0, "branch_frames": 144384, "chosen": {"run": 154, "jump now": 6, "jump later": 5, "bc": 13, "back off": 7, "wait": 3}}
+{"arm": "oracle h=128 scanpos", "seed": 5022, "best_x": 2836, "deaths": 0, "branch_frames": 144384, "chosen": {"run": 125, "bc": 23, "jump later": 9, "back off": 10, "jump now": 9, "wait": 12}}
+{"arm": "oracle h=128 scanpos", "seed": 5023, "best_x": 2149, "deaths": 0, "branch_frames": 144384, "chosen": {"run": 75, "bc": 46, "back off": 10, "jump now": 9, "wait": 42, "jump later": 6}}
+{"arm": "oracle h=128 scanpos", "seed": 5024, "best_x": 2151, "deaths": 0, "branch_frames": 144384, "chosen": {"run": 75, "jump now": 13, "back off": 13, "bc": 68, "jump later": 1, "wait": 18}}
+{"arm": "oracle h=128 scanpos", "seed": 5025, "best_x": 1612, "deaths": 0, "branch_frames": 144384, "chosen": {"jump now": 7, "run": 68, "bc": 72, "jump later": 3, "wait": 30, "back off": 8}}
+{"arm": "oracle h=128 scanpos", "seed": 5026, "best_x": 2151, "deaths": 0, "branch_frames": 144384, "chosen": {"run": 54, "jump later": 5, "jump now": 10, "back off": 5, "bc": 25, "wait": 89}}
+{"arm": "oracle h=128 scanpos", "seed": 5027, "best_x": 2137, "deaths": 0, "branch_frames": 144384, "chosen": {"jump later": 5, "run": 157, "jump now": 5, "back off": 4, "wait": 8, "bc": 9}}
+{"arm": "oracle h=128 scanpos", "seed": 5028, "best_x": 2764, "deaths": 0, "branch_frames": 144384, "chosen": {"jump now": 10, "run": 94, "jump later": 5, "bc": 48, "wait": 22, "back off": 9}}
+{"arm": "oracle h=128 scanpos", "seed": 5029, "best_x": 2048, "deaths": 0, "branch_frames": 144384, "chosen": {"run": 164, "bc": 5, "jump later": 5, "jump now": 3, "back off": 6, "wait": 5}}
+{"arm": "oracle h=128 scanpos", "seed": 5030, "best_x": 2271, "deaths": 0, "branch_frames": 144384, "chosen": {"bc": 34, "run": 29, "jump later": 1, "back off": 1, "jump now": 4, "wait": 119}}
+{"arm": "oracle h=128 scanpos", "seed": 5031, "best_x": 2032, "deaths": 0, "branch_frames": 144384, "chosen": {"run": 50, "bc": 30, "wait": 95, "jump now": 6, "jump later": 5, "back off": 2}}
+
+bc             best_x mean  2005.5  median  2008.5  min   1746  deaths   0  vs bc     +0.0  t=+0.00
+oracle h=48 scanpos best_x mean  2211.8  median  2136.0  min   1630  deaths   0  vs bc   +206.3  t=+5.02
+oracle h=96 scanpos best_x mean  2270.9  median  2151.0  min   1955  deaths   0  vs bc   +265.3  t=+4.99
+oracle h=128 scanpos best_x mean  2200.9  median  2147.5  min   1612  deaths   0  vs bc   +195.4  t=+4.10

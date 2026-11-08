@@ -1,0 +1,114 @@
+{
+  "game": "Galaga-Nes-v0",
+  "n_windows_6": 3373,
+  "n_windows_dino": 3373,
+  "acc_6dim": 1.0,
+  "acc_dinov2": 1.0,
+  "diff": 0.0,
+  "time_6dim_s": 300.5,
+  "time_dinov2_s": 1050.3,
+  "log_6dim": [
+    {
+      "epoch": 0,
+      "loss": 0.04,
+      "acc": 0.9879
+    },
+    {
+      "epoch": 1,
+      "loss": 0.0004,
+      "acc": 1.0
+    },
+    {
+      "epoch": 2,
+      "loss": 0.0003,
+      "acc": 1.0
+    },
+    {
+      "epoch": 3,
+      "loss": 0.0002,
+      "acc": 1.0
+    },
+    {
+      "epoch": 4,
+      "loss": 0.0002,
+      "acc": 1.0
+    },
+    {
+      "epoch": 5,
+      "loss": 0.0001,
+      "acc": 1.0
+    },
+    {
+      "epoch": 6,
+      "loss": 0.0001,
+      "acc": 1.0
+    },
+    {
+      "epoch": 7,
+      "loss": 0.0001,
+      "acc": 1.0
+    },
+    {
+      "epoch": 8,
+      "loss": 0.0001,
+      "acc": 1.0
+    },
+    {
+      "epoch": 9,
+      "loss": 0.0001,
+      "acc": 1.0
+    }
+  ],
+  "log_dinov2": [
+    {
+      "epoch": 0,
+      "loss": 0.0428,
+      "acc": 0.9853
+    },
+    {
+      "epoch": 1,
+      "loss": 0.0003,
+      "acc": 1.0
+    },
+    {
+      "epoch": 2,
+      "loss": 0.0002,
+      "acc": 1.0
+    },
+    {
+      "epoch": 3,
+      "loss": 0.0002,
+      "acc": 1.0
+    },
+    {
+      "epoch": 4,
+      "loss": 0.0001,
+      "acc": 1.0
+    },
+    {
+      "epoch": 5,
+      "loss": 0.0001,
+      "acc": 1.0
+    },
+    {
+      "epoch": 6,
+      "loss": 0.0001,
+      "acc": 1.0
+    },
+    {
+      "epoch": 7,
+      "loss": 0.0001,
+      "acc": 1.0
+    },
+    {
+      "epoch": 8,
+      "loss": 0.0001,
+      "acc": 1.0
+    },
+    {
+      "epoch": 9,
+      "loss": 0.0001,
+      "acc": 1.0
+    }
+  ]
+}
