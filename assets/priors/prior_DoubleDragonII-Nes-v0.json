@@ -211,6 +211,596 @@
         "page": 9,
         "quote": "TO MOVE Press the CONTROL PAD ARROWS RIGHT"
       }
+    },
+    {
+      "name": "punch-chain-right",
+      "phases": [
+        {
+          "hold": [
+            "A"
+          ],
+          "rest": 0,
+          "frames": 6
+        },
+        {
+          "hold": [
+            "A"
+          ],
+          "rest": 0,
+          "frames": 6
+        },
+        {
+          "hold": [
+            "A"
+          ],
+          "rest": 0,
+          "frames": 6
+        }
+      ],
+      "citation": {
+        "page": 10,
+        "quote": "deliver several PUNCHES in a row to weaken your opponent"
+      },
+      "note": "Punch chain for uppercut: several punches in a row"
+    },
+    {
+      "name": "back-kick-right",
+      "phases": [
+        {
+          "hold": [
+            "B"
+          ],
+          "rest": 0,
+          "frames": 10
+        }
+      ],
+      "citation": {
+        "page": 10,
+        "quote": "TO KICK (BACK KICK) -Press the ATTACK BUTTON in the opposite direction you're facing"
+      },
+      "note": "Back kick: press B when facing right"
+    },
+    {
+      "name": "double-punch-right",
+      "phases": [
+        {
+          "hold": [
+            "A"
+          ],
+          "rest": 0,
+          "frames": 5
+        },
+        {
+          "hold": [
+            "A"
+          ],
+          "rest": 0,
+          "frames": 5
+        }
+      ],
+      "citation": {
+        "page": 9,
+        "quote": "TO PUNCH -Press the A or B ATTACK BUTTON in the same direction"
+      },
+      "note": "Double punch right"
+    },
+    {
+      "name": "run-punch-right",
+      "phases": [
+        {
+          "hold": [
+            "RIGHT"
+          ],
+          "rest": 0,
+          "frames": 30
+        },
+        {
+          "hold": [
+            "A"
+          ],
+          "rest": 0,
+          "frames": 6
+        },
+        {
+          "hold": [
+            "A"
+          ],
+          "rest": 0,
+          "frames": 6
+        }
+      ],
+      "citation": {
+        "page": 9,
+        "quote": "TO MOVE -Press the CONTROL PAD ARROWS RIGHT"
+      },
+      "note": "Run then double punch"
+    },
+    {
+      "name": "retreat-punch",
+      "phases": [
+        {
+          "hold": [
+            "LEFT"
+          ],
+          "rest": 0,
+          "frames": 15
+        },
+        {
+          "hold": [
+            "A"
+          ],
+          "rest": 0,
+          "frames": 10
+        }
+      ],
+      "citation": {
+        "page": 10,
+        "quote": "TO KICK (BACK KICK) -Press the ATTACK BUTTON in the opposite direction"
+      },
+      "note": "Retreat then punch (back kick range)"
+    },
+    {
+      "name": "jump-kick-left",
+      "phases": [
+        {
+          "hold": [
+            "A",
+            "B"
+          ],
+          "rest": 0,
+          "frames": 6
+        },
+        {
+          "hold": [
+            "B"
+          ],
+          "rest": 0,
+          "frames": 10
+        }
+      ],
+      "citation": {
+        "page": 10,
+        "quote": "press the A and B BUTTONS simultaneously to jump. Then while in the air Press the ATTACK BUTTON to kick"
+      },
+      "note": "Jump kick left: A+B jump then B attack"
+    },
+    {
+      "name": "elbow-right",
+      "phases": [
+        {
+          "hold": [
+            "A"
+          ],
+          "rest": 0,
+          "frames": 4
+        },
+        {
+          "hold": [
+            "A"
+          ],
+          "rest": 0,
+          "frames": 4
+        },
+        {
+          "hold": [
+            "A"
+          ],
+          "rest": 0,
+          "frames": 8
+        }
+      ],
+      "citation": {
+        "page": 3,
+        "quote": "The elbow smashes and jump kicks"
+      },
+      "note": "Elbow smash right: rapid punches then finisher"
+    },
+    {
+      "name": "run-kick-right",
+      "phases": [
+        {
+          "hold": [
+            "RIGHT"
+          ],
+          "rest": 0,
+          "frames": 25
+        },
+        {
+          "hold": [
+            "B"
+          ],
+          "rest": 0,
+          "frames": 10
+        }
+      ],
+      "citation": {
+        "page": 10,
+        "quote": "TO KICK (BACK KICK) -Press the ATTACK BUTTON in the opposite direction"
+      },
+      "note": "Run then kick (approach and back kick)"
+    },
+    {
+      "name": "walk-left-kick",
+      "phases": [
+        {
+          "hold": [
+            "LEFT"
+          ],
+          "rest": 0,
+          "frames": 15
+        },
+        {
+          "hold": [
+            "B"
+          ],
+          "rest": 0,
+          "frames": 10
+        }
+      ],
+      "citation": {
+        "page": 10,
+        "quote": "Press the ATTACK BUTTON in the opposite direction you're facing"
+      },
+      "note": "Walk left then B = kick (opposite direction)"
+    },
+    {
+      "name": "jump-punch-right",
+      "phases": [
+        {
+          "hold": [
+            "A",
+            "B"
+          ],
+          "rest": 0,
+          "frames": 6
+        },
+        {
+          "hold": [
+            "A"
+          ],
+          "rest": 0,
+          "frames": 8
+        }
+      ],
+      "citation": {
+        "page": 10,
+        "quote": "while in the air Press the ATTACK BUTTON"
+      },
+      "note": "Jump punch right: A+B jump then A attack"
+    },
+    {
+      "name": "triple-punch-right",
+      "phases": [
+        {
+          "hold": [
+            "A"
+          ],
+          "rest": 0,
+          "frames": 4
+        },
+        {
+          "hold": [
+            "A"
+          ],
+          "rest": 0,
+          "frames": 4
+        },
+        {
+          "hold": [
+            "A"
+          ],
+          "rest": 0,
+          "frames": 4
+        },
+        {
+          "hold": [
+            "A"
+          ],
+          "rest": 0,
+          "frames": 8
+        }
+      ],
+      "citation": {
+        "page": 10,
+        "quote": "deliver several PUNCHES in a row to weaken your opponent"
+      },
+      "note": "Triple punch chain for uppercut"
+    },
+    {
+      "name": "walk-right-kick",
+      "phases": [
+        {
+          "hold": [
+            "RIGHT"
+          ],
+          "rest": 0,
+          "frames": 15
+        },
+        {
+          "hold": [
+            "B"
+          ],
+          "rest": 0,
+          "frames": 10
+        }
+      ],
+      "citation": {
+        "page": 10,
+        "quote": "TO KICK (BACK KICK) -Press the ATTACK BUTTON in the opposite direction"
+      },
+      "note": "Walk right then B = back kick"
+    },
+    {
+      "name": "grab-attack",
+      "phases": [
+        {
+          "hold": [
+            "A"
+          ],
+          "rest": 0,
+          "frames": 4
+        },
+        {
+          "hold": [
+            "A"
+          ],
+          "rest": 0,
+          "frames": 4
+        },
+        {
+          "hold": [
+            "B"
+          ],
+          "rest": 0,
+          "frames": 6
+        },
+        {
+          "hold": [
+            "B"
+          ],
+          "rest": 0,
+          "frames": 10
+        }
+      ],
+      "citation": {
+        "page": 10,
+        "quote": "There are several different moves you can do when you grab the enemy by the hair or collar"
+      },
+      "note": "Punch chain then kick (grab combo)"
+    },
+    {
+      "name": "spinning-cyclone",
+      "phases": [
+        {
+          "hold": [
+            "A",
+            "B"
+          ],
+          "rest": 0,
+          "frames": 8
+        },
+        {
+          "hold": [
+            "A"
+          ],
+          "rest": 0,
+          "frames": 12
+        }
+      ],
+      "citation": {
+        "page": 20,
+        "quote": "SPINNING CYCLONE - To spin in mid-air with one foot extended, jump by pushing both ATTACK BUTTONS simultaneously; then push either the A or B ATTACK BUTTON"
+      },
+      "note": "Spinning Cyclone: A+B jump then attack in air (special move)"
+    },
+    {
+      "name": "hyper-uppercut",
+      "phases": [
+        {
+          "hold": [
+            "A",
+            "B"
+          ],
+          "rest": 0,
+          "frames": 8
+        },
+        {
+          "hold": [
+            "A"
+          ],
+          "rest": 0,
+          "frames": 6
+        }
+      ],
+      "citation": {
+        "page": 20,
+        "quote": "HYPER UPPERCUT - This exceptionally powerful uppercut can be delivered if you press either the A or B ATTACK BUTTON just as you're landing from a jump"
+      },
+      "note": "Hyper Uppercut: attack just as landing from jump"
+    },
+    {
+      "name": "noggin-knockers",
+      "phases": [
+        {
+          "hold": [
+            "A"
+          ],
+          "rest": 0,
+          "frames": 4
+        },
+        {
+          "hold": [
+            "A"
+          ],
+          "rest": 0,
+          "frames": 4
+        },
+        {
+          "hold": [
+            "A"
+          ],
+          "rest": 0,
+          "frames": 4
+        },
+        {
+          "hold": [
+            "DOWN",
+            "A"
+          ],
+          "rest": 0,
+          "frames": 8
+        },
+        {
+          "hold": [
+            "A"
+          ],
+          "rest": 0,
+          "frames": 6
+        },
+        {
+          "hold": [
+            "A"
+          ],
+          "rest": 0,
+          "frames": 6
+        }
+      ],
+      "citation": {
+        "page": 11,
+        "quote": "NOGGIN KNOCKERS - Once seizing the enemy's hair, repeatedly press the ATTACK BUTTON in the same direction you're facing"
+      },
+      "note": "Grab hair then repeatedly attack (noggin knockers)"
+    },
+    {
+      "name": "hurl-enemy",
+      "phases": [
+        {
+          "hold": [
+            "A"
+          ],
+          "rest": 0,
+          "frames": 4
+        },
+        {
+          "hold": [
+            "A"
+          ],
+          "rest": 0,
+          "frames": 4
+        },
+        {
+          "hold": [
+            "A"
+          ],
+          "rest": 0,
+          "frames": 4
+        },
+        {
+          "hold": [
+            "DOWN",
+            "A"
+          ],
+          "rest": 0,
+          "frames": 8
+        },
+        {
+          "hold": [
+            "B"
+          ],
+          "rest": 0,
+          "frames": 10
+        }
+      ],
+      "citation": {
+        "page": 11,
+        "quote": "TO HURL THE ENEMY - Once you've grabbed the enemy's hair, press the ATTACK BUTTON in the opposite direction"
+      },
+      "note": "Grab hair then hurl (attack opposite direction)"
+    },
+    {
+      "name": "upper-kick",
+      "phases": [
+        {
+          "hold": [
+            "A"
+          ],
+          "rest": 0,
+          "frames": 4
+        },
+        {
+          "hold": [
+            "A"
+          ],
+          "rest": 0,
+          "frames": 4
+        },
+        {
+          "hold": [
+            "A"
+          ],
+          "rest": 0,
+          "frames": 4
+        },
+        {
+          "hold": [
+            "DOWN",
+            "A"
+          ],
+          "rest": 0,
+          "frames": 8
+        },
+        {
+          "hold": [
+            "UP",
+            "A"
+          ],
+          "rest": 0,
+          "frames": 10
+        }
+      ],
+      "citation": {
+        "page": 11,
+        "quote": "FOR AN UPPER KICK - When seizing the enemy's hair, press the UP ARROW and the ATTACK BUTTON in the same direction you're facing"
+      },
+      "note": "Grab hair then upper kick (UP + attack)"
+    },
+    {
+      "name": "grab-hair",
+      "phases": [
+        {
+          "hold": [
+            "A"
+          ],
+          "rest": 0,
+          "frames": 4
+        },
+        {
+          "hold": [
+            "A"
+          ],
+          "rest": 0,
+          "frames": 4
+        },
+        {
+          "hold": [
+            "A"
+          ],
+          "rest": 0,
+          "frames": 4
+        },
+        {
+          "hold": [
+            "RIGHT"
+          ],
+          "rest": 0,
+          "frames": 6
+        }
+      ],
+      "citation": {
+        "page": 11,
+        "quote": "TO GRAB AN ENEMY'S HAIR OR COLLAR - First deliver several PUNCHES in a row to tire your enemy out and make him drop his head a bit. Then immediately press the CONTROL PAD ARROW in the same direction of the enemy"
+      },
+      "note": "Grab hair: punches then direction toward enemy"
     }
   ]
 }

@@ -1,0 +1,128 @@
+{
+  "game": "DuckTales-Nes-v0",
+  "scan_id": "rx2MRPnes1250pxPDF Disney's Duck Tales I.pdf",
+  "language": "en",
+  "note": "Auto-generated from LLM lexicon. 15 facts.",
+  "facts": [
+    {
+      "id": "a-jump",
+      "kind": "controls",
+      "page": 6,
+      "statement_key": "a-jump",
+      "provenance": "us_manual",
+      "quote_hint": "The A button is used for jumping. There are two types of jumps that Uncle Scroog"
+    },
+    {
+      "id": "b-cane-pogo",
+      "kind": "controls",
+      "page": 8,
+      "statement_key": "b-cane-pogo",
+      "provenance": "us_manual",
+      "quote_hint": "Button B: Continues Pogo Jump and Swings Cane"
+    },
+    {
+      "id": "dpad-move",
+      "kind": "controls",
+      "page": 6,
+      "statement_key": "dpad-move",
+      "provenance": "us_manual",
+      "quote_hint": "Pushing RIGHT and LEFT on the controller moves Uncle Scrooge right and left. Thi"
+    },
+    {
+      "id": "climb",
+      "kind": "ability",
+      "page": 6,
+      "statement_key": "climb-rope",
+      "provenance": "us_manual",
+      "quote_hint": "UP and DOWN are used for climbing up and down ropes, chains and vines"
+    },
+    {
+      "id": "pogo-jump",
+      "kind": "ability",
+      "page": 6,
+      "statement_key": "down-a-b-pogo",
+      "provenance": "us_manual",
+      "quote_hint": "To Pogo-jump, press the convol pad down, press the A button, (the jump button), "
+    },
+    {
+      "id": "cane-swing",
+      "kind": "ability",
+      "page": 7,
+      "statement_key": "direction-b-cane-swing",
+      "provenance": "us_manual",
+      "quote_hint": "To make Uncle Scrooge swing his cane at an object, push RIGHT or LEFT on the con"
+    },
+    {
+      "id": "open-chests",
+      "kind": "ability",
+      "page": 7,
+      "statement_key": "pogo-open-chest",
+      "provenance": "us_manual",
+      "quote_hint": "The Pogo-jump is one of the ways that Uncle Scrooge can open treasure chests and"
+    },
+    {
+      "id": "stop-fall",
+      "kind": "ability",
+      "page": 6,
+      "statement_key": "up-stop-fall",
+      "provenance": "us_manual",
+      "quote_hint": "Pushing UP while he is falling will stop the fall"
+    },
+    {
+      "id": "five-treasures",
+      "kind": "goal",
+      "page": 9,
+      "statement_key": "collect-five-treasures",
+      "provenance": "us_manual",
+      "quote_hint": "His goal this time is to obtain the five lost treasures that were scattered thro"
+    },
+    {
+      "id": "hit-points",
+      "kind": "hud",
+      "page": 10,
+      "statement_key": "hp-bar-red-yellow",
+      "provenance": "us_manual",
+      "quote_hint": "Hit Points: When damage is done by the enemies. etc., the color changes from red"
+    },
+    {
+      "id": "land-money",
+      "kind": "economy",
+      "page": 10,
+      "statement_key": "money-per-land",
+      "provenance": "us_manual",
+      "quote_hint": "Land Money: Money collected for that land. When the player is out, this figure g"
+    },
+    {
+      "id": "invulnerability",
+      "kind": "hazard",
+      "page": 7,
+      "statement_key": "damage-invulnerability",
+      "provenance": "us_manual",
+      "quote_hint": "When Uncle Scrooge is damaged, he is invulnerable for a second or two. Take adva"
+    },
+    {
+      "id": "difficulty-select",
+      "kind": "menu",
+      "page": 5,
+      "statement_key": "difficulty-select",
+      "provenance": "us_manual",
+      "quote_hint": "you may choose the difficulty level. By pressing the control pad left or right. "
+    },
+    {
+      "id": "land-select",
+      "kind": "menu",
+      "page": 5,
+      "statement_key": "land-select",
+      "provenance": "us_manual",
+      "quote_hint": "Use the control pad to move the glowing ball to the land of your choice, and pre"
+    },
+    {
+      "id": "start-pause",
+      "kind": "controls",
+      "page": 7,
+      "statement_key": "start-pause",
+      "provenance": "us_manual",
+      "quote_hint": "The Start button is used for pausing the game and reviewing the special items th"
+    }
+  ]
+}

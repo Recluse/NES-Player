@@ -1,0 +1,358 @@
+{
+  "schema_version": 2,
+  "game": "DuckTales-Nes-v0",
+  "source": "Auto-generated from LLM lexicon (rx2MRPnes1250pxPDF Disney's Duck Tales I.pdf).",
+  "manual": {
+    "scan_id": "rx2MRPnes1250pxPDF Disney's Duck Tales I.pdf",
+    "language": "en",
+    "pages_used": [
+      5,
+      6,
+      7,
+      8,
+      9,
+      10
+    ],
+    "parse": {
+      "method": "llm-lexicon",
+      "pipeline_version": "llm_lexicon.py/1",
+      "judge": "MiMo as model behind the prompt"
+    }
+  },
+  "notes": [
+    "The A Button is used for jumping; the longer you hold it down, the higher Uncle ",
+    "The B Button continues Pogo-jump and swings the cane.",
+    "LEFT and RIGHT move Uncle Scrooge; this works even when jumping or falling.",
+    "UP and DOWN are used for climbing ropes, chains, and vines.",
+    "To Pogo-jump, press the control pad DOWN, press A (jump), and while in midair pr"
+  ],
+  "facts": [
+    {
+      "id": "a-jump",
+      "kind": "controls",
+      "statement": "The A Button is used for jumping; the longer you hold it down, the higher Uncle Scrooge can jump.",
+      "citation": {
+        "page": 6,
+        "quote": "The A button is used for jumping. There are two types of jumps that Uncle Scrooge can do. The first is a regular jump. The longer you hold down the A button, the higher he can jump"
+      },
+      "status": "extracted"
+    },
+    {
+      "id": "b-cane-pogo",
+      "kind": "controls",
+      "statement": "The B Button continues Pogo-jump and swings the cane.",
+      "citation": {
+        "page": 8,
+        "quote": "Button B: Continues Pogo Jump and Swings Cane"
+      },
+      "status": "extracted"
+    },
+    {
+      "id": "dpad-move",
+      "kind": "controls",
+      "statement": "LEFT and RIGHT move Uncle Scrooge; this works even when jumping or falling.",
+      "citation": {
+        "page": 6,
+        "quote": "Pushing RIGHT and LEFT on the controller moves Uncle Scrooge right and left. This works even when he is jumping or falling"
+      },
+      "status": "extracted"
+    },
+    {
+      "id": "climb",
+      "kind": "ability",
+      "statement": "UP and DOWN are used for climbing ropes, chains, and vines.",
+      "citation": {
+        "page": 6,
+        "quote": "UP and DOWN are used for climbing up and down ropes, chains and vines"
+      },
+      "status": "extracted"
+    },
+    {
+      "id": "pogo-jump",
+      "kind": "ability",
+      "statement": "To Pogo-jump, press the control pad DOWN, press A (jump), and while in midair press B. You MUST press B before landing.",
+      "citation": {
+        "page": 6,
+        "quote": "To Pogo-jump, press the convol pad down, press the A button, (the jump button), and while Uncle Scrooge is in midair, press the B button. You MUST press the B button before he lands"
+      },
+      "status": "extracted"
+    },
+    {
+      "id": "cane-swing",
+      "kind": "ability",
+      "statement": "To swing the cane at an object, push RIGHT or LEFT and press B.",
+      "citation": {
+        "page": 7,
+        "quote": "To make Uncle Scrooge swing his cane at an object, push RIGHT or LEFT on the control pad, (depending on which side the object is on), and press the B button"
+      },
+      "status": "extracted"
+    },
+    {
+      "id": "open-chests",
+      "kind": "ability",
+      "statement": "The Pogo-jump can open treasure chests and remove rocks from the path; the cane swing can also open objects.",
+      "citation": {
+        "page": 7,
+        "quote": "The Pogo-jump is one of the ways that Uncle Scrooge can open treasure chests and remove rocks from his path. The other way is by swinging his cane"
+      },
+      "status": "extracted"
+    },
+    {
+      "id": "stop-fall",
+      "kind": "ability",
+      "statement": "Pushing UP while falling will stop the fall.",
+      "citation": {
+        "page": 6,
+        "quote": "Pushing UP while he is falling will stop the fall"
+      },
+      "status": "extracted"
+    },
+    {
+      "id": "five-treasures",
+      "kind": "goal",
+      "statement": "Obtain the five lost treasures scattered throughout the world: Amazon jungle, Himalayas, Transylvania, Africa mines, and the Moon.",
+      "citation": {
+        "page": 9,
+        "quote": "His goal this time is to obtain the five lost treasures that were scattered throughout the world"
+      },
+      "status": "extracted"
+    },
+    {
+      "id": "hit-points",
+      "kind": "hud",
+      "statement": "Hit Points show damage: color changes from red to yellow when damaged; when all turn yellow, one player is out.",
+      "citation": {
+        "page": 10,
+        "quote": "Hit Points: When damage is done by the enemies. etc., the color changes from red to yellow. When all turn yellow, one player is out"
+      },
+      "status": "extracted"
+    },
+    {
+      "id": "land-money",
+      "kind": "economy",
+      "statement": "Land Money is collected per land and goes back to zero when the player is out. Total Amount accumulates when brought back to the Control Room.",
+      "citation": {
+        "page": 10,
+        "quote": "Land Money: Money collected for that land. When the player is out, this figure goes back to zero"
+      },
+      "status": "extracted"
+    },
+    {
+      "id": "invulnerability",
+      "kind": "hazard",
+      "statement": "When Uncle Scrooge is damaged, he is invulnerable for a second or two. Take advantage of this time to get past tough opponents.",
+      "citation": {
+        "page": 7,
+        "quote": "When Uncle Scrooge is damaged, he is invulnerable for a second or two. Take advantage of this time to get past tough opponents"
+      },
+      "status": "extracted"
+    },
+    {
+      "id": "difficulty-select",
+      "kind": "menu",
+      "statement": "Choose difficulty (Easy, Normal, Difficult) by pressing control pad left or right on the title screen, then press START.",
+      "citation": {
+        "page": 5,
+        "quote": "you may choose the difficulty level. By pressing the control pad left or right. you can choose either Easy, Normal, or Difficult"
+      },
+      "status": "extracted"
+    },
+    {
+      "id": "land-select",
+      "kind": "menu",
+      "statement": "On the LAND SELECT screen, use the control pad to move the glowing ball to the land of your choice, and press A to start.",
+      "citation": {
+        "page": 5,
+        "quote": "Use the control pad to move the glowing ball to the land of your choice, and press the A button to start your quest"
+      },
+      "status": "extracted"
+    },
+    {
+      "id": "start-pause",
+      "kind": "controls",
+      "statement": "The Start button pauses the game and reviews special items collected.",
+      "citation": {
+        "page": 7,
+        "quote": "The Start button is used for pausing the game and reviewing the special items that Uncle Scrooge picked up"
+      },
+      "status": "extracted"
+    }
+  ],
+  "templates": [
+    {
+      "name": "jump",
+      "phases": [
+        {
+          "tap": [
+            "A"
+          ],
+          "rest": [],
+          "frames": 12
+        }
+      ],
+      "citation": {
+        "page": 6,
+        "quote": "The A button is used for jumping. There are two types of jumps that Uncle Scrooge can do. The first is a regular jump. The longer you hold down the A button, the higher he can jump"
+      },
+      "note": "The A Button is used for jumping; the longer you hold it dow"
+    },
+    {
+      "name": "walk-right",
+      "phases": [
+        {
+          "hold": [
+            "RIGHT"
+          ],
+          "rest": 0,
+          "frames": 20
+        }
+      ],
+      "citation": {
+        "page": 6,
+        "quote": "Pushing RIGHT and LEFT on the controller moves Uncle Scrooge right and left. This works even when he is jumping or falling"
+      },
+      "note": "LEFT and RIGHT move Uncle Scrooge; this works even when jump"
+    },
+    {
+      "name": "pogo-jump",
+      "phases": [
+        {
+          "hold": [
+            "DOWN"
+          ],
+          "rest": 0,
+          "frames": 4
+        },
+        {
+          "tap": [
+            "A"
+          ],
+          "rest": [],
+          "frames": 6
+        },
+        {
+          "hold": [
+            "B"
+          ],
+          "rest": 0,
+          "frames": 30
+        }
+      ],
+      "citation": {
+        "page": 6,
+        "quote": "To Pogo-jump, press the convol pad down, press the A button, and while Uncle Scrooge is in midair, press the B button"
+      },
+      "note": "Pogo-jump: DOWN + A + B (hold B to continue)"
+    },
+    {
+      "name": "cane-swing-right",
+      "phases": [
+        {
+          "hold": [
+            "RIGHT"
+          ],
+          "rest": 0,
+          "frames": 4
+        },
+        {
+          "tap": [
+            "B"
+          ],
+          "rest": [],
+          "frames": 10
+        }
+      ],
+      "citation": {
+        "page": 7,
+        "quote": "push RIGHT or LEFT on the control pad, and press the B button"
+      },
+      "note": "Swing cane right: RIGHT + B"
+    },
+    {
+      "name": "cane-swing-left",
+      "phases": [
+        {
+          "hold": [
+            "LEFT"
+          ],
+          "rest": 0,
+          "frames": 4
+        },
+        {
+          "tap": [
+            "B"
+          ],
+          "rest": [],
+          "frames": 10
+        }
+      ],
+      "citation": {
+        "page": 7,
+        "quote": "push RIGHT or LEFT on the control pad, and press the B button"
+      },
+      "note": "Swing cane left: LEFT + B"
+    },
+    {
+      "name": "run-jump-right",
+      "phases": [
+        {
+          "hold": [
+            "RIGHT"
+          ],
+          "rest": 0,
+          "frames": 20
+        },
+        {
+          "tap": [
+            "A"
+          ],
+          "rest": [],
+          "frames": 12
+        }
+      ],
+      "citation": {
+        "page": 6,
+        "quote": "Pushing RIGHT and LEFT on the controller moves Uncle Scrooge right and left"
+      },
+      "note": "Run right and jump"
+    },
+    {
+      "name": "pogo-right",
+      "phases": [
+        {
+          "hold": [
+            "RIGHT"
+          ],
+          "rest": 0,
+          "frames": 15
+        },
+        {
+          "hold": [
+            "DOWN"
+          ],
+          "rest": 0,
+          "frames": 4
+        },
+        {
+          "tap": [
+            "A"
+          ],
+          "rest": [],
+          "frames": 6
+        },
+        {
+          "hold": [
+            "B"
+          ],
+          "rest": 0,
+          "frames": 25
+        }
+      ],
+      "citation": {
+        "page": 6,
+        "quote": "You can use the control pad to direct Uncle Scrooge while he is Pogo-jumping"
+      },
+      "note": "Pogo-jump right: RIGHT then DOWN+A+B"
+    }
+  ]
+}
